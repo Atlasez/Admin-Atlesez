@@ -38,7 +38,7 @@ test("応募済みプロジェクトは応募フォームの選択肢と入力�
   await expect(page.locator("[data-project-fieldset]")).toBeHidden();
 });
 
-test("基本情報とプロジェクト情報を別ページで入力し、マイページへ進める", async ({
+test("基本情報とプロジェクト情報を別ページで入力し、ポータルへ進める", async ({
   page,
 }) => {
   let savedBasicProfile: Record<string, string> | undefined;
@@ -62,7 +62,7 @@ test("基本情報とプロジェクト情報を別ページで入力し、マ�
   await page.route("**/api/onboarding/project", async (route) => {
     if (route.request().method() === "POST") {
       await route.fulfill({
-        json: { ok: true, next: "/applicant/" },
+        json: { ok: true, next: "/admin/portal/" },
       });
       return;
     }
@@ -102,4 +102,50 @@ test("基本情報とプロジェクト情報を別ページで入力し、マ�
     "/admin/member-profile/",
   );
   await expect(page.getByLabel("プロジェクト内自己紹介")).toBeVisible();
+  await page
+    .getByLabel("プロジェクト内自己紹介")
+    .fill("初回の担当を確認します。");
+  await page.getByRole("button", { name: "保存して活動を始める" }).click();
+  await page.waitForURL(/\/admin\/portal\/$/);
 });
+
+for (const applications of [
+  [],
+  [
+    {
+      project: "考えるカフェ",
+      status: "accepted",
+      submittedAt: "2026-01-01T00:00:00Z",
+    },
+    {
+      project: "事務局",
+      status: "reviewing",
+      submittedAt: "2026-10-04T00:00:00Z",
+    },
+  ],
+]) {
+  test(`会員の応募状況にポータルへの入口を表示する（応募履歴${applications.length}件）`, async ({
+    page,
+  }) => {
+    await page.route("**/api/applicant/me", (route) =>
+      route.fulfill({
+        json: {
+          email: "member@example.com",
+          stage: "MEMBER",
+          basicProfileComplete: true,
+          applications,
+        },
+      }),
+    );
+    await page.goto("applicant/");
+    await expect(
+      page.getByRole("heading", { name: "活動を始められます" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "メンバー用サイトへ進む" }),
+    ).toHaveAttribute("href", "/admin/portal/");
+    await expect(
+      page.getByRole("link", { name: "別のプロジェクトに応募する" }),
+    ).toBeVisible();
+  });
+}

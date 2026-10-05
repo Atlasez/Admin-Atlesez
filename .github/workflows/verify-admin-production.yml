@@ -1,19 +1,12 @@
 name: Verify admin production sync
 
+# Read-only verification independent of any GitHub Actions deploy run.
 on:
-  workflow_run:
-    workflows:
-      - Deploy ADMIN from GitHub
-    types:
-      - completed
-    branches:
-      - main
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
-  actions: read
   contents: read
 
 concurrency:
@@ -32,52 +25,53 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pending="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-admin-from-github.yml/runs?branch=main&per_page=20" --jq '[.workflow_runs[] | select(.status != "completed")] | length')"
-          if [ "$pending" -gt 0 ]; then
-            echo "ADMIN deployが承認待ちまたは実行中です。配信後に再照合します。"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
           if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
             echo "main SHAを解決できませんでした: $sha" >&2
             exit 1
           fi
-          echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "expected main SHA: $sha"
 
       - name: Checkout expected main
-        if: steps.main.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.main.outputs.sha }}
           fetch-depth: 0
 
-      - name: Verify live build identity after merge
-        if: steps.main.outputs.skip != 'true'
+      - name: Verify live build identity within bounded Workers Builds delay
         env:
           EXPECTED_COMMIT: ${{ steps.main.outputs.sha }}
+          BUILD_INFO_URL: https://admin.atlasez.org/build-info.json
           ALLOW_AUDIT_ONLY_ADVANCE: "true"
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 12); do
-            pending="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-admin-from-github.yml/runs?branch=main&per_page=20" --jq '[.workflow_runs[] | select(.status != "completed")] | length')"
-            if [ "$pending" -gt 0 ]; then
-              echo "新しいADMIN deployが承認待ちまたは実行中のため、照合を後続の確認へ渡します。"
-              exit 0
+          for attempt in $(seq 1 15); do
+            latest_main="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+            if ! [[ "$latest_main" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "main SHAを解決できませんでした: $latest_main" >&2
+              exit 1
+            fi
+            if [ "$latest_main" != "$EXPECTED_COMMIT" ]; then
+              git fetch --quiet origin main
+              git cat-file -e "$latest_main^{commit}"
+              export EXPECTED_COMMIT="$latest_main"
+              echo "main更新に合わせて対象SHAを再照合: $EXPECTED_COMMIT"
             fi
             if node scripts/verify-live-admin-production.mjs; then
-              echo "ADMIN本番がmain SHAに一致しました（試行 ${attempt}/12）。"
-              exit 0
+              confirmed_main="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+              if [ "$confirmed_main" = "$EXPECTED_COMMIT" ]; then
+                echo "ADMIN本番とmainを照合しました（試行 ${attempt}/15、SHA ${EXPECTED_COMMIT}）。"
+                exit 0
+              fi
+              echo "照合中にmainが進んだため再確認します。"
             fi
-            if [ "$attempt" -lt 12 ]; then
-              delay=$((attempt * 10))
-              echo "GitHub Actions deployの反映を待機します（${delay}秒後、試行 ${attempt}/12）。"
-              sleep "$delay"
+            if [ "$attempt" -lt 15 ]; then
+              echo "Workers Buildsの反映を待機します（60秒後、試行 ${attempt}/15）。"
+              sleep 60
             fi
           done
-          echo "ADMIN本番のbuild-infoがmain SHAに一致しません。GitHub Actions deploy run・Cloudflare Versionの100%配信を確認してください。" >&2
+          echo "ADMIN本番のbuild-infoを最大14分待ってもmainと照合できません。Workers Buildsのrun・checkout SHA・固定Worker Version・100%配信を確認し、PR/Issueへ停止理由を記録してください。" >&2
           exit 1

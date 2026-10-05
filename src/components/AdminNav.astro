@@ -171,16 +171,16 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   </div>
   <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
   <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
-      <a class="admin-action-center-link" href="/admin/action-center/" data-admin-page="action-center" data-admin-action-center-tab aria-current={current === "action-center" ? "page" : undefined} aria-label="要対応一覧（アクションセンター）" title="要対応一覧を開く"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>要対応</span></a>
+      <a class="admin-action-center-link" data-requires-admin href="/admin/action-center/" data-admin-page="action-center" data-admin-action-center-tab aria-current={current === "action-center" ? "page" : undefined} aria-label="要対応一覧（アクションセンター）" title="要対応一覧を開く"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>要対応</span></a>
       <a href="/admin/member-tasks/" data-admin-site="portal" data-admin-page="member-tasks" hidden={site !== "portal"} aria-current={current === "member-tasks" ? "page" : undefined}>タスク管理</a>
       <a href="/admin/member-calendar/" data-admin-site="portal" data-admin-page="member-calendar" hidden={site !== "portal"} aria-current={current === "member-calendar" ? "page" : undefined}>カレンダー</a>
       <a href="/admin/member-profile/" data-admin-site="portal" data-admin-page="member-profile" hidden={site !== "portal"} aria-current={current === "member-profile" ? "page" : undefined}>マイページ</a>
-      <a href="/admin/articles/" data-admin-site="atlas" data-admin-page="articles" hidden={site !== "atlas"} aria-current={current === "articles" && site === "atlas" ? "page" : undefined}>編集・フィードバック</a>
+      <a href="/admin/articles/" data-requires-admin data-admin-site="atlas" data-admin-page="articles" hidden={site !== "atlas"} aria-current={current === "articles" && site === "atlas" ? "page" : undefined}>編集・フィードバック</a>
       <a href="/admin/operations/?project=atlas" data-admin-site="atlas" data-admin-page="operations" hidden={site !== "atlas"} aria-current={current === "operations" && site === "atlas" ? "page" : undefined}>タスク管理</a>
       <a href="/admin/calendar/?project=atlas" data-admin-site="atlas" data-admin-page="calendar" hidden={site !== "atlas"} aria-current={current === "calendar" && site === "atlas" ? "page" : undefined}>カレンダー</a>
       <a href="/admin/operations/?project=secretariat" data-admin-site="secretariat" data-admin-page="operations" hidden={site !== "secretariat"} aria-current={current === "operations" && site === "secretariat" ? "page" : undefined}>事務局タスク管理</a>
       <a href="/admin/calendar/?project=secretariat" data-admin-site="secretariat" data-admin-page="calendar" hidden={site !== "secretariat"} aria-current={current === "calendar" && site === "secretariat" ? "page" : undefined}>事務局カレンダー</a>
-      <a href="/admin/profile-requests/" data-admin-site="secretariat" data-admin-page="profile-requests" hidden={site !== "secretariat"} aria-current={current === "profile-requests" && site === "secretariat" ? "page" : undefined}>メンバー情報の承認</a>
+      <a href="/admin/profile-requests/" data-project-manager-only data-admin-site="secretariat" data-admin-page="profile-requests" hidden={site !== "secretariat"} aria-current={current === "profile-requests" && site === "secretariat" ? "page" : undefined}>メンバー情報の承認</a>
       <a href="/admin/operations/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="operations" hidden={site !== "semi-platform"} aria-current={current === "operations" && site === "semi-platform" ? "page" : undefined}>ゼミ・タスク管理</a>
       <a href="/admin/calendar/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="calendar" hidden={site !== "semi-platform"} aria-current={current === "calendar" && site === "semi-platform" ? "page" : undefined}>ゼミ・カレンダー</a>
       <a href="/admin/operations/?project=student-council-exchange" data-admin-site="student-council" data-admin-page="operations" hidden={site !== "student-council"} aria-current={current === "operations" && site === "student-council" ? "page" : undefined}>生徒会タスク管理</a>
@@ -323,7 +323,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         item.hidden = !(isManager || managerProjects.length > 0) || item.dataset.adminSite !== state.site;
       });
     };
-    type AuthStatus = { email?: string; isManager?: boolean; managerProjects?: string[]; error?: string };
+    type AuthStatus = { canAccessAdmin?: boolean; email?: string; isManager?: boolean; managerProjects?: string[]; error?: string };
     type AuthStatusResult = { ok: boolean; status: number; contentType: string; data: AuthStatus };
     let authStatusRequest: Promise<AuthStatusResult> | null = null;
     let authStatusCache: { value: AuthStatusResult; expiresAt: number } | null = null;
@@ -359,6 +359,13 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         const status = response.data;
         if (requestId !== document.documentElement.dataset.adminNavRequest) return;
         applyManagerVisibility(status.isManager === true, status.managerProjects ?? []);
+        const memberOnly = status.canAccessAdmin === false;
+        document.querySelectorAll<HTMLElement>('[data-requires-admin]').forEach((item) => { item.hidden = memberOnly || (Boolean(item.dataset.adminSite) && item.dataset.adminSite !== readRouteState().site); });
+        document.querySelectorAll<HTMLAnchorElement>('a[data-admin-page="operations"],a[data-admin-page="calendar"],a[data-member-operation-link]').forEach((link) => {
+          const calendar = link.dataset.adminPage === 'calendar' || link.dataset.memberOperationLink === 'calendar';
+          const currentProject = link.dataset.memberProject || new URL(link.href).searchParams.get('project') || readRouteState().slug;
+          link.href = `/admin/${memberOnly ? calendar ? 'member-calendar' : 'member-tasks' : calendar ? 'calendar' : 'operations'}/?project=${encodeURIComponent(currentProject)}`;
+        });
       } catch {
         // 権限UIの更新失敗だけでページ全体を止めない。次のpage-loadで再試行する。
       }

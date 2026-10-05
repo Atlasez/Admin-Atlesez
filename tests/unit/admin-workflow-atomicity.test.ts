@@ -61,6 +61,7 @@ const createEnvironment = (
       proposed_country TEXT,
       proposed_timezone TEXT,
       proposed_bio TEXT,
+      submitted_at TEXT NOT NULL DEFAULT '2026-10-05T10:00:00.000Z',
       task_id TEXT
     );
     CREATE TABLE editorial_member_profiles (
@@ -87,6 +88,7 @@ const createEnvironment = (
       status TEXT NOT NULL,
       project_id TEXT NOT NULL,
       proposed_internal_bio TEXT,
+      submitted_at TEXT NOT NULL DEFAULT '2026-10-05T10:00:00.000Z',
       task_id TEXT,
       reviewed_by TEXT,
       reviewed_at TEXT,
@@ -111,6 +113,13 @@ const createEnvironment = (
       role TEXT NOT NULL,
       joined_at TEXT NOT NULL,
       UNIQUE(project_id,email)
+    );
+    CREATE TABLE admin_member_lifecycle (
+      email TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'active'
+    );
+    CREATE TABLE atlasez_project_member_lifecycle (
+      project_id TEXT NOT NULL, email TEXT NOT NULL, state TEXT NOT NULL,
+      PRIMARY KEY(project_id,email)
     );
     CREATE TABLE atlasez_member_discord_accounts (
       email TEXT PRIMARY KEY,
@@ -581,6 +590,9 @@ it("rolls back application acceptance and membership if its workflow event canno
   const { db, environment } = createEnvironment({
     withoutWorkflowEvents: true,
   });
+  const membershipsBefore = db
+    .prepare("SELECT * FROM atlasez_project_memberships")
+    .all();
 
   const response = await acceptApplication(environment, "accept-without-event");
 
@@ -591,11 +603,16 @@ it("rolls back application acceptance and membership if its workflow event canno
   expect(
     db.prepare("SELECT COUNT(*) AS count FROM editorial_member_profiles").get(),
   ).toEqual({ count: 0 });
+  expect(db.prepare("SELECT * FROM atlasez_project_memberships").all()).toEqual(
+    membershipsBefore,
+  );
   expect(
     db
-      .prepare("SELECT COUNT(*) AS count FROM atlasez_project_memberships")
-      .get(),
-  ).toEqual({ count: 1 });
+      .prepare(
+        "SELECT * FROM atlasez_project_memberships WHERE email='applicant@example.com'",
+      )
+      .all(),
+  ).toEqual([]);
 });
 
 it("commits project-profile approval with its event and replays it once", async () => {

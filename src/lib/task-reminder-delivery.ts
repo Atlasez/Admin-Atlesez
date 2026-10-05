@@ -69,6 +69,17 @@ const RETRY_DELAYS_MS = [
 ];
 const RETRY_WINDOW_MS = 23 * 60 * 60_000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ACTIVE_REMINDER_RECIPIENT_SQL = `
+  AND NOT EXISTS (
+    SELECT 1 FROM atlasez_project_member_lifecycle lifecycle
+    WHERE lifecycle.project_id=t.project_id
+      AND lower(lifecycle.email)=lower(trim(t.reminder_email))
+      AND lifecycle.state IN ('paused','withdrawn')
+  )
+  AND NOT (t.project_id='atlas' AND EXISTS (
+    SELECT 1 FROM admin_member_lifecycle archived
+    WHERE lower(archived.email)=lower(trim(t.reminder_email)) AND archived.status='archived'
+  ))`;
 
 const safeLog = (
   logger: Pick<Console, "info" | "error">,
@@ -215,7 +226,8 @@ async function createOccurrenceAttempt(
        SELECT ?,r.id,?,?,?,?,?,'pending',0,?,?,?,?
        FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
        WHERE r.id=? AND r.remind_at_utc=? AND r.remind_at_utc<=?
-         AND t.status!='done' AND t.archived_at IS NULL AND lower(trim(t.reminder_email))=lower(?)`,
+         AND t.status!='done' AND t.archived_at IS NULL AND t.is_test_data=0 AND lower(trim(t.reminder_email))=lower(?)
+         ${ACTIVE_REMINDER_RECIPIENT_SQL}`,
   )
     .bind(
       deliveryKey,
@@ -253,8 +265,9 @@ async function claimAttempt(
            SELECT 1 FROM editorial_task_reminders r
            JOIN editorial_tasks t ON t.id=r.task_id
            WHERE r.id=a.reminder_id AND r.remind_at_utc=a.occurrence_at
-             AND r.remind_at_utc<=? AND t.status!='done' AND t.archived_at IS NULL
+             AND r.remind_at_utc<=? AND t.status!='done' AND t.archived_at IS NULL AND t.is_test_data=0
              AND lower(trim(t.reminder_email))=lower(a.recipient_email)
+             ${ACTIVE_REMINDER_RECIPIENT_SQL}
          )`,
   )
     .bind(
@@ -423,8 +436,9 @@ export async function dispatchDueTaskReminders(
               CASE WHEN (SELECT COUNT(*) FROM editorial_task_reminders rr WHERE rr.task_id=r.task_id)=1 THEN COALESCE(t.reminder_repeat,'none') ELSE 'none' END AS repeat,
               lower(trim(t.reminder_email)) AS recipient_email
        FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
-       WHERE t.status!='done' AND t.archived_at IS NULL AND r.remind_at_utc IS NOT NULL AND r.remind_at_utc<=?
+       WHERE t.status!='done' AND t.archived_at IS NULL AND t.is_test_data=0 AND r.remind_at_utc IS NOT NULL AND r.remind_at_utc<=?
          AND lower(trim(t.reminder_email)) IS NOT NULL
+         ${ACTIVE_REMINDER_RECIPIENT_SQL}
        ORDER BY r.remind_at_utc ASC LIMIT ?`,
   )
     .bind(now, limit)
@@ -455,8 +469,9 @@ export async function dispatchDueTaskReminders(
        JOIN editorial_task_reminders r ON r.id=a.reminder_id
        JOIN editorial_tasks t ON t.id=r.task_id
        WHERE a.attempt_count<? AND a.retry_deadline_at>? AND r.remind_at_utc=a.occurrence_at
-         AND r.remind_at_utc<=? AND t.status!='done' AND t.archived_at IS NULL
+         AND r.remind_at_utc<=? AND t.status!='done' AND t.archived_at IS NULL AND t.is_test_data=0
          AND lower(trim(t.reminder_email))=lower(a.recipient_email)
+         ${ACTIVE_REMINDER_RECIPIENT_SQL}
          AND ((a.status IN ('pending','retry') AND a.next_attempt_at<=?)
               OR (a.status='sending' AND a.claimed_at<=?))
        ORDER BY a.next_attempt_at ASC LIMIT ?`,

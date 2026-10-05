@@ -58,7 +58,7 @@ npm run deploy:public
 
 ```
 
-ADMIN本番の通常経路は、mainのCI成功後にproduction Environment承認を受けるGitHub Actions deploy workflowです。D1 migrationは自動適用しません。`npm run deploy:admin`はGitHub Actionsが使えない緊急時の例外手順に限り、cleanな`main` checkout、正本remote main由来、レビュー済みSHAの明示指定、別途の実行承認が必要です。詳細は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)を参照してください。
+ADMIN本番の通常経路は、GitHub `Atlasez/Admin-Atlesez`のProduction branchを`main`に固定したCloudflare Workers Buildsだけです。PRのCI成功・レビューをマージ条件とし、Build側でも検証を実行します。`.github/workflows/deploy-admin-from-github.yml`は検証専用で、ADMIN成果物とdry-runを確認するだけです。Cloudflareへの書き込みは行いません。D1 migrationは自動適用せず、新Workerに必要なmigrationのバックアップ・レビュー・適用記録を先に完了します。`npm run deploy:admin`はWorkers Buildsが使えない緊急時に限り、cleanな`main` checkout、正本remote main由来、レビュー済みSHAの明示指定、別途の実行承認が必要です。固定Worker・Build/Deploy command・切替手順は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)と[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照してください。
 
 デプロイ前のターゲット検証では、Worker名・Cloudflareアカウント・ドメインルート・D1が正しいか確認します。
 検査に失敗した場合は、設定を手で書き換えて続行せず、正しい設定ファイルを確認してください。
@@ -161,8 +161,8 @@ npx wrangler secret put RESEND_API_KEY --config wrangler.admin.jsonc
 
 1. `git log`、公開`build-info.json`、Cloudflare Versionのデプロイ元SHAを照合する
 2. `npm run verify:deploy-config`とGitHub `main`のCI状態を確認する
-3. PRレビュー済みの変更を`main`へマージし、GitHub Actions CI、production Environment承認、対象SHAの配信完了を確認する
-4. CI・Environment承認・SHA照合のいずれかが停止中または不一致ならdeployを止めてIssueへ記録する。緊急時の例外は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)の承認・ガード条件を満たす場合だけ実施する
+3. PRのCI成功・レビューとD1 migration前提を確認し、正常接続済みのWorkers Buildsでレビュー済みmain SHAの配信完了を確認する
+4. Workers Builds未接続・内部エラー・CI失敗・SHA不一致なら配信を止めてIssueへ記録する。緊急時の例外は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)の承認・ガード条件を満たす場合だけ実施する
 5. Chromeで`/admin/portal/`と`/admin/manage/?project=atlas`を確認し、古い一時cloneや別アカウントのWorkerを使わない
 
 ### 記事が開けない

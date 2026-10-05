@@ -21,6 +21,7 @@ type Task = {
   due_at?: string | null;
   due_timezone?: string;
   archived_at?: string | null;
+  is_test_data?: number;
 };
 type Data = {
   scope?: { email?: string; isManager?: boolean; memberAccess?: boolean };
@@ -54,6 +55,9 @@ function initialize() {
   const statusFilter = get<HTMLSelectElement>("[data-status-filter]");
   const dueFilter = get<HTMLSelectElement>("[data-due-filter]");
   const showArchived = get<HTMLInputElement>("[data-show-archived]");
+  const showTestData = get<HTMLInputElement>("[data-show-test]");
+  const createTestData = get<HTMLInputElement>("[data-create-test]");
+  const createTestLabel = get<HTMLElement>("[data-create-test-label]");
   const loadMore = get<HTMLButtonElement>("[data-task-load-more]");
   let data: Data = {};
   const initialParams = new URLSearchParams(location.search);
@@ -94,6 +98,8 @@ function initialize() {
     const label = assigneeSelect.closest("label");
     if (label)
       label.hidden = !data.scope?.isManager && project?.role !== "manager";
+    createTestLabel.hidden =
+      !data.scope?.isManager && project?.role !== "manager";
     const selected = new Set(
       [...assigneeSelect.selectedOptions].map((option) => option.value),
     );
@@ -110,6 +116,7 @@ function initialize() {
   const query = () => {
     const params = new URLSearchParams({
       includeArchived: showArchived.checked ? "1" : "0",
+      includeTestData: showTestData.checked ? "1" : "0",
       limit: "50",
       view: filter,
       q: search.value.trim(),
@@ -216,7 +223,13 @@ function initialize() {
               : task.status === "done"
                 ? `<button type="button" class="status-button task-archive-button" data-archive-task="${escape(task.id)}" data-archive-next="true">アーカイブ</button>`
                 : "";
-          return `<article class="task status-${escape(task.status)} ${task.archived_at ? "is-archived" : ""}${focusId === task.id ? " is-focused" : ""}" data-task-id="${escape(task.id)}" ${focusId === task.id ? 'tabindex="-1"' : ""}><div class="task-body"><div class="task-title"><span class="status-dot" aria-hidden="true"></span><h3>${escape(task.title)}</h3>${task.archived_at ? '<span class="badge badge-status">アーカイブ済み</span>' : ""}</div><div class="task-meta"><span class="badge">${task.task_kind === "feedback" ? "フィードバック依頼" : "タスク依頼"}</span><span class="badge">${escape(project?.name ?? task.project_id)}</span><span class="badge badge-status">${statusLabel}</span>${assignee ? `<span class="badge">担当: ${escape(assignee)}</span>` : ""}</div>${task.details ? `<p>${escape(task.details)}</p>` : ""}${task.due_at ? `<p>期限: ${escape(formatTaskDeadline(task.due_at, task.due_timezone || "Asia/Tokyo"))}</p>` : ""}${approvalLink}<a href="/admin/task-detail/?task=${encodeURIComponent(task.id)}">詳細・引き継ぎ →</a></div>${
+          const manager = Boolean(
+            data.scope?.isManager || project?.role === "manager",
+          );
+          const testToggle = manager
+            ? `<button type="button" class="status-button" data-test-task="${escape(task.id)}" data-test-next="${task.is_test_data ? "false" : "true"}">${task.is_test_data ? "通常タスクに戻す" : "テスト用に設定"}</button>`
+            : "";
+          return `<article class="task status-${escape(task.status)} ${task.archived_at ? "is-archived" : ""}${focusId === task.id ? " is-focused" : ""}" data-task-id="${escape(task.id)}" ${focusId === task.id ? 'tabindex="-1"' : ""}><div class="task-body"><div class="task-title"><span class="status-dot" aria-hidden="true"></span><h3>${escape(task.title)}</h3>${task.is_test_data ? '<span class="badge badge-status">テストデータ</span>' : ""}${task.archived_at ? '<span class="badge badge-status">アーカイブ済み</span>' : ""}</div><div class="task-meta"><span class="badge">${task.task_kind === "feedback" ? "フィードバック依頼" : "タスク依頼"}</span><span class="badge">${escape(project?.name ?? task.project_id)}</span><span class="badge badge-status">${statusLabel}</span>${assignee ? `<span class="badge">担当: ${escape(assignee)}</span>` : ""}</div>${task.details ? `<p>${escape(task.details)}</p>` : ""}${task.due_at ? `<p>期限: ${escape(formatTaskDeadline(task.due_at, task.due_timezone || "Asia/Tokyo"))}</p>` : ""}${approvalLink}<a href="/admin/task-detail/?task=${encodeURIComponent(task.id)}">詳細・引き継ぎ →</a></div>${
             editable
               ? `<div class="task-actions"><label class="status-control"><span>進捗</span><select aria-label="${escape(task.title)}の状態" data-task-status="${escape(task.id)}">${[
                   ["open", "未着手"],
@@ -229,7 +242,7 @@ function initialize() {
                   )
                   .join(
                     "",
-                  )}</select></label><button type="button" class="status-button" data-save-status="${escape(task.id)}">状態を保存</button>${archiveAction}</div>`
+                  )}</select></label><button type="button" class="status-button" data-save-status="${escape(task.id)}">状態を保存</button>${archiveAction}${testToggle}</div>`
               : '<div class="task-actions"><span class="badge">閲覧のみ</span></div>'
           }</article>`;
         })
@@ -316,6 +329,7 @@ function initialize() {
   statusFilter.addEventListener("change", filtersChanged);
   dueFilter.addEventListener("change", filtersChanged);
   showArchived.addEventListener("change", filtersChanged);
+  showTestData.addEventListener("change", filtersChanged);
   get<HTMLButtonElement>("[data-apply-filters]").addEventListener(
     "click",
     filtersChanged,
@@ -450,11 +464,13 @@ function initialize() {
         dueAt: get<HTMLInputElement>("[data-due]").value,
         dueTimezone: get<HTMLSelectElement>("[data-timezone]").value,
         details: get<HTMLTextAreaElement>("[data-details]").value,
+        isTestData: createTestData.checked,
       },
       "タスクを追加しました。",
       () => {
         get<HTMLInputElement>("[data-title]").value = "";
         get<HTMLTextAreaElement>("[data-details]").value = "";
+        createTestData.checked = false;
         [...assigneeSelect.options].forEach((option) => {
           option.selected = false;
         });
@@ -463,10 +479,11 @@ function initialize() {
   });
   list.addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>(
-      "[data-archive-task], [data-save-status]",
+      "[data-archive-task], [data-save-status], [data-test-task]",
     );
     if (!button || button.disabled) return;
     const archiveId = button.dataset.archiveTask;
+    const testId = button.dataset.testTask;
     const archive = button.dataset.archiveNext === "true";
     if (
       archiveId &&
@@ -474,16 +491,18 @@ function initialize() {
       !confirm("完了タスクを一覧からアーカイブします。監査履歴は保持されます。")
     )
       return;
-    const id = archiveId ?? button.dataset.saveStatus!;
+    const id = archiveId ?? testId ?? button.dataset.saveStatus!;
     if (!data.tasks?.some((task) => task.id === id && task.can_update === true))
       return;
-    const payload = archiveId
-      ? { archived: archive }
-      : {
-          status: list.querySelector<HTMLSelectElement>(
-            `[data-task-status="${CSS.escape(id)}"]`,
-          )?.value,
-        };
+    const payload = testId
+      ? { isTestData: button.dataset.testNext === "true" }
+      : archiveId
+        ? { archived: archive }
+        : {
+            status: list.querySelector<HTMLSelectElement>(
+              `[data-task-status="${CSS.escape(id)}"]`,
+            )?.value,
+          };
     void mutate(
       button,
       `/api/admin/operations/tasks/${encodeURIComponent(id)}`,

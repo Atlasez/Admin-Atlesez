@@ -45,7 +45,10 @@ const text = (value: unknown, max: number) =>
   typeof value === "string" ? value.trim().slice(0, max) : "";
 const schedules = new Set<Schedule>(["none", "daily", "weekly", "monthly"]);
 class TemplateUnavailableError extends Error {}
-const authoritySql = `(lower(t.owner_email)=lower(?) OR EXISTS(SELECT 1 FROM report_admin_permissions p WHERE lower(p.email)=lower(t.owner_email) AND p.subject='*') OR EXISTS(SELECT 1 FROM atlasez_project_memberships m WHERE m.project_id=t.project_id AND lower(m.email)=lower(t.owner_email) AND (m.role='manager' OR (m.role='member' AND json_array_length(t.assignees_json)=1 AND NOT EXISTS(SELECT 1 FROM json_each(t.assignees_json) a WHERE lower(a.value)<>lower(t.owner_email)))))) AND NOT EXISTS(SELECT 1 FROM json_each(t.assignees_json) a WHERE NOT EXISTS(SELECT 1 FROM atlasez_project_memberships m WHERE m.project_id=t.project_id AND lower(m.email)=lower(a.value)))`;
+const authoritySql = `(lower(t.owner_email)=lower(?) OR EXISTS(SELECT 1 FROM report_admin_permissions p WHERE lower(p.email)=lower(t.owner_email) AND p.subject='*') OR EXISTS(SELECT 1 FROM atlasez_project_memberships m WHERE m.project_id=t.project_id AND lower(m.email)=lower(t.owner_email) AND (m.role='manager' OR (m.role='member' AND json_array_length(t.assignees_json)=1 AND NOT EXISTS(SELECT 1 FROM json_each(t.assignees_json) a WHERE lower(a.value)<>lower(t.owner_email))))))
+  AND NOT EXISTS(SELECT 1 FROM atlasez_project_member_lifecycle l WHERE l.project_id=t.project_id AND lower(l.email)=lower(t.owner_email) AND l.state!='active')
+  AND NOT (t.project_id='atlas' AND EXISTS(SELECT 1 FROM admin_member_lifecycle archived WHERE lower(archived.email)=lower(t.owner_email) AND archived.status='archived'))
+  AND NOT EXISTS(SELECT 1 FROM json_each(t.assignees_json) a WHERE NOT EXISTS(SELECT 1 FROM atlasez_project_memberships m LEFT JOIN atlasez_project_member_lifecycle l ON l.project_id=m.project_id AND lower(l.email)=lower(m.email) WHERE m.project_id=t.project_id AND lower(m.email)=lower(a.value) AND COALESCE(l.state,'active')='active' AND NOT EXISTS(SELECT 1 FROM admin_member_lifecycle archived WHERE t.project_id='atlas' AND lower(archived.email)=lower(m.email) AND archived.status='archived')))`;
 export async function templateTaskId(id: string, run: string) {
   const bytes = new Uint8Array(
     await crypto.subtle.digest(
@@ -208,7 +211,7 @@ export async function handleTaskTemplates(
     const members = allowed.length
       ? await db
           .prepare(
-            `SELECT m.project_id,m.email,COALESCE(NULLIF(trim(p.display_name),''),'表示名未設定') AS name FROM atlasez_project_memberships m LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(m.email) WHERE m.project_id IN (${allowed.map(() => "?").join(",")})`,
+            `SELECT m.project_id,m.email,COALESCE(NULLIF(trim(p.display_name),''),'表示名未設定') AS name FROM atlasez_project_memberships m LEFT JOIN atlasez_project_member_lifecycle l ON l.project_id=m.project_id AND lower(l.email)=lower(m.email) LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(m.email) WHERE m.project_id IN (${allowed.map(() => "?").join(",")}) AND COALESCE(l.state,'active')='active' AND NOT EXISTS(SELECT 1 FROM admin_member_lifecycle a WHERE m.project_id='atlas' AND lower(a.email)=lower(m.email) AND a.status='archived')`,
           )
           .bind(...allowed)
           .all<{ project_id: string; email: string; name: string }>()
@@ -353,7 +356,7 @@ export async function handleTaskTemplates(
   if (assignees.length) {
     const rows = await db
       .prepare(
-        `SELECT lower(email) AS email FROM atlasez_project_memberships WHERE project_id=? AND lower(email) IN (${assignees.map(() => "?").join(",")})`,
+        `SELECT lower(m.email) AS email FROM atlasez_project_memberships m LEFT JOIN atlasez_project_member_lifecycle l ON l.project_id=m.project_id AND lower(l.email)=lower(m.email) WHERE m.project_id=? AND lower(m.email) IN (${assignees.map(() => "?").join(",")}) AND COALESCE(l.state,'active')='active' AND NOT EXISTS(SELECT 1 FROM admin_member_lifecycle a WHERE m.project_id='atlas' AND lower(a.email)=lower(m.email) AND a.status='archived')`,
       )
       .bind(project.id, ...assignees)
       .all<{ email: string }>();

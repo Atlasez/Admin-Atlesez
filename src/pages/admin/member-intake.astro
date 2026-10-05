@@ -1,0 +1,175 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
+
+const projects = [
+  ["atlas", "学習サイト「アトラス」"],
+  ["thinking-cafe", "考えるカフェ"],
+  ["seminar-platform", "ゼミプラットフォーム"],
+  ["student-council-exchange", "日本生徒会協会"],
+  ["secretariat", "運営事務局"],
+] as const;
+const requested = Astro.url.searchParams.get("project")?.trim().toLowerCase() ?? "";
+const project = projects.find(([slug]) => slug === requested);
+---
+
+<AdminLayout title="応募後の受入フォロー" description="連絡状況、初回タスク、次回フォローを記録します">
+  <main class="intake" data-member-intake data-project={project?.[0] ?? ""}>
+    <header>
+      <div><p>メンバー運営</p><h1>応募後の受入フォロー</h1><span>連絡状況、担当運営者、初回の小さなタスク、次回フォローを記録します。ここから応募者へ連絡や招待は送信されません。</span></div>
+      <a data-applications-link href={project ? `/admin/applications/?project=${encodeURIComponent(project[0])}` : "/admin/applications/"}>応募管理へ戻る →</a>
+    </header>
+    <section class="project-picker" aria-label="プロジェクト選択">
+      <label>プロジェクト<select data-project-select>
+        <option value="">プロジェクトを選択</option>
+        {projects.map(([slug, label]) => <option value={slug} selected={slug === project?.[0]}>{label}</option>)}
+      </select></label>
+      <label class="search-label">名前・メールで検索<input type="search" data-search placeholder="応募者またはメンバーを検索" /></label>
+      <output data-message aria-live="polite">{project ? "読み込み中…" : "プロジェクトを選択してください。"}</output>
+    </section>
+    <section class="entries" data-entries aria-label="応募者・メンバーの受入フォロー"></section>
+    <AdminRetryNotice />
+  </main>
+</AdminLayout>
+
+<style>
+  .intake{margin:0 auto;max-width:1180px;padding:0 1.25rem 4rem}.intake header{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2.25rem 0 1.25rem}.intake header p{color:var(--accent-primary);font-size:.7rem;font-weight:800;letter-spacing:.08em;margin:0}.intake h1{font-size:clamp(1.8rem,3vw,2.3rem);margin:.4rem 0}.intake header span{color:var(--text-secondary);font-size:.82rem;line-height:1.6}.intake header a{color:var(--accent-primary);font-size:.8rem;font-weight:800;white-space:nowrap}.project-picker{align-items:end;border-bottom:1px solid var(--border-default);display:grid;gap:.8rem;grid-template-columns:minmax(12rem,.6fr) minmax(16rem,1fr) 1fr;padding:1rem 0}.intake label{color:var(--text-secondary);display:grid;font-size:.72rem;font-weight:800;gap:.3rem}.intake input,.intake select,.intake textarea{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-primary);font:inherit;min-height:2.4rem;padding:.5rem;width:100%}.intake textarea{min-height:4.2rem;resize:vertical}.project-picker output{color:var(--text-secondary);font-size:.76rem}.entries{display:grid;gap:.8rem;margin-top:1rem}.entry{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.6rem;padding:1rem}.entry-head{align-items:start;display:flex;gap:1rem;justify-content:space-between}.entry h2{font-size:1rem;margin:0}.entry-head p{color:var(--text-secondary);font-size:.76rem;margin:.25rem 0}.entry-fields{display:grid;gap:.65rem;grid-template-columns:1fr 1fr 1.2fr}.entry-fields .wide{grid-column:1/-1}.entry-fields .check{align-items:center;display:flex;gap:.5rem}.entry-fields .check input{min-height:auto;width:auto}.entry-actions{align-items:center;display:flex;gap:.65rem;margin-top:.75rem}.entry-actions button{background:var(--accent-primary);border:1px solid var(--accent-primary);border-radius:.35rem;color:#fff;cursor:pointer;font:inherit;font-size:.78rem;font-weight:800;padding:.55rem .8rem}.entry-actions a{color:var(--accent-primary);font-size:.77rem}.entry-status{border:1px solid var(--border-default);border-radius:999px;font-size:.7rem;padding:.2rem .5rem}.empty{color:var(--text-secondary);padding:2rem;text-align:center}@media(max-width:760px){.intake header{align-items:start;flex-direction:column}.project-picker{grid-template-columns:1fr}.entry-fields{grid-template-columns:1fr}.entry-fields .wide{grid-column:auto}.entry-head{display:grid}}
+</style>
+
+<script>
+  import { readAdminApiJson } from "../../lib/admin-api";
+  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  const initializeMemberIntake = () => {
+    const root = document.querySelector<HTMLElement>("[data-member-intake]");
+    if (!root || root.dataset.ready === "true") return;
+    root.dataset.ready = "true";
+    const projectSelect = root.querySelector<HTMLSelectElement>("[data-project-select]")!;
+    const search = root.querySelector<HTMLInputElement>("[data-search]")!;
+    const message = root.querySelector<HTMLOutputElement>("[data-message]")!;
+    const entries = root.querySelector<HTMLElement>("[data-entries]")!;
+    const requestedProject = new URL(location.href).searchParams.get("project")?.trim().toLowerCase() ?? "";
+    const validProject = [...projectSelect.options].some((option) => option.value === requestedProject) ? requestedProject : "";
+    projectSelect.value = validProject;
+    root.dataset.project = validProject;
+    const applicationsLink = root.querySelector<HTMLAnchorElement>("[data-applications-link]");
+    if (applicationsLink) applicationsLink.href = validProject ? `/admin/applications/?project=${encodeURIComponent(validProject)}` : "/admin/applications/";
+    message.value = validProject ? "読み込み中…" : "プロジェクトを選択してください。";
+    const escape = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
+    type Entry = Record<string, any>;
+    let rows: Entry[] = [];
+    const draftSelectors = ["data-responsible", "data-consultation", "data-contact-status", "data-follow-up", "data-contact-note", "data-first-task", "data-follow-completed"];
+    const drafts = new Map<string, Record<string, string | boolean>>();
+    const draftKey = (email: string) => `${projectSelect.value}:${email}`;
+    const rememberDraft = (card: HTMLElement) => {
+      const values: Record<string, string | boolean> = {};
+      for (const selector of draftSelectors) {
+        const input = card.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[${selector}]`);
+        if (input) values[selector] = input instanceof HTMLInputElement && input.type === "checkbox" ? input.checked : input.value;
+      }
+      drafts.set(draftKey(card.dataset.entry ?? ""), values);
+    };
+    entries.addEventListener("input", (event) => {
+      const card = (event.target as HTMLElement).closest<HTMLElement>("[data-entry]");
+      if (card) rememberDraft(card);
+    });
+    entries.addEventListener("change", (event) => {
+      const card = (event.target as HTMLElement).closest<HTMLElement>("[data-entry]");
+      if (card) rememberDraft(card);
+    });
+    let responsible: Array<{email:string;displayName:string}> = [];
+    let busy = false;
+    let loading = false;
+    let loadGeneration = 0;
+    let load:(showLoading?:boolean)=>Promise<void>;
+    const retry = createAdminLoadRetry(root, () => load(true), "受入フォロー記録を読み込めませんでした。");
+    const dateInput = (value: unknown) => {
+      if (!value) return "";
+      const date = new Date(String(value));
+      if (!Number.isFinite(date.getTime())) return "";
+      return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    };
+    const render = () => {
+      const query = search.value.trim().toLocaleLowerCase();
+      const shown = rows.filter((row) => `${row.display_name} ${row.email}`.toLocaleLowerCase().includes(query));
+      entries.innerHTML = shown.map((row) => {
+        const managers = [...new Map([...responsible, ...(row.responsible_email ? [{email:row.responsible_email,displayName:row.responsible_email}] : [])].map((item) => [item.email, item])).values()];
+        const selectedResponsible = String(row.responsible_email ?? "");
+        const selectedConsultation = String(row.consultation_email ?? "");
+        const applicationLabel = row.application_status ? `応募：${row.application_status}` : row.application_id ? "応募：保存期間経過" : "直接追加メンバー／応募情報なし";
+        const taskLink = row.first_task_id ? `<a href="/admin/task-detail/?task=${encodeURIComponent(row.first_task_id)}">初回タスク：${escape(row.first_task_title)}（${escape(row.first_task_status ?? "未着手")}）</a>` : "";
+        const firstTaskLabel = row.first_task_id
+          ? row.first_task_type === "operator" ? "受入準備タスク（担当運営者）" : "初回タスク（メンバー担当）"
+          : row.is_member ? "初回の小さなタスク（メンバー担当）" : "受入準備タスク（担当運営者）";
+        return `<article class="entry" data-entry="${escape(row.email)}"><div class="entry-head"><div><h2>${escape(row.display_name || row.email)}</h2><p>${escape(row.email)} ・ ${escape(applicationLabel)}</p></div><span class="entry-status">${row.follow_up_completed_at ? "フォロー完了" : row.follow_up_at ? "フォロー予定あり" : "フォロー未設定"}</span></div><div class="entry-fields"><label>担当運営者<select data-responsible><option value="">担当未設定</option>${managers.map((item) => `<option value="${escape(item.email)}" ${item.email === selectedResponsible ? "selected" : ""}>${escape(item.displayName)}</option>`).join("")}</select></label><label>相談先<select data-consultation><option value="">相談先未設定</option>${managers.map((item) => `<option value="${escape(item.email)}" ${item.email === selectedConsultation ? "selected" : ""}>${escape(item.displayName)}</option>`).join("")}</select></label><label>連絡状況<select data-contact-status><option value="not_contacted" ${row.contact_status === "not_contacted" || !row.contact_status ? "selected" : ""}>未連絡</option><option value="contacted" ${row.contact_status === "contacted" ? "selected" : ""}>連絡済み</option><option value="replied" ${row.contact_status === "replied" ? "selected" : ""}>返信あり</option></select></label><label>次回フォロー日時<input type="datetime-local" data-follow-up value="${escape(dateInput(row.follow_up_at))}" /></label><label class="wide">連絡メモ<textarea data-contact-note maxlength="2000" placeholder="送信した連絡の要点や次に確認すること">${escape(row.contact_note)}</textarea></label><label class="${row.first_task_id ? "wide" : ""}">${firstTaskLabel}${row.first_task_id ? `<input value="${escape(row.first_task_title)}" disabled />` : `<input data-first-task maxlength="200" placeholder="例：最初の記事を1本読んで感想を共有する" />`}</label><label class="check"><input type="checkbox" data-follow-completed ${row.follow_up_completed_at ? "checked" : ""} />次回フォロー完了</label></div><div class="entry-actions"><button type="button" data-save>記録を保存</button>${taskLink}</div></article>`;
+      }).join("") || '<p class="empty">該当する応募者・メンバーがいません。</p>';
+      for (const card of entries.querySelectorAll<HTMLElement>("[data-entry]")) {
+        const draft = drafts.get(draftKey(card.dataset.entry ?? ""));
+        if (!draft) continue;
+        for (const [selector, value] of Object.entries(draft)) {
+          const input = card.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[${selector}]`);
+          if (!input) continue;
+          if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = Boolean(value);
+          else input.value = String(value);
+        }
+      }
+    };
+    load = async (showLoading=true) => {
+      const project = projectSelect.value;
+      const generation = ++loadGeneration;
+      loading = Boolean(project);
+      if (!project) { rows = []; render(); message.value = "プロジェクトを選択してください。"; return; }
+      retry.begin();
+      const requestedProject = project;
+      if (showLoading) message.value = "受入フォロー記録を読み込んでいます…";
+      try {
+        const response = await fetch(`/api/admin/member-intake?project=${encodeURIComponent(project)}`, {credentials:"same-origin",cache:"no-store"});
+        const data = await readAdminApiJson<{entries?:Entry[];responsibleCandidates?:Array<{email:string;displayName:string}>;error?:string}>(response, "記録を読み込めませんでした。");
+        if (!response.ok) throw new Error(data.error ?? "記録を読み込めませんでした。");
+        if (projectSelect.value !== requestedProject || generation !== loadGeneration) return;
+        rows = Array.isArray(data.entries) ? data.entries : [];
+        responsible = Array.isArray(data.responsibleCandidates) ? data.responsibleCandidates : [];
+        render();
+        message.value = `${rows.length}名の記録を読み込みました。連絡メールや招待は送信していません。`;
+        retry.success();
+      } catch (error) { if (projectSelect.value !== requestedProject || generation !== loadGeneration) return; retry.fail(error); message.value = error instanceof Error ? error.message : "記録を読み込めませんでした。"; }
+      finally { if (generation === loadGeneration) loading = false; }
+    };
+    entries.addEventListener("click", async (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-save]");
+      if (!button || busy || loading) return;
+      const card = button.closest<HTMLElement>("[data-entry]");
+      const email = card?.dataset.entry ?? "";
+      const row = rows.find((item) => item.email === email);
+      if (!card || !row) return;
+      const localDate = card.querySelector<HTMLInputElement>("[data-follow-up]")?.value ?? "";
+      const followUpAt = localDate ? new Date(localDate).toISOString() : null;
+      const body = {
+        email,
+        applicationId: row.application_id ?? null,
+        expectedRevision: Number(row.revision ?? 0),
+        responsibleEmail: card.querySelector<HTMLSelectElement>("[data-responsible]")?.value ?? "",
+        consultationEmail: card.querySelector<HTMLSelectElement>("[data-consultation]")?.value ?? "",
+        contactStatus: card.querySelector<HTMLSelectElement>("[data-contact-status]")?.value ?? "not_contacted",
+        contactNote: card.querySelector<HTMLTextAreaElement>("[data-contact-note]")?.value ?? "",
+        firstTaskTitle: row.first_task_id ? "" : card.querySelector<HTMLInputElement>("[data-first-task]")?.value ?? "",
+        followUpAt,
+        followUpCompleted: card.querySelector<HTMLInputElement>("[data-follow-completed]")?.checked ?? false,
+      };
+      busy = true; button.disabled = true; projectSelect.disabled = true; message.value = "記録を保存しています…";
+      try {
+        const response = await fetch(`/api/admin/member-intake?project=${encodeURIComponent(projectSelect.value)}`, {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+        const data = await readAdminApiJson<{error?:string}>(response, "記録を保存できませんでした。");
+        if (!response.ok) throw new Error(data.error ?? "記録を保存できませんでした。");
+        drafts.delete(draftKey(email));
+        message.value = "記録を保存しました。連絡メールや招待は送信していません。";
+        await load();
+      } catch (error) { message.value = error instanceof Error ? error.message : "記録を保存できませんでした。"; }
+      finally { busy = false; button.disabled = false; projectSelect.disabled = false; }
+    });
+    projectSelect.addEventListener("change", () => { rows = []; responsible = []; render(); if (applicationsLink) applicationsLink.href = projectSelect.value ? `/admin/applications/?project=${encodeURIComponent(projectSelect.value)}` : "/admin/applications/"; root.dataset.project = projectSelect.value; const url = new URL(location.href); url.searchParams.set("project", projectSelect.value); history.replaceState(null,"",url); void load(); });
+    search.addEventListener("input", render);
+    if (projectSelect.value) void load();
+  };
+  initializeMemberIntake();
+  document.addEventListener("astro:page-load", initializeMemberIntake);
+</script>

@@ -93,6 +93,13 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         </details>
       </div>
     </section>
+    <section class="permission-audit" data-manager-grants aria-labelledby="manager-grants-title">
+      <div class="member-admin__section-heading"><div><h2 id="manager-grants-title">プロジェクト管理者の任命</h2><small>独立した任命と、全分野権限からの自動付与を区別します。付与元未確認の任命もここで確認できます。</small></div><button type="button" data-manager-grants-reload>再読み込み</button></div>
+      <p>ロールの解除だけでは全分野権限は変わりません。全分野権限も外す場合は上の担当権限を変更してください。</p>
+      <label>参加者を検索<input type="search" data-manager-grants-search placeholder="名前・プロジェクト・メールアドレス" /></label>
+      <output data-manager-grants-message aria-live="polite"></output>
+      <div data-manager-grants-list>読み込み中…</div>
+    </section>
     <section class="permission-audit" aria-labelledby="permission-audit-title">
       <div class="member-admin__section-heading"><div><h2 id="permission-audit-title">権限変更履歴</h2><small>誰が、誰のアクセス範囲を変更したかを直近30件まで表示します。</small></div><label class="permission-audit__archive-toggle"><input type="checkbox" data-permission-audit-include-archived /> アーカイブを含む</label></div>
       <div class="permission-audit__list loading-state" data-permission-audit-list aria-live="polite">読み込み中…</div>
@@ -236,7 +243,9 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       const interestOptions = fields.map(field => `<label><input type="checkbox" data-modal-interest value="${esc(field)}" ${selectedInterests.includes(field) ? "checked" : ""} />${esc(field)}</label>`).join("");
       const discordRoleOptions = discordRoles.map((role: any) => `<label class="member-role-option${role.is_managed ? " member-role-option--managed" : ""}" data-modal-role-option data-role-name="${esc(role.name.toLocaleLowerCase())}"><input type="checkbox" data-modal-discord-role value="${esc(role.discord_role_id)}" ${memberRoleIds.includes(role.discord_role_id) ? "checked" : ""} ${role.is_managed ? "disabled" : ""} /><span>${esc(role.name)}${role.is_managed ? "（管理対象外）" : ""}</span></label>`).join("");
       const linked = Boolean(member.discord_user_id);
-      return `<div class="member-modal__grid"><label>所属機関<select data-modal-university><option value="" ${member.university ? "" : "selected"}>未設定</option>${opts(institutionOptions, member.university ?? "")}</select></label><label>学年<select data-modal-year><option value="" ${member.year ? "" : "selected"}>未設定</option>${opts(years, member.year ?? "")}</select></label><label class="member-modal__wide">担当権限（複数選択可）<select data-modal-permission-subjects multiple>${permissionOptions}</select></label><div class="member-modal__section member-modal__wide"><h3>担当・関心分野</h3><div class="member-interest-picker member-modal__interest-picker">${interestOptions}</div></div><section class="member-modal__section member-modal__wide" aria-labelledby="member-modal-discord-title"><h3 id="member-modal-discord-title">Discord連携 <span class="member-modal__discord-status" data-state="${linked ? "connected" : "unconnected"}">${linked ? "連携済み" : "未連携"}</span></h3><p>対象ユーザーのDiscord IDを入力して、サーバー内の本人確認とロール同期を行います。</p><div class="member-modal__link-row"><label>DiscordユーザーID<input inputmode="numeric" maxlength="22" data-modal-discord-id placeholder="15〜22桁の数字" value="${esc(member.discord_user_id ?? "")}" /></label><button type="button" class="member-modal__link-button" data-link-discord>${linked ? "Discord連携を更新" : "Discordと連携"}</button></div><p class="member-modal__help">Discordのユーザー設定で「開発者モード」を有効にすると、ユーザー名を右クリックしてIDをコピーできます。対象ユーザーが連携先サーバーに参加している必要があります。</p></section><section class="member-role-picker member-modal__wide" aria-labelledby="member-modal-role-title"><strong id="member-modal-role-title">Discord役職（複数選択可）</strong><div class="member-role-picker__tools"><input type="search" data-modal-role-search placeholder="役職名で検索" autocomplete="off" /><span class="member-role-picker__count" data-modal-role-visible-count>${discordRoles.length}件</span></div><div class="member-role-options" data-modal-role-options>${discordRoleOptions || "<small>ロールが読み込まれていません。</small>"}</div><small>既存ロールだけを割り当てます。Discord側のロール定義は変更しません。</small></section></div>`;
+      const managerDispositionMarkup = memberSubjects.includes("*")
+        ? `<label class="member-modal__wide">全分野権限を外す場合のアトラス運営内運営<select data-modal-atlas-manager-disposition><option value="">付与元に従う（未確認の場合は選択が必要）</option><option value="revoke">全分野権限と一緒に解除する</option><option value="preserve">独立した任命として維持する</option></select><small>自動付与は解除されます。確認済みの独立任命は維持されます。付与元未確認の場合は選択内容を記録します。</small></label>` : "";
+      return `<div class="member-modal__grid"><label>所属機関<select data-modal-university><option value="" ${member.university ? "" : "selected"}>未設定</option>${opts(institutionOptions, member.university ?? "")}</select></label><label>学年<select data-modal-year><option value="" ${member.year ? "" : "selected"}>未設定</option>${opts(years, member.year ?? "")}</select></label><label class="member-modal__wide">担当権限（複数選択可）<select data-modal-permission-subjects multiple>${permissionOptions}</select></label>${managerDispositionMarkup}<div class="member-modal__section member-modal__wide"><h3>担当・関心分野</h3><div class="member-interest-picker member-modal__interest-picker">${interestOptions}</div></div><section class="member-modal__section member-modal__wide" aria-labelledby="member-modal-discord-title"><h3 id="member-modal-discord-title">Discord連携 <span class="member-modal__discord-status" data-state="${linked ? "connected" : "unconnected"}">${linked ? "連携済み" : "未連携"}</span></h3><p>対象ユーザーのDiscord IDを入力して、サーバー内の本人確認とロール同期を行います。</p><div class="member-modal__link-row"><label>DiscordユーザーID<input inputmode="numeric" maxlength="22" data-modal-discord-id placeholder="15〜22桁の数字" value="${esc(member.discord_user_id ?? "")}" /></label><button type="button" class="member-modal__link-button" data-link-discord>${linked ? "Discord連携を更新" : "Discordと連携"}</button></div><p class="member-modal__help">Discordのユーザー設定で「開発者モード」を有効にすると、ユーザー名を右クリックしてIDをコピーできます。対象ユーザーが連携先サーバーに参加している必要があります。</p></section><section class="member-role-picker member-modal__wide" aria-labelledby="member-modal-role-title"><strong id="member-modal-role-title">Discord役職（複数選択可）</strong><div class="member-role-picker__tools"><input type="search" data-modal-role-search placeholder="役職名で検索" autocomplete="off" /><span class="member-role-picker__count" data-modal-role-visible-count>${discordRoles.length}件</span></div><div class="member-role-options" data-modal-role-options>${discordRoleOptions || "<small>ロールが読み込まれていません。</small>"}</div><small>既存ロールだけを割り当てます。Discord側のロール定義は変更しません。</small></section></div>`;
     };
     const openMemberModal = (email: string) => {
       const member = memberRecords.find(item => String(item.email).toLowerCase() === email.toLowerCase());
@@ -282,6 +291,17 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       } catch (error) { setMemberModalMessage(error instanceof Error ? error.message : "Discord連携に失敗しました。", "error"); }
       finally { linkButton.disabled = false; }
     });
+    const chooseAtlasManagerDisposition = (email: string): Promise<string | null> => new Promise(resolve => {
+      const dialog = document.createElement("dialog");
+      dialog.setAttribute("aria-labelledby", "manager-disposition-heading");
+      dialog.innerHTML = `<h2 id="manager-disposition-heading">アトラスの管理者任命を確認</h2><p>全分野権限を外した後の運営内運営を選択してください。付与元が未確認のため、選択内容を記録します。</p><p data-target-email></p><button type="button" data-decision="revoke">全分野権限と一緒に解除する</button><button type="button" data-decision="preserve">独立した任命として維持する</button><button type="button" data-decision="cancel">キャンセル</button>`;
+      dialog.querySelector("[data-target-email]")!.textContent = email;
+      let resolved = false;
+      const finish = (decision: string | null) => {if(resolved)return;resolved=true;dialog.close();dialog.remove();resolve(decision);};
+      dialog.addEventListener("cancel", event => {event.preventDefault();finish(null);});
+      dialog.addEventListener("click", event => {const button=(event.target as HTMLElement).closest<HTMLButtonElement>("[data-decision]");if(button)finish(button.dataset.decision === "cancel" ? null : button.dataset.decision ?? null);});
+      document.body.append(dialog);dialog.showModal();
+    });
     memberModalSave.addEventListener("click", async () => {
       if (!activeMemberEmail) return;
       const permissions = Array.from(memberModalContent.querySelector<HTMLSelectElement>("[data-modal-permission-subjects]")?.selectedOptions ?? []).map(option => option.value);
@@ -290,7 +310,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       memberModalSave.disabled = true;
       setMemberModalMessage("保存・Discord同期中…");
       try {
-        const response = await fetch("/api/admin/member-settings", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,subjects:permissions,roleIds:discordRoleIds,university:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-university]")?.value ?? "",year:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-year]")?.value ?? "",interests})});
+        const response = await fetch("/api/admin/member-settings", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,subjects:permissions,atlasManagerDisposition:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-atlas-manager-disposition]")?.value ?? "",roleIds:discordRoleIds,university:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-university]")?.value ?? "",year:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-year]")?.value ?? "",interests})});
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
           setMemberModalMessage(result.error ?? discordSyncMessage("Discord同期に失敗しました。", result.provisioning), "error");
@@ -432,13 +452,63 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         finally { sync.disabled = false; sync.textContent = "Discordロールを再同期"; }
         return;
       }
-      if (remove) { if (!confirm(`${email} の権限を削除しますか？`)) return; const query = new URLSearchParams({email,subject:remove.dataset.subject ?? ""}); const response = await fetch(`/api/admin/report-admin-permissions?${query}`, {method:"DELETE",credentials:"same-origin"}); const data = await response.json().catch(() => ({})); message.value = response.ok ? discordSyncMessage("権限を削除しました。", data.provisioning) : (data.error ?? "削除できませんでした。"); if (response.ok) await load(); }
+      if (remove) { if (!confirm(`${email} の権限を削除しますか？`)) return; const query = new URLSearchParams({email,subject:remove.dataset.subject ?? ""});
+        if (remove.dataset.subject === "*") {
+          const member = memberRecords.find(item => String(item.email).toLowerCase() === email.toLowerCase());
+          if (!member?.atlas_manager_source || ["none","legacy"].includes(member.atlas_manager_source)) {
+            const disposition = await chooseAtlasManagerDisposition(email);
+            if (!disposition) return;
+            query.set("atlasManagerDisposition", disposition);
+          }
+        }
+        const response = await fetch(`/api/admin/report-admin-permissions?${query}`, {method:"DELETE",credentials:"same-origin"}); const data = await response.json().catch(() => ({})); message.value = response.ok ? discordSyncMessage("権限を削除しました。", data.provisioning) : (data.error ?? "削除できませんでした。"); if (response.ok) await load(); }
     });
     workflowRoleList.addEventListener("click", async event => { const remove = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-remove-workflow-role]"); if (!remove) return; remove.disabled = true; const query = new URLSearchParams({email:remove.dataset.email ?? "",role:"subject-coordinator",subject:remove.dataset.subject ?? ""}); const response = await fetch(`/api/admin/editorial-workflow-roles?${query}`, {method:"DELETE",credentials:"same-origin"}); message.value = response.ok ? "分野統括の割り当てを削除しました。" : "分野統括の割り当てを削除できませんでした。"; if (response.ok) await load(); else remove.disabled = false; });
     void load().catch(error => { list.textContent = error instanceof Error ? error.message : "参加者一覧を読み込めませんでした。"; });
   }};
   document.addEventListener("astro:page-load", initializeMemberAdmin);
   initializeMemberAdmin();
+</script>
+<script>
+  type ManagerAppointment = {review_required?:number;project_id:string;project_name:string;email:string;role:string;source:string;revision:number;granted_by:string};
+  const grantPanel = document.querySelector<HTMLElement>("[data-manager-grants]");
+  if (grantPanel) {
+    const list = grantPanel.querySelector<HTMLElement>("[data-manager-grants-list]")!;
+    const message = grantPanel.querySelector<HTMLOutputElement>("[data-manager-grants-message]")!;
+    const search = grantPanel.querySelector<HTMLInputElement>("[data-manager-grants-search]")!;
+    const reload = grantPanel.querySelector<HTMLButtonElement>("[data-manager-grants-reload]")!;
+    let appointments:ManagerAppointment[]=[];
+    const sourceLabels:Record<string,string>={permission:"全分野権限から自動付与",explicit:"独立した任命を確認済み",legacy:"付与元未確認",none:"管理者任命なし"};
+    const renderGrants = () => {
+      const query=search.value.trim().toLowerCase();
+      list.replaceChildren();
+      for (const item of appointments.filter(row=>`${row.email} ${row.project_name}`.toLowerCase().includes(query))) {
+        const form=document.createElement("form");
+        const label=document.createElement("label");label.textContent=`${item.project_name}：${item.email}（${sourceLabels[item.source] ?? item.source}${item.review_required ? "・Discord同期の解除判断が必要" : ""}） `;
+        const select=document.createElement("select");select.setAttribute("aria-label",`${item.email} の ${item.project_name} ロール`);
+        for(const [value,text] of [["member","運営メンバー"],["manager","運営内運営（独立任命）"]]) {const option=document.createElement("option");option.value=value;option.textContent=text;select.append(option);}
+        select.value=item.role;label.append(select);
+        const save=document.createElement("button");save.type="submit";save.textContent="任命を保存・確認";
+        form.append(label,save);list.append(form);
+        form.addEventListener("submit",async event=>{
+          event.preventDefault();save.disabled=true;message.value="任命を保存中…";
+          try {
+            const response=await fetch("/api/admin/project-manager-grants",{method:"PATCH",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({projectId:item.project_id,email:item.email,role:select.value,expectedRole:item.role,expectedSource:item.source,revision:item.revision})});
+            const data=await response.json();if(!response.ok)throw new Error(data.error ?? "保存できませんでした。");
+            await loadGrants();message.value="任命を記録しました。全分野権限と通知は変更していません。";
+          } catch(error) {message.value=error instanceof Error ? error.message : "保存できませんでした。";} finally {save.disabled=false;}
+        });
+      }
+      if(!list.childElementCount)list.textContent="該当する所属はありません。";
+    };
+    const loadGrants = async () => {
+      reload.disabled=true;message.value="";
+      try {const response=await fetch("/api/admin/project-manager-grants",{credentials:"same-origin",cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error ?? "任命を読み込めませんでした。");appointments=data.members ?? [];renderGrants();}
+      catch(error) {message.value=error instanceof Error ? error.message : "任命を読み込めませんでした。";list.textContent="任命一覧を確認できません。再読み込みしてください。";}
+      finally {reload.disabled=false;}
+    };
+    search.addEventListener("input",renderGrants);reload.addEventListener("click",loadGrants);void loadGrants();
+  }
 </script>
 
 <script>

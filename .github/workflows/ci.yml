@@ -1,5 +1,5 @@
 # CI: PR・mainへのpushで内容を検証する。
-# ADMIN本番の配信は deploy-admin-from-github.yml が担当する。
+# ADMIN本番の通常配信はCloudflare Workers Buildsのmain接続だけが担当する。
 # このワークフローはPRとmainの検証を担当する。
 name: CI
 
