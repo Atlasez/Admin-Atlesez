@@ -15,7 +15,7 @@ import { nextTemplateOccurrence } from "../../src/lib/task-template-schedule";
 function fixture() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(
-    `CREATE TABLE atlasez_projects(id TEXT PRIMARY KEY);INSERT INTO atlasez_projects VALUES ('atlas');CREATE TABLE atlasez_project_memberships(project_id TEXT,email TEXT,role TEXT);INSERT INTO atlasez_project_memberships VALUES ('atlas','owner@example.com','manager'),('atlas','a@example.com','member');CREATE TABLE report_admin_permissions(email TEXT,subject TEXT);CREATE TABLE editorial_member_profiles(email TEXT,display_name TEXT);CREATE TABLE editorial_tasks(id TEXT PRIMARY KEY,project_id TEXT,assignee_email TEXT,title TEXT,details TEXT,status TEXT,due_at TEXT,due_timezone TEXT,created_by TEXT,created_at TEXT,updated_at TEXT);`,
+    `CREATE TABLE atlasez_projects(id TEXT PRIMARY KEY);INSERT INTO atlasez_projects VALUES ('atlas');CREATE TABLE atlasez_project_memberships(project_id TEXT,email TEXT,role TEXT);INSERT INTO atlasez_project_memberships VALUES ('atlas','owner@example.com','manager'),('atlas','a@example.com','member');CREATE TABLE atlasez_project_member_lifecycle(project_id TEXT,email TEXT,state TEXT);CREATE TABLE admin_member_lifecycle(email TEXT,status TEXT);CREATE TABLE report_admin_permissions(email TEXT,subject TEXT);CREATE TABLE editorial_member_profiles(email TEXT,display_name TEXT);CREATE TABLE editorial_tasks(id TEXT PRIMARY KEY,project_id TEXT,assignee_email TEXT,title TEXT,details TEXT,status TEXT,due_at TEXT,due_timezone TEXT,created_by TEXT,created_at TEXT,updated_at TEXT);`,
   );
   sqlite.exec(
     readFileSync(
@@ -138,6 +138,39 @@ describe("タスクテンプレートの作成・定期実行", () => {
         ?.enabled,
     ).toBe(0);
     sqlite.close();
+  });
+  it("does not create scheduled tasks owned by paused members or assigned to inactive members", async () => {
+    const { db, sqlite, seed } = fixture();
+    seed();
+    sqlite
+      .prepare(
+        "INSERT INTO atlasez_project_member_lifecycle VALUES ('atlas','owner@example.com','paused')",
+      )
+      .run();
+    expect(
+      await dispatchTaskTemplates(db, "primary@example.com", now),
+    ).toMatchObject({ created: 0, failed: 1 });
+    expect(
+      sqlite.prepare("SELECT COUNT(*) AS count FROM editorial_tasks").get()
+        ?.count,
+    ).toBe(0);
+    sqlite.close();
+    const second = fixture();
+    second.seed();
+    second.sqlite
+      .prepare(
+        "INSERT INTO atlasez_project_member_lifecycle VALUES ('atlas','a@example.com','withdrawn')",
+      )
+      .run();
+    expect(
+      await dispatchTaskTemplates(second.db, "primary@example.com", now),
+    ).toMatchObject({ created: 0, failed: 1 });
+    expect(
+      second.sqlite
+        .prepare("SELECT COUNT(*) AS count FROM editorial_tasks")
+        .get()?.count,
+    ).toBe(0);
+    second.sqlite.close();
   });
   it("reuses the task id on a repeated manual request and guards against a stale template snapshot", async () => {
     const { db, sqlite, seed } = fixture();

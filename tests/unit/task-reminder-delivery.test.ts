@@ -210,6 +210,17 @@ describe("task reminder delivery", () => {
       },
     });
     expect(result).toEqual({ sent: 1, failed: 0 });
+    const lifecycleGuardedQueries = db.queries.filter((query) =>
+      query.includes("atlasez_project_member_lifecycle"),
+    );
+    expect(lifecycleGuardedQueries).toHaveLength(4);
+    expect(
+      lifecycleGuardedQueries.every(
+        (query) =>
+          query.includes("lifecycle.state IN ('paused','withdrawn')") &&
+          query.includes("archived.status='archived'"),
+      ),
+    ).toBe(true);
     expect(requests).toHaveLength(1);
     expect(new Headers(requests[0].headers).get("Idempotency-Key")).toBe(
       "atlasez-reminder-stable",
