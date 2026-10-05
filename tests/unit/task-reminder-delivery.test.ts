@@ -21,9 +21,17 @@ class FakeStatement {
     if (this.query.includes("SELECT r.id,r.remind_at,r.timezone"))
       return { results: this.db.legacyRows as T[] };
     if (this.query.includes("SELECT r.id AS reminder_id"))
-      return { results: this.db.dueRows as T[] };
-    if (this.query.includes("SELECT a.delivery_key"))
-      return { results: this.db.attemptRows as T[] };
+      return {
+        results: (this.db.recipientActive ? this.db.dueRows : []) as T[],
+      };
+    if (this.query.includes("SELECT a.delivery_key")) {
+      const results = this.db.recipientActive ? [...this.db.attemptRows] : [];
+      if (this.db.flipLifecycleBeforeClaim) {
+        this.db.recipientActive = false;
+        this.db.flipLifecycleBeforeClaim = false;
+      }
+      return { results: results as T[] };
+    }
     return { results: [] as T[] };
   }
   async run() {
@@ -33,7 +41,11 @@ class FakeStatement {
         "UPDATE editorial_task_reminder_delivery_attempts AS a",
       )
     )
-      return { meta: { changes: this.db.claimChanges } };
+      return {
+        meta: {
+          changes: this.db.recipientActive ? this.db.claimChanges : 0,
+        },
+      };
     if (
       this.query.startsWith(
         "INSERT OR IGNORE INTO editorial_task_reminder_delivery_attempts",
@@ -49,6 +61,8 @@ class FakeDb {
   legacyRows: Array<{ id: string; remind_at: string; timezone: string }> = [];
   normalizedValues: unknown[][] = [];
   claimChanges = 1;
+  recipientActive = true;
+  flipLifecycleBeforeClaim = false;
   readonly dueRows = [
     {
       reminder_id: "reminder-1",
@@ -248,6 +262,38 @@ describe("task reminder delivery", () => {
     const db = new FakeDb();
     db.dueRows.splice(0);
     db.attemptRows.splice(0);
+    let calls = 0;
+    const result = await dispatchDueTaskReminders(env(db), {
+      now,
+      fetcher: async () => {
+        calls += 1;
+        return new Response(null, { status: 200 });
+      },
+    });
+    expect(result).toEqual({ sent: 0, failed: 0 });
+    expect(calls).toBe(0);
+  });
+
+  it("skips paused recipients for due reminders and existing retries", async () => {
+    const db = new FakeDb();
+    db.recipientActive = false;
+    db.dueRows.splice(0);
+    let calls = 0;
+    const result = await dispatchDueTaskReminders(env(db), {
+      now,
+      fetcher: async () => {
+        calls += 1;
+        return new Response(null, { status: 200 });
+      },
+    });
+    expect(result).toEqual({ sent: 0, failed: 0 });
+    expect(calls).toBe(0);
+  });
+
+  it("rechecks lifecycle state when claiming a reminder after candidates load", async () => {
+    const db = new FakeDb();
+    db.dueRows.splice(0);
+    db.flipLifecycleBeforeClaim = true;
     let calls = 0;
     const result = await dispatchDueTaskReminders(env(db), {
       now,

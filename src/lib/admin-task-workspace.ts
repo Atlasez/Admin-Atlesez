@@ -206,8 +206,12 @@ export async function handleTaskWorkspace(
             await context.db
               .prepare(
                 `SELECT m.email,COALESCE(NULLIF(p.display_name,''),'表示名未登録') AS name
-        FROM atlasez_project_memberships m LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(m.email)
-        WHERE m.project_id=? ORDER BY name,m.email`,
+        FROM atlasez_project_memberships m
+        LEFT JOIN atlasez_project_member_lifecycle l ON l.project_id=m.project_id AND lower(l.email)=lower(m.email)
+        LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(m.email)
+        WHERE m.project_id=? AND COALESCE(l.state,'active')='active'
+          AND NOT EXISTS(SELECT 1 FROM admin_member_lifecycle a WHERE m.project_id='atlas' AND lower(a.email)=lower(m.email) AND a.status='archived')
+        ORDER BY name,m.email`,
               )
               .bind(task.project_id)
               .all<{ email: string; name: string }>()

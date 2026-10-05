@@ -202,6 +202,22 @@ describe("task workspaces", () => {
         .get(a),
     ).toMatchObject({ assignee_email: owner });
   });
+  it("does not offer inactive members in the handoff recipient list", async () => {
+    const { context, sqlite } = fixture();
+    sqlite
+      .prepare(
+        "INSERT INTO atlasez_project_member_lifecycle(project_id,email,state) VALUES ('atlas',?,'paused')",
+      )
+      .run(next);
+    const result = await handleTaskWorkspace(
+      new Request("https://admin.example/api/admin/task-workspaces/" + a),
+      a,
+      context,
+    );
+    expect(await result.json()).toMatchObject({
+      members: [{ email: owner }],
+    });
+  });
   it("rechecks recipient lifecycle in the atomic handoff write", async () => {
     const { save, input, sqlite, setBeforeBatch } = fixture();
     setBeforeBatch(() => {
