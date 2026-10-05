@@ -624,6 +624,10 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       "更新前も表示される記事",
     );
     await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "visible",
+      });
       document.dispatchEvent(new Event("visibilitychange"));
     });
     await expect.poll(() => requestCount).toBe(2);

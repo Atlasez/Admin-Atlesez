@@ -7989,17 +7989,6 @@ async function getProjectReviewerScope(
   return { scope: reviewerScope, project };
 }
 
-async function getAnyProjectReviewerScope(request: Request, env: Env): Promise<AdminScope | Response> {
-  const scope = await getProjectMemberScope(request, env);
-  if (isResponse(scope)) return scope;
-  if (scope.isManager) return scope;
-  for (const slug of APPLICATION_FORM_SLUGS) {
-    const role = await operationProjectRole(env, scope, slug);
-    if (role === "manager") return scope;
-  }
-  return json({ error: "応募後フォローは担当プロジェクトの運営内運営のみ利用できます。" }, 403);
-}
-
 async function getProjectProfileReviewerScope(
   request: Request, env: Env, requestedProject: string,
 ): Promise<ProjectReviewerScope | Response> {
