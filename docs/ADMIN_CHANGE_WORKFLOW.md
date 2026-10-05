@@ -55,17 +55,23 @@ PR本文に必ず次を記載する。
 
 ## 5. 本番デプロイ
 
-`.github/workflows/deploy-admin-from-github.yml`をADMIN本番の唯一の通常デプロイ経路とする。mainのCI成功後に`production` Environmentの承認が必要で、workflowはmainのHEADが対象SHAから進んでいないことを確認してから配信する。変更が`docs/deployments/cloudflare-latest.json`だけなら本番配信を省略する。Cloudflare Workers Buildsを併用しない。Build設定は次に固定する。
+ADMIN本番の唯一の通常デプロイ経路はCloudflare Workers Buildsで、repositoryを`Atlasez/Admin-Atlesez`、Production branchを`main`、Workerを`atlasez-admin`に固定する。PRのCI成功・レビューをmainマージ条件とし、Build側でも検証を成功条件にする。
 
 ```bash
-# Build command
-npm ci && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ npm run build
+# Workers Builds: Build command
+npm ci && npm run verify:deploy-config && npm run check && npm run lint && npm test && npm run format:check && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ CF_BRANCH=main npm run build && npm run verify:build-info && npx wrangler deploy --dry-run --config wrangler.admin.jsonc --keep-vars
 
-# Deploy command
+# Workers Builds: Deploy command
 npx wrangler deploy --config wrangler.admin.jsonc --keep-vars
 ```
 
-PRのCI成功後にmainへマージし、main pushに対するCI全成功後にGitHub Actionsのdeploy workflowを起動する。production Environment承認後に配信する。WorkflowはD1 migrationを実行せず、build artifactのSHA・Worker名・100%配信・公開build-infoを検証する。Cloudflare Workers Buildsを再接続する場合は、GitHub Actions deployを先に止め、運用方針をPRで切り替える。GitHub Actionsも利用できない緊急時に限り、[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)の承認を得て、`npm run deploy:admin`をcleanな`main` checkoutから実行できる。このローカルガードは明示承認SHA、remote main由来、clean worktree、ADMIN向けbuild-infoを検証する。SHAはその場でHEADから生成せず、レビュー済みmain commitに対して明示承認された40桁値を指定する。
+Build checkoutのHEAD、接続Production branch、build-infoのcommit/ref/targetを照合する。任意SHAを固定してmetadataを上書きしない。既存bindings・varsを維持し、Account・Worker・repository・branch・コマンド・影響・復旧方法を接続前にレビューする。
+
+`.github/workflows/deploy-admin-from-github.yml`は検証専用で、main CI成功後にbuild/dry-run/artifact保存だけを行う。production Environment、deploy job、Cloudflare書き込みtokenは持たない。切替PRをmainへ反映しても旧定義で待機・実行中のrunは残るため、別途停止・記録してからWorkers Buildsを接続する。詳細は[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照する。
+
+D1 migrationは通常Build/Deployに含めない。バックアップ・旧Workerと共有D1への影響・復旧手順をレビューし、新Workerに必要なmigrationの適用記録を先に確定する。今回の0127・0128・0129が未適用なら、Build接続・初回配信を進めない。
+
+接続が正常な場合だけ、レビュー・CI成功後のmainマージでBuildを起動する。Git接続保存だけを完了扱いにせず、Workers Builds run ID・checkout SHA・成功時刻・固定Worker Version・100%配信・build-infoを記録する。Workers Buildsが使えない緊急時だけ、[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)の対象SHAへの明示承認を得て、cleanなmain checkoutから`npm run deploy:admin`を実行できる。SHAはその場でHEADから生成せず、レビュー済みmain commitに対して明示承認された40桁値をリテラル指定する。
 
 デプロイ後、次を確認してから完了とする。
 
@@ -75,18 +81,17 @@ npx wrangler deployments list --config wrangler.admin.jsonc
 npx wrangler versions list --config wrangler.admin.jsonc
 ```
 
-`build-info.json.commit`がマージした`main`のSHAと一致し、Versionが`atlasez-admin`のProductionへ100%配信されていなければ停止する。例外は監査JSONだけを変更したMergeで、この場合はbuild-infoが直前のコードdeploy SHAを指し続けることを確認する。
+`build-info.json.commit`がマージした`main`のSHAと一致し、Versionが`atlasez-admin`のProductionへ100%配信されていなければ停止する。監査JSONだけのmain advanceを許容する場合も、公開SHAの祖先関係と差分が`docs/deployments/cloudflare-latest.json`だけであることを検証する。
 
 ## 6. 現在のCloudflare連携障害時
 
-Cloudflare DashboardのGit repository接続が「内部エラー」で失敗している間は、承認済みGitHub Actions経路を使う。Cloudflare BuildsとActionsの二重配信は避け、Workers Builds接続を再試行する前にGitHub Actions deployを無効化する。
+Workers Buildsが未接続・内部エラー・CI失敗・SHA不一致なら配信を停止し、PR/Issueにrun ID・時刻・対象SHA・固定Worker・停止理由を記録する。
 
-- main merge後はdeploy workflowとproduction Environmentの承認を確認し、検証完了までは本番反映済みと報告しない。
-- `main`でないbranchから`wrangler deploy`しない。
-- GitHub Actionsのdeploy workflowが失敗したらrun logとIssueを記録する。D1 migration、別worker、Cloudflare Editorを使って穴埋めしない。
-- Dashboard Editor、Versionsのpromote、rollback、cache purgeで穴埋めしない。
-- 緊急手動デプロイが必要な場合は、対象SHA、理由、承認者、影響、復旧方法をIssueに記録してから別途明示承認を得て、cleanでremote main由来の`main` checkoutから`npm run deploy:admin`を実行する。
-- GitHub Actionsが復旧した後は、最初の1回を監視デプロイとし、SHA、Version ID、時刻、Chrome結果を記録する。
+- Actions deployの再開、Dashboard Editor、別Worker、Route変更、Versionsのpromote/rollback、cache purgeを推測で行わない。
+- `main`でないbranch・未コミット変更から本番へ出さない。
+- 緊急手動配信が必要な場合は、対象SHA、理由、承認者、影響、復旧方法を記録し、別途明示承認とclean mainガードを満たす。
+- Workers Builds復旧後の最初の配信はrun・checkout SHA・Version ID・時刻・Chrome結果を記録する。
+- `verify-admin-production.yml`はschedule/dispatchで固定URLを読み取る。最大15回、60秒間隔、job20分以内に一致を確認できなければ失敗とする。待機中のActions runを照合省略や成功の根拠にしない。
 
 ## 7. 本番相当のライブスモーク
 

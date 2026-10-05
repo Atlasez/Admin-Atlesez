@@ -49,6 +49,22 @@ const stageEnv = (
     prepare: (query: string) => {
       const statement = new Statement(query);
       statement.all = async <T>() => {
+        if (query.includes("SELECT m.project_id,p.slug,p.name,pp.internal_bio"))
+          return {
+            results:
+              applicationStatus === "accepted"
+                ? ([
+                    {
+                      project_id: "atlas",
+                      slug: "atlas",
+                      name: "アトラス",
+                      internal_bio: projectProfileComplete
+                        ? "project profile"
+                        : "",
+                    },
+                  ] as T[])
+                : ([] as T[]),
+          };
         if (query.includes("SELECT subject FROM report_admin_permissions"))
           return {
             results: globalManager ? ([{ subject: "*" }] as T[]) : ([] as T[]),

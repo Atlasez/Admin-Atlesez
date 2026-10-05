@@ -22,6 +22,8 @@ function fixture() {
   sqlite.exec(`PRAGMA foreign_keys=ON;
     CREATE TABLE editorial_tasks(id TEXT PRIMARY KEY,project_id TEXT,subject TEXT,title TEXT,status TEXT,assignee_email TEXT,updated_at TEXT,archived_at TEXT);
     CREATE TABLE atlasez_project_memberships(project_id TEXT,email TEXT);
+    CREATE TABLE atlasez_project_member_lifecycle(project_id TEXT,email TEXT,state TEXT);
+    CREATE TABLE admin_member_lifecycle(email TEXT,status TEXT);
     CREATE TABLE editorial_member_profiles(email TEXT,display_name TEXT);
     CREATE TABLE admin_audit_log(id TEXT PRIMARY KEY,actor_email TEXT,action TEXT,target_type TEXT,target_id TEXT,target_label TEXT,summary TEXT,details_json TEXT,created_at TEXT);`);
   sqlite.exec(
@@ -183,6 +185,56 @@ describe("task workspaces", () => {
         .prepare("SELECT count(*) AS n FROM editorial_task_workspaces")
         .get(),
     ).toMatchObject({ n: 0 });
+  });
+  it("rejects paused or withdrawn members as new handoff recipients", async () => {
+    const { save, input, sqlite } = fixture();
+    sqlite
+      .prepare(
+        "INSERT INTO atlasez_project_member_lifecycle(project_id,email,state) VALUES ('atlas',?,'paused')",
+      )
+      .run(next);
+    expect(
+      (await save(a, input({ handoff: true, assigneeEmails: [next] }))).status,
+    ).toBe(403);
+    expect(
+      sqlite
+        .prepare("SELECT assignee_email FROM editorial_tasks WHERE id=?")
+        .get(a),
+    ).toMatchObject({ assignee_email: owner });
+  });
+  it("does not offer inactive members in the handoff recipient list", async () => {
+    const { context, sqlite } = fixture();
+    sqlite
+      .prepare(
+        "INSERT INTO atlasez_project_member_lifecycle(project_id,email,state) VALUES ('atlas',?,'paused')",
+      )
+      .run(next);
+    const result = await handleTaskWorkspace(
+      new Request("https://admin.example/api/admin/task-workspaces/" + a),
+      a,
+      context,
+    );
+    expect(await result.json()).toMatchObject({
+      members: [{ email: owner }],
+    });
+  });
+  it("rechecks recipient lifecycle in the atomic handoff write", async () => {
+    const { save, input, sqlite, setBeforeBatch } = fixture();
+    setBeforeBatch(() => {
+      sqlite
+        .prepare(
+          "INSERT INTO atlasez_project_member_lifecycle(project_id,email,state) VALUES ('atlas',?,'withdrawn')",
+        )
+        .run(next);
+    });
+    expect(
+      (await save(a, input({ handoff: true, assigneeEmails: [next] }))).status,
+    ).toBe(409);
+    expect(
+      sqlite
+        .prepare("SELECT assignee_email FROM editorial_tasks WHERE id=?")
+        .get(a),
+    ).toMatchObject({ assignee_email: owner });
   });
   it("rejects self-links, invisible dependencies, cross-project links and cycles", async () => {
     const { save, input, sqlite } = fixture();

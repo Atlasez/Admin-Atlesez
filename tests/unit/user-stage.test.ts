@@ -2,6 +2,32 @@ import { describe, expect, it } from "vitest";
 import { canAccess, getUserStage, stageHome } from "../../src/lib/user-stage";
 
 describe("user stages", () => {
+  it("bases member access on current membership even after later applications or retention", () => {
+    for (const applicationStatus of [null, "new", "reviewing", "rejected"]) {
+      expect(
+        getUserStage({
+          isAdmin: false,
+          hasMembership: true,
+          applicationStatus,
+          profileComplete: true,
+          projectProfileComplete: true,
+        }),
+      ).toBe("MEMBER");
+    }
+    expect(getUserStage({ isAdmin: false, hasMembership: true })).toBe(
+      "ONBOARDING",
+    );
+    expect(
+      getUserStage({
+        isAdmin: false,
+        hasMembership: false,
+        applicationStatus: "accepted",
+        profileComplete: true,
+        projectProfileComplete: true,
+      }),
+    ).toBe("APPLICANT");
+    expect(getUserStage({ isAdmin: true, hasMembership: false })).toBe("ADMIN");
+  });
   it("keeps Google authentication and admin permission separate", () => {
     expect(getUserStage({ isAdmin: false })).toBe("NEW_USER");
     expect(getUserStage({ isAdmin: true })).toBe("ADMIN");

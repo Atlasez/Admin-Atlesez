@@ -17,6 +17,8 @@ export type UserStage = (typeof USER_STAGES)[number];
 
 export type UserStageInput = {
   applicationStatus?: string | null;
+  /** 現在のプロジェクト所属。応募履歴の保持期間や追加応募から独立させる。 */
+  hasMembership?: boolean;
   /** プロフィール入力まで完了したか。 */
   profileComplete?: boolean;
   /** 参加プロジェクト内のプロフィール入力まで完了したか。 */
@@ -32,11 +34,12 @@ export type UserArea =
   "application" | "applicant" | "onboarding" | "member" | "admin";
 
 /**
- * DB に保存されている応募状態と既存の運営権限表からステージを決める。
+ * 現在の所属・プロフィール、応募状態、既存の運営権限からステージを決める。
  * 管理権限は Google ログインや応募の有無とは独立しており、常に最優先する。
  */
 export function getUserStage({
   applicationStatus,
+  hasMembership,
   profileComplete,
   projectProfileComplete,
   tutorialComplete: _tutorialComplete,
@@ -45,7 +48,11 @@ export function getUserStage({
 }: UserStageInput): UserStage {
   if (isAdmin) return "ADMIN";
 
-  switch (applicationStatus) {
+  // 所属を失った人を、保存されている過去の受入済み応募から再有効化しない。
+  if (hasMembership === false && applicationStatus === "accepted")
+    return "APPLICANT";
+
+  switch (hasMembership ? "accepted" : applicationStatus) {
     case "new":
     case "reviewing":
     case "rejected":

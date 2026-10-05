@@ -1,4 +1,6 @@
-name: Deploy ADMIN from GitHub
+# The legacy filename is retained to replace the old workflow on merge.
+# Verification only. Production deployment is Cloudflare Workers Builds / main.
+name: Verify ADMIN build only
 
 on:
   workflow_run:
@@ -11,8 +13,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-admin-production
-  cancel-in-progress: false
+  group: verify-admin-build
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -24,11 +26,8 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    outputs:
-      deploy_required: ${{ steps.classify.outputs.deploy_required }}
-      deploy_reason: ${{ steps.classify.outputs.reason }}
     env:
-      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      BUILD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - name: Checkout main commit
         uses: actions/checkout@v4
@@ -47,12 +46,6 @@ jobs:
 
       - name: Verify deployment target
         run: npm run verify:deploy-config
-
-      - name: Classify changes since the live ADMIN build
-        id: classify
-        env:
-          TARGET_COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
-        run: node scripts/classify-admin-deployment.mjs
 
       - name: Type and content checks
         run: |
@@ -90,7 +83,7 @@ jobs:
           const info = JSON.parse(await readFile("dist/build-info.json", "utf8"));
           if (
             info.repository !== "Atlasez/Admin-Atlesez" ||
-            info.commit !== process.env.DEPLOY_SHA ||
+            info.commit !== process.env.BUILD_SHA ||
             info.ref !== "main" ||
             info.target !== "admin"
           ) {
@@ -108,93 +101,3 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 7
-
-  deploy:
-    if: >-
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.conclusion == 'success' &&
-      needs.verify.outputs.deploy_required == 'true'
-    needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: production
-    env:
-      CLOUDFLARE_ACCOUNT_ID: 812021e62fa20465950b61be55dfe064
-      NO_COLOR: "1"
-      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
-    steps:
-      - name: Checkout verified main commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Download verified ADMIN assets
-        uses: actions/download-artifact@v4
-        with:
-          name: admin-dist-${{ github.event.workflow_run.head_sha || github.sha }}
-          path: dist/
-
-      - name: Recheck deployment target and build identity
-        env:
-          EXPECTED_COMMIT_SHA: ${{ env.DEPLOY_SHA }}
-        run: |
-          npm run verify:deploy-config
-          npm run verify:build-info
-
-      - name: Confirm main has not advanced before deployment
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch --quiet origin main
-          latest_main="$(git rev-parse refs/remotes/origin/main)"
-          if [ "$latest_main" != "$DEPLOY_SHA" ]; then
-            echo "main advanced while this deployment was waiting; refusing to publish stale SHA $DEPLOY_SHA (latest $latest_main)." >&2
-            exit 1
-          fi
-
-      - name: Deploy ADMIN Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_API_TOKEN }}
-        run: npx wrangler deploy --config wrangler.admin.jsonc --keep-vars
-
-      - name: Verify 100 percent production traffic
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_API_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          status="$(npx wrangler deployments status --config wrangler.admin.jsonc 2>&1)"
-          printf '%s\n' "$status"
-          if ! grep -Fq '(100%)' <<<"$status"; then
-            echo "atlasez-adminのProduction配信が100%ではありません。" >&2
-            exit 1
-          fi
-
-      - name: Verify live ADMIN build identity
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 12); do
-            if EXPECTED_COMMIT="$DEPLOY_SHA" npm run verify:live-admin-production; then
-              echo "本番build-infoを検証しました（試行 ${attempt}/12）。"
-              exit 0
-            fi
-            if [ "$attempt" -lt 12 ]; then
-              sleep 5
-            fi
-          done
-          echo "ADMIN本番のbuild-infoが対象SHAに一致しません。" >&2
-          exit 1

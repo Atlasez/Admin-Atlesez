@@ -7,7 +7,7 @@ const source = readFileSync(
 );
 
 describe("admin API baseline scope gate", () => {
-  it("runs before every admin API dispatch except the intentional auth-status endpoint", () => {
+  it("runs before admin dispatch except explicit dedicated-scope endpoints", () => {
     const handlerStart = source.indexOf("async function handleAdminRequest(");
     expect(handlerStart).toBeGreaterThanOrEqual(0);
     const handler = source.slice(handlerStart);
@@ -21,7 +21,11 @@ describe("admin API baseline scope gate", () => {
         /url\.pathname\s*(?:===|startsWith\()\s*["`]([^"`]*\/api\/admin\/[^"`]*)/g,
       ),
     ].map((match) => match[1]);
-    expect(preGateAdminPaths).toEqual(["/api/admin/auth-status"]);
+    expect(preGateAdminPaths).toEqual([
+      "/api/admin/auth-status",
+      "/api/admin/member-procedures",
+    ]);
+    expect(beforeGate).toContain("memberProcedureRequests(request, env)");
 
     const gateBlock = handler.slice(gateOffset, gateOffset + 900);
     expect(gateBlock).toContain('url.pathname.startsWith("/api/admin/")');

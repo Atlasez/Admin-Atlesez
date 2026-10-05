@@ -12,7 +12,7 @@
 1. `main`へマージする前にCIを通す
 2. ローカルで `npm run verify:deploy-config` を実行する
 3. 公開サイトは既存の公開サイト向け手順に従う。
-4. 運営用サイトはmainのCI成功後にproduction Environment承認を通る`.github/workflows/deploy-admin-from-github.yml`で反映する。`npm run deploy:admin`はGitHub Actionsが使えない緊急時のローカル例外手順（[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)）に限る。
+4. 運営用サイトはPRのCI成功・レビュー後のmainをProduction branchに固定したCloudflare Workers Buildsだけで反映する。`.github/workflows/deploy-admin-from-github.yml`は検証専用で配信しない。`npm run deploy:admin`はWorkers Buildsが使えない緊急時のローカル例外手順（[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)）に限る。
 5. Chromeで公開サイト、`/admin/portal/`、`/admin/member-calendar/`、`/admin/manage/?project=atlas`を確認する
 
 本番Worker名・アカウント・ルート・D1は設定ファイルに固定し、`npm run verify:deploy-config`で確認します。ADMINのローカル緊急deployは、これに加えてmain由来の承認SHAとbuild-infoを検証します。
@@ -32,7 +32,23 @@ ADMINのproduction buildは次を固定します。
 ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/
 ```
 
-GitHub ActionsはこのADMIN設定でビルドし、成果物のcommit SHA、`main`の先行、Cloudflare Versionの100%配信、公開`build-info.json`を照合します。監査PRが`docs/deployments/cloudflare-latest.json`だけを変更する場合はWorker配信を省略し、次のサイト変更でSHAをmainへ進めます。D1 migrationは通常deployに含めません。`npm run deploy:admin`はcleanな`main`・remote main由来・明示承認SHA一致を検証し、ローカルからの実デプロイは緊急例外として別途明示承認された場合だけ行います。
+Workers Buildsは固定repository `Atlasez/Admin-Atlesez` / Production branch `main` / Worker `atlasez-admin`を使います。PRのCI成功・レビューに加えて、Build側でも全検証を成功条件にします。
+
+```bash
+# Workers Builds: Build command
+npm ci && npm run verify:deploy-config && npm run check && npm run lint && npm test && npm run format:check && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ CF_BRANCH=main npm run build && npm run verify:build-info && npx wrangler deploy --dry-run --config wrangler.admin.jsonc --keep-vars
+
+# Workers Builds: Deploy command
+npx wrangler deploy --config wrangler.admin.jsonc --keep-vars
+```
+
+Build checkout SHA・接続branch・build-infoを照合し、既存bindings・varsを維持します。任意のSHAを環境変数へ固定して成果物の身元を偽装しません。切替時は検証専用Workflowをmainへ先に反映し、旧Actions deployの待機・実行中runを別途停止・記録してからWorkers Buildsを接続します。二経路の同時有効化は禁止します。接続手順は[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照してください。この文書変更だけではCloudflare接続や本番反映は完了しません。
+
+D1 migrationは通常Build/Deployに含めません。今回の0127・0128・0129についてバックアップ・共有D1/旧Workerへの影響・復旧方法・隔離検証・適用記録を確定し、新Workerを配信する前に適用します。未適用なら接続・初回Buildを停止します。
+
+配信後はWorkers Builds run・checkout SHA、固定Worker Version・100%配信、公開build-info、認証済みChromeを確認します。読み取り専用の`verify-admin-production.yml`はschedule/dispatchで最大15回、60秒間隔、job20分以内に照合し、未一致を失敗として報告します。監査JSONだけのmain advanceは公開SHAがmainの祖先で、差分が`docs/deployments/cloudflare-latest.json`だけと検証できる場合だけ許容します。
+
+Workers Builds未接続・内部エラー・CI失敗・SHA不一致なら配信を止めてPR/Issueへ記録します。`npm run deploy:admin`はcleanなmain・remote main由来・明示承認SHA一致を検証し、緊急例外として対象SHAへの実行が別途明示承認された場合だけ使います。
 
 `main`以外のプレビューは検索インデックスに入らないよう`noindex`になります。公開前に本番URLへ向けてビルドし直してください。
 
@@ -47,4 +63,4 @@ curl -fsS https://atlasez.org/sitemap-0.xml
 
 ## ロールバック
 
-Workerの直前バージョンへ戻す場合は、Cloudflare WorkersのVersionsから対象Workerを選び、正しいWorker名を確認してロールバックします。別アカウントのWorkerへ切り替える操作は行いません。
+コードの復旧はmain由来SHA・固定Worker Version・D1互換性・影響・復旧方法をレビューしてから実施します。SHA不一致や古い画面を理由に、対象未確認のrollback/promote/cache purge/Route変更を行いません。追加済みD1データを安易に削除しません。

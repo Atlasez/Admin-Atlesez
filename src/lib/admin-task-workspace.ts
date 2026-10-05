@@ -206,8 +206,12 @@ export async function handleTaskWorkspace(
             await context.db
               .prepare(
                 `SELECT m.email,COALESCE(NULLIF(p.display_name,''),'表示名未登録') AS name
-        FROM atlasez_project_memberships m LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(m.email)
-        WHERE m.project_id=? ORDER BY name,m.email`,
+        FROM atlasez_project_memberships m
+        LEFT JOIN atlasez_project_member_lifecycle l ON l.project_id=m.project_id AND lower(l.email)=lower(m.email)
+        LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(m.email)
+        WHERE m.project_id=? AND COALESCE(l.state,'active')='active'
+          AND NOT EXISTS(SELECT 1 FROM admin_member_lifecycle a WHERE m.project_id='atlas' AND lower(a.email)=lower(m.email) AND a.status='archived')
+        ORDER BY name,m.email`,
               )
               .bind(task.project_id)
               .all<{ email: string; name: string }>()
@@ -306,13 +310,17 @@ export async function handleTaskWorkspace(
     if (input.assignees) {
       const rows = await context.db
         .prepare(
-          `SELECT lower(email) AS email FROM atlasez_project_memberships WHERE project_id=? AND lower(email) IN (${input.assignees.map(() => "?").join(",")})`,
+          `SELECT lower(m.email) AS email FROM atlasez_project_memberships m
+           LEFT JOIN atlasez_project_member_lifecycle l ON l.project_id=m.project_id AND lower(l.email)=lower(m.email)
+           WHERE m.project_id=? AND lower(m.email) IN (${input.assignees.map(() => "?").join(",")})
+             AND COALESCE(l.state,'active')='active'
+             AND NOT EXISTS(SELECT 1 FROM admin_member_lifecycle a WHERE ?='atlas' AND lower(a.email)=lower(m.email) AND a.status='archived')`,
         )
-        .bind(task.project_id, ...input.assignees)
+        .bind(task.project_id, ...input.assignees, task.project_id)
         .all<{ email: string }>();
       if (rows.results.length !== input.assignees.length)
         return fail(
-          "引き継ぎ先はこのプロジェクトの参加者に限定されます。",
+          "引き継ぎ先はこのプロジェクトで活動中の参加者に限定されます。",
           403,
         );
     }
@@ -325,6 +333,10 @@ export async function handleTaskWorkspace(
     const now = new Date().toISOString(),
       operationId = crypto.randomUUID();
     const assignees = input.assignees?.join(",") ?? task.assignee_email;
+    const assigneeLifecycleGuard = input.assignees
+      ? ` AND NOT EXISTS(SELECT 1 FROM atlasez_project_member_lifecycle l WHERE l.project_id=editorial_tasks.project_id AND l.state!='active' AND lower(l.email) IN (${input.assignees.map(() => "?").join(",")}))
+          AND NOT EXISTS(SELECT 1 FROM admin_member_lifecycle a WHERE editorial_tasks.project_id='atlas' AND a.status='archived' AND lower(a.email) IN (${input.assignees.map(() => "?").join(",")}))`
+      : "";
     const audit = context.db
       .prepare(
         `INSERT INTO admin_audit_log(id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at)
@@ -349,7 +361,7 @@ export async function handleTaskWorkspace(
     const statements = [
       context.db
         .prepare(
-          `UPDATE editorial_tasks SET assignee_email=?,updated_at=? WHERE id=? AND updated_at=? AND archived_at IS NULL
+          `UPDATE editorial_tasks SET assignee_email=?,updated_at=? WHERE id=? AND updated_at=? AND archived_at IS NULL${assigneeLifecycleGuard}
         AND COALESCE((SELECT revision FROM editorial_task_workspaces WHERE task_id=editorial_tasks.id),0)=?
         AND NOT EXISTS (${dependencyCycleSql})`,
         )
@@ -358,6 +370,8 @@ export async function handleTaskWorkspace(
           now,
           taskId,
           task.updated_at,
+          ...(input.assignees ?? []),
+          ...(input.assignees ?? []),
           input.revision,
           dependencies,
           taskId,

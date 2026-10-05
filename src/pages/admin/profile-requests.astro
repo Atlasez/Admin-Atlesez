@@ -248,7 +248,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       const note = button.closest<HTMLElement>(".request-list")?.querySelector<HTMLInputElement>(`[data-note="${CSS.escape(id)}"]`)?.value ?? "";
       const endpoint = kind === "atlas" ? `/api/admin/project-profile-change-requests/${encodeURIComponent(id)}` : `/api/admin/profile-change-requests/${encodeURIComponent(id)}`;
       try {
-        const response = await fetch(endpoint, { method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: button.dataset.review, reviewNote: note }) });
+        const response = await fetch(endpoint, { method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: button.dataset.review, reviewNote: note, expectedSubmittedAt: (kind === "atlas" ? atlasRows : commonRows).find(row => row.id === id)?.submitted_at }) });
         const data = await readAdminApiJson<{ error?: string }>(response, "申請を処理できませんでした。");
         if (!response.ok) throw new Error(data.error ?? "処理できませんでした。");
         message.value = "処理しました。";
