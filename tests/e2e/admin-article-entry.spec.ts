@@ -509,6 +509,14 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("D-3b: 絞り込み条件を記憶し、担当分野だけを選択できる", async ({
     page,
   }) => {
+    await page.addInitScript(() => {
+      if (!localStorage.getItem("atlasez-admin-article-filters")) {
+        localStorage.setItem(
+          "atlasez-admin-article-filters",
+          JSON.stringify({ management: "unregistered", workflow: "all" }),
+        );
+      }
+    });
     await page.route("**/api/admin/editor/documents", async (route) => {
       await route.fulfill({
         json: {
@@ -543,6 +551,18 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     });
 
     await page.goto("admin/articles/?verify=filter-memory");
+    await expect(page.locator("[data-management]")).toHaveCount(0);
+    await expect(page.locator("[data-list]")).toContainText("数学の記事");
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            JSON.parse(
+              localStorage.getItem("atlasez-admin-article-filters") ?? "{}",
+            ).management,
+        ),
+      )
+      .toBeUndefined();
     await expect(
       page.locator("[data-subject] option:not([hidden])"),
     ).toHaveText(["すべての分野", "数学"]);

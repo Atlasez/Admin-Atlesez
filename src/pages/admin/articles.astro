@@ -115,15 +115,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         </select>
       </label>
       <label class="filter-control">
-        <span>運営管理</span>
-        <select data-management>
-          <option value="all">運営管理：すべて</option>
-          <option value="managed">運営原稿あり</option>
-          <option value="unregistered">公開済み・未登録</option>
-          <option value="conflict">紐付け要確認</option>
-        </select>
-      </label>
-      <label class="filter-control">
         <span>テスト原稿</span>
         <select data-test>
           <option value="exclude">テスト原稿を除く</option>
@@ -753,7 +744,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   import { readAdminApiJson } from "../../lib/admin-api";
   import { canRegisterArticleInSubject, isBulkArticleRegistrationCandidate, isTestArticleTitle } from "../../lib/admin-article-registration";
   type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;scheduled_publish_at?:string|null;archived_at?:string|null;archive_expires_at?:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
-  type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;management:string;test:string;workflow:string;archive:string};
+  type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;test:string;workflow:string;archive:string};
   type ArticleScope={email:string;subjects?:string[];coordinatorSubjects?:string[];allSubjects?:boolean;isManager?:boolean;isProjectLeader?:boolean};
   type ArticlePagination={limit:number;nextCursor:string|null;hasMore:boolean};
   type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string;managementState?:string;documentId?:string;duplicateDocumentIds?:string[]};
@@ -769,7 +760,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const category = root.querySelector<HTMLSelectElement>("[data-category]")!;
     const status = root.querySelector<HTMLSelectElement>("[data-status]")!;
     const publication = root.querySelector<HTMLSelectElement>("[data-public]")!;
-    const management = root.querySelector<HTMLSelectElement>("[data-management]")!;
     const test = root.querySelector<HTMLSelectElement>("[data-test]")!;
     const workflow = root.querySelector<HTMLSelectElement>("[data-workflow-filter]")!;
     const archive = root.querySelector<HTMLSelectElement>("[data-archive]")!;
@@ -804,7 +794,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     let hasMore = false;
     let loadedPageCount = 0;
     const filterStorageKey = "atlasez-admin-article-filters";
-    const defaultFilterState: ArticleFilterState = { query: "", subject: "all", category: "all", status: "all", publication: "all", management: "all", test: "exclude", workflow: "all", archive: "active" };
+    const defaultFilterState: ArticleFilterState = { query: "", subject: "all", category: "all", status: "all", publication: "all", test: "exclude", workflow: "all", archive: "active" };
 
     const requestedMode = new URLSearchParams(location.search).get("mode");
     const readStoredFilters = (): Partial<ArticleFilterState> => {
@@ -828,7 +818,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     assignSelectValue(category, storedFilters.category, defaultFilterState.category);
     assignSelectValue(status, storedFilters.status, defaultFilterState.status);
     assignSelectValue(publication, storedFilters.publication, defaultFilterState.publication);
-    assignSelectValue(management, storedFilters.management, defaultFilterState.management);
     assignSelectValue(test, storedFilters.test, defaultFilterState.test);
     assignSelectValue(workflow, requestedMode === "review" || requestedMode === "revise" || requestedMode === "request" ? requestedMode : storedFilters.workflow, defaultFilterState.workflow);
     assignSelectValue(archive, storedFilters.archive, defaultFilterState.archive);
@@ -873,7 +862,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         category: category.value,
         status: status.value,
         publication: publication.value,
-        management: management.value,
         test: test.value,
         workflow: workflow.value,
         archive: archive.value,
@@ -1013,7 +1001,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         if (subject.value !== "all" && rowSubject(row) !== subject.value) return false;
         if (category.value !== "all" && rowCategory(row) !== category.value) return false;
         if (status.value !== "all" && (!article || article.status !== status.value)) return false;
-        if (management.value !== "all" && row.management !== management.value) return false;
         if (publication.value === "published" && (isUnregistered ? true : !article?.published_at)) return false;
         if (publication.value === "scheduled" && (isUnregistered || Boolean(article?.published_at) || !article?.scheduled_publish_at)) return false;
         if (publication.value === "unpublished" && (isUnregistered || Boolean(article?.published_at) || Boolean(article?.scheduled_publish_at))) return false;
@@ -1348,7 +1335,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       assignSelectValue(category, defaultFilterState.category, defaultFilterState.category);
       assignSelectValue(status, defaultFilterState.status, defaultFilterState.status);
       assignSelectValue(publication, defaultFilterState.publication, defaultFilterState.publication);
-      assignSelectValue(management, defaultFilterState.management, defaultFilterState.management);
       assignSelectValue(test, defaultFilterState.test, defaultFilterState.test);
       assignSelectValue(workflow, defaultFilterState.workflow, defaultFilterState.workflow);
       assignSelectValue(archive, defaultFilterState.archive, defaultFilterState.archive);
@@ -1375,7 +1361,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     loadingFallbackTimer = window.setTimeout(() => { if (list.textContent?.includes("取得しています")) list.textContent = "原稿一覧を取得できませんでした。ページを再読み込みしてください。"; }, 6_000);
     subject.addEventListener("change", () => { updateCategoryOptions(); render(); });
     query.addEventListener("input", render);
-    [category, status, publication, management, test, workflow].forEach((element) => element.addEventListener("change", render));
+    [category, status, publication, test, workflow].forEach((element) => element.addEventListener("change", render));
     archive.addEventListener("change", () => { render(); void load(false, { silent: true }); });
     loadMoreButton.addEventListener("click", () => { if (!hasMore || loadMoreButton.disabled) return; loadMoreButton.disabled = true; paginationStatus.textContent = "次の原稿を読み込んでいます…"; void load(true); });
     list.addEventListener("click", async (event) => {
