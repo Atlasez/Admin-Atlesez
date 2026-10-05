@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canRegisterArticleInSubject,
   isBulkArticleRegistrationCandidate,
   isTestArticleTitle,
 } from "../../src/lib/admin-article-registration";
@@ -28,5 +29,21 @@ describe("bulk article registration candidates", () => {
     expect(isTestArticleTitle("【テスト記事】表示確認")).toBe(true);
     expect(isTestArticleTitle("Test article")).toBe(true);
     expect(isTestArticleTitle("通常の記事")).toBe(false);
+  });
+
+  it("matches the registration API's direct edit scope", () => {
+    const scope = {
+      subjects: ["mathematics"],
+      coordinatorSubjects: ["physics"],
+      isProjectLeader: true,
+    };
+
+    expect(canRegisterArticleInSubject(scope, "mathematics")).toBe(true);
+    expect(canRegisterArticleInSubject(scope, "physics")).toBe(false);
+    expect(canRegisterArticleInSubject(scope, "chemistry")).toBe(false);
+    expect(
+      canRegisterArticleInSubject({ allSubjects: true }, "chemistry"),
+    ).toBe(true);
+    expect(canRegisterArticleInSubject(null, "mathematics")).toBe(false);
   });
 });
