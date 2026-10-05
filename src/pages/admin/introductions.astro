@@ -110,7 +110,10 @@ const projectLabel = project === "secretariat" ? "Atlasez運営事務局" : proj
     const root = document.querySelector<HTMLElement>("[data-introductions-page]");
     if (!root || root.dataset.initialized === "true") return;
     root.dataset.initialized = "true";
-    const project = root.dataset.project ?? "atlas";
+    const project = new URLSearchParams(location.search).get("project")?.trim().toLowerCase() || root.dataset.project || "atlas";
+    root.dataset.project = project;
+    const profileLink = root.querySelector<HTMLAnchorElement>(".intro-primary-action");
+    if (profileLink) profileLink.href = `/admin/workspace/?project=${encodeURIComponent(project)}`;
     const list = root.querySelector<HTMLElement>("[data-introduction-list]")!;
     const message = root.querySelector<HTMLOutputElement>("[data-introductions-message]")!;
     const search = root.querySelector<HTMLInputElement>("[data-introduction-search]")!;

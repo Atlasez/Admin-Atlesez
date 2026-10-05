@@ -38,6 +38,8 @@ async function mockWorkspaceApi(page: Page, avatarUrl = "") {
       await route.fulfill({
         json: {
           project: { id: "atlas", name: "アトラス", role: "member" },
+          canEditArticles: true,
+          canReview: false,
           memberProfile: {
             display_name: "山田 花子",
             avatar_url: avatarUrl,

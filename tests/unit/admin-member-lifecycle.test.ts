@@ -46,6 +46,7 @@ const createEnvironment = () => {
     CREATE TABLE atlasez_member_discord_accounts (email TEXT PRIMARY KEY, discord_user_id TEXT NOT NULL);
     CREATE TABLE editorial_member_profiles (email TEXT PRIMARY KEY, display_name TEXT, bio TEXT, avatar_url TEXT, university TEXT, year TEXT, interests TEXT, affiliation_type TEXT, country TEXT, timezone TEXT, updated_at TEXT);
     CREATE TABLE admin_member_lifecycle (email TEXT PRIMARY KEY, status TEXT NOT NULL, snapshot_json TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL, archived_by TEXT, archived_at TEXT);
+    CREATE TABLE atlasez_project_member_lifecycle (project_id TEXT NOT NULL, email TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'active', PRIMARY KEY(project_id,email));
     CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_email TEXT NOT NULL, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, target_label TEXT NOT NULL, summary TEXT NOT NULL, details_json TEXT NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE admin_permission_audit_log (id TEXT PRIMARY KEY, actor_email TEXT NOT NULL, target_email TEXT NOT NULL, action TEXT NOT NULL, before_subjects TEXT NOT NULL, after_subjects TEXT NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE editorial_member_profile_change_requests (id TEXT PRIMARY KEY, email TEXT NOT NULL, status TEXT NOT NULL, reviewed_by TEXT, reviewed_at TEXT, submitted_at TEXT NOT NULL);

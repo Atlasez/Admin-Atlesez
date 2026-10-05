@@ -14,7 +14,15 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     <aside class="welcome-entry" aria-label="初参加の方へ">
       <div><strong>初参加の方へ</strong><p>プロフィール、相談先、最初の小タスクを確認しましょう。</p></div>
       <a href="/admin/getting-started/">参加後の案内 →</a>
+      <a href="/admin/procedures/">休止・退会・再開の手続き →</a>
     </aside>
+
+    <section class="my-intake" data-my-intake hidden aria-label="あなたの参加後フォロー">
+      <h2>あなたの参加後フォロー</h2>
+      <p data-my-intake-summary>読み込み中…</p>
+      <div data-my-intake-entries></div>
+      <button type="button" data-my-intake-retry hidden>参加後フォローを再読み込み</button>
+    </section>
 
     <section class="portal-summary" aria-label="ポータルの概要" data-portal-summary>
       <a class="portal-summary-item portal-summary-item--action" href="/admin/action-center/">
@@ -110,6 +118,12 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .welcome-entry strong { font-size: .85rem; }
   .welcome-entry p { color: var(--text-secondary); font-size: .8rem; line-height: 1.6; margin: .25rem 0 0; }
   .welcome-entry a { color: var(--accent-primary); font-size: .85rem; font-weight: 700; }
+  .my-intake { background: var(--background-secondary); border: 1px solid var(--border-default); border-left: 3px solid var(--accent-primary); margin: 1rem 0; padding: .85rem 1rem; }
+  .my-intake h2 { font-size: .95rem; margin: 0 0 .4rem; }
+  .my-intake p, .my-intake li { color: var(--text-secondary); font-size: .78rem; line-height: 1.55; }
+  .my-intake p { margin: .25rem 0; }
+  .my-intake ul { margin: .3rem 0 0; padding-left: 1.2rem; }
+  .my-intake a { color: var(--accent-primary); font-weight: 700; }
   .portal-app-download { align-items: center; border-top: 1px solid var(--border-default); color: var(--text-primary); display: flex; gap: 1rem; justify-content: space-between; margin-top: 2rem; padding-top: 1rem; }
   .portal-app-download strong { font-size: .82rem; }
   .portal-app-download p { color: var(--text-secondary); font-size: .72rem; line-height: 1.5; margin: .2rem 0 0; }
@@ -512,6 +526,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     const timezoneNote = root.querySelector<HTMLElement>('[data-calendar-timezone-note]')!;
     const todosView = root.querySelector<HTMLElement>('[data-todos]')!;
     const todoSummary = root.querySelector<HTMLElement>('[data-todo-summary]')!;
+    const myIntakeSection = root.querySelector<HTMLElement>('[data-my-intake]')!;
+    const myIntakeSummary = root.querySelector<HTMLElement>('[data-my-intake-summary]')!;
+    const myIntakeEntries = root.querySelector<HTMLElement>('[data-my-intake-entries]')!;
+    const myIntakeRetry = root.querySelector<HTMLButtonElement>('[data-my-intake-retry]')!;
     const summary = root.querySelector<HTMLElement>('[data-portal-summary]')!;
     const portalError = root.querySelector<HTMLElement>('[data-portal-error]')!;
     const portalErrorMessage = root.querySelector<HTMLElement>('[data-portal-error-message]')!;
@@ -527,6 +545,19 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     let retry: ReturnType<typeof createAdminLoadRetry> | null = null;
     document.addEventListener('astro:before-swap', () => lifecycle.abort(), { once: true, signal: lifecycle.signal });
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
+    type MyIntakeEntry = { project_name:string; contact_status:string; responsible_name?:string; consultation_name?:string; first_task_id?:string|null; first_task_title?:string; first_task_type?:string; first_task_status?:string|null; follow_up_at?:string|null; follow_up_completed_at?:string|null };
+    const renderMyIntake = (entries: MyIntakeEntry[]) => {
+      myIntakeRetry.hidden = true;
+      myIntakeSection.hidden = entries.length === 0;
+      if (!entries.length) return;
+      myIntakeSummary.textContent = '運営と共有している連絡・初回タスク・次回フォローの記録です。';
+      myIntakeEntries.innerHTML = entries.map((entry) => {
+        const task = entry.first_task_title ? `<li>${entry.first_task_type === 'operator' ? '参加前の運営準備' : '初回の小さなタスク'}：${escapeHtml(entry.first_task_title)}${entry.first_task_id && entry.first_task_type !== 'operator' ? ` <a href="/admin/task-detail/?task=${encodeURIComponent(entry.first_task_id)}">タスクを開く →</a>` : ''}</li>` : '';
+        const followup = entry.follow_up_completed_at ? `次回フォロー：完了（${escapeHtml(formatDate(entry.follow_up_completed_at))}）` : entry.follow_up_at ? `次回フォロー：${escapeHtml(formatDate(entry.follow_up_at))}` : '次回フォロー：未設定';
+        const contact = entry.contact_status === 'replied' ? '返信あり' : entry.contact_status === 'contacted' ? '連絡済み' : '連絡前';
+        return `<article><strong>${escapeHtml(entry.project_name)}</strong><ul><li>連絡状況：${contact}</li><li>担当運営者：${escapeHtml(entry.responsible_name || '未設定')}</li><li>相談先：${escapeHtml(entry.consultation_name || '未設定')}</li><li>${followup}</li>${task}</ul></article>`;
+      }).join('');
+    };
     type PortalLanguage = 'ja' | 'en';
     const getLanguage = (): PortalLanguage => {
       try {
@@ -726,6 +757,24 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       todosView.classList.remove('loading-state');
       todosView.innerHTML = '<p class="empty">データを読み込めませんでした。</p>';
     };
+    const loadMyIntake = async () => {
+      myIntakeRetry.disabled = true;
+      try {
+        const ownResponse = await fetch('/api/admin/my-intake', { credentials: 'same-origin', cache: 'no-store', signal: lifecycle.signal });
+        const ownData = ownResponse.headers.get('content-type')?.includes('application/json')
+          ? await ownResponse.json() as { entries?: MyIntakeEntry[] } : null;
+        if (!ownResponse.ok || !Array.isArray(ownData?.entries)) throw new Error('案内情報を読み込めませんでした。');
+        if (!lifecycle.signal.aborted) renderMyIntake(ownData.entries);
+      } catch {
+        if (!lifecycle.signal.aborted) {
+          myIntakeSection.hidden = false;
+          myIntakeSummary.textContent = '参加後フォローを読み込めませんでした。再読み込みしてください。';
+          myIntakeEntries.replaceChildren();
+          myIntakeRetry.hidden = false;
+        }
+      } finally { if (!lifecycle.signal.aborted) myIntakeRetry.disabled = false; }
+    };
+    myIntakeRetry.addEventListener('click', () => void loadMyIntake());
     const loadPortal = async () => {
       if (lifecycle.signal.aborted) return;
       retry?.begin();
@@ -743,6 +792,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         if (lifecycle.signal.aborted) return;
         portalData = data;
         renderPortal(portalData);
+        await loadMyIntake();
         portalError.hidden = true;
         retry?.success();
       } catch (error) {

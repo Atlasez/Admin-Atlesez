@@ -8,6 +8,7 @@ interface Props {
 }
 
 const { projectSlug, title, description } = Astro.props;
+const projectSite = projectSlug === "seminar-platform" ? "semi-platform" : projectSlug === "student-council-exchange" ? "student-council" : projectSlug;
 ---
 
 <AdminLayout title={`${title}運営`} description={`${title}の運営ワークスペース`}>
@@ -21,21 +22,26 @@ const { projectSlug, title, description } = Astro.props;
     </header>
 
     <section class="project-links" aria-label={`${title}運営メニュー`}>
-      <a class="featured" href={`/admin/operations/?project=${projectSlug}`}>
+      <a class="featured" data-member-operation-link="tasks" data-member-project={projectSlug} href={`/admin/operations/?project=${projectSlug}`}>
         <strong>タスク管理</strong>
         <small>担当タスク、進捗報告、期限をまとめて管理します。</small>
         <span>タスクを開く →</span>
       </a>
-      <a class="featured" href={`/admin/calendar/?project=${projectSlug}`}>
+      <a class="featured" data-member-operation-link="calendar" data-member-project={projectSlug} href={`/admin/calendar/?project=${projectSlug}`}>
         <strong>カレンダー</strong>
         <small>予定の登録と参加状況を確認します。</small>
         <span>カレンダーを開く →</span>
       </a>
+      <a href={`/admin/workspace/?project=${projectSlug}`}><strong>マイページ</strong><small>プロジェクトでの担当と自己紹介を確認・編集します。</small><span>マイページを開く →</span></a>
+      <a href={`/admin/introductions/?project=${projectSlug}`}><strong>メンバーの自己紹介</strong><small>同じプロジェクトのメンバーを確認します。</small><span>自己紹介一覧を開く →</span></a>
+      <a href={`/admin/procedures/?project=${projectSlug}`}><strong>諸手続き</strong><small>休止・退会・再開を申請します。</small><span>諸手続きを開く →</span></a>
+      <a href={`/admin/manage/?project=${projectSlug}`} data-project-manager-only data-admin-site={projectSite} hidden><strong>管理</strong><small>担当責任者向けの応募審査・承認メニューです。</small><span>管理を開く →</span></a>
     </section>
   </main>
 </AdminLayout>
 
 <style>
+  .project-operations-home [hidden] { display: none !important; }
   .project-operations-home { margin: 0 auto; max-width: 1200px; padding: 0 1.25rem 4rem; }
   .project-heading { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2.2rem 0 1.4rem; }
   .project-heading h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin: .25rem 0; }
