@@ -5,25 +5,60 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
 <AdminLayout title="諸手続き" description="参加プロジェクトの活動休止・退会・再開を申請します">
   <main class="procedures-page" data-procedures-page>
-    <header class="procedures-heading"><h1>諸手続き</h1><a href="/admin/portal/">ポータルへ</a></header>
-    <p>参加プロジェクトごとに申請します。承認後、指定日の午前0時（指定タイムゾーン）から反映されます。記事・プロフィール・履歴は保持されます。申請や審査で自動通知は送りません。</p>
-    <label>対象プロジェクト<select data-project><option value="">読み込み中…</option></select></label>
+    <header class="procedures-heading">
+      <div class="procedures-breadcrumb"><a href="/admin/portal/">運営サイト</a><span aria-hidden="true">›</span><span>諸手続き</span></div>
+      <div class="procedures-heading-row"><div><h1>諸手続き</h1><p class="lead">活動休止・退会・再開など、必要な手続きを選択して申請できます。</p></div><a class="back-link" href="/admin/portal/">ポータルへ戻る <span aria-hidden="true">→</span></a></div>
+    </header>
+    <section class="procedure-start" aria-label="申請の流れ">
+      <div><h2>必要な申請を選択</h2><p>内容を入力して送信すると、運営が確認したうえで手続きを進めます。</p></div>
+      <ol class="procedure-steps"><li><b>1</b><span>申請内容を入力</span></li><li><b>2</b><span>運営が確認</span></li><li><b>3</b><span>指定日に反映</span></li></ol>
+    </section>
+    <aside class="notice" role="note"><strong>申請について</strong><span>承認後、指定日の午前0時（指定タイムゾーン）から反映されます。送信しただけでアカウントや記事が削除されることはありません。申請や審査で自動通知は送りません。</span></aside>
+    <label class="project-picker">対象プロジェクト<select data-project><option value="">読み込み中…</option></select></label>
     <p data-membership-state></p>
     <nav><button type="button" data-own>自分の申請</button><button type="button" data-review hidden>運営として確認</button></nav>
     <section data-self>
-      <form data-procedure-form>
-        <label>手続き<select name="type" required><option value="pause">活動休止</option><option value="withdrawal">退会</option><option value="restart">活動再開</option></select></label>
-        <label>希望日<input name="effectiveFrom" type="date" required /></label>
-        <label>タイムゾーン<input name="timezone" value="Asia/Tokyo" maxlength="80" required /></label>
-        <label>再開予定日（休止のみ・任意）<input name="effectiveUntil" type="date" /></label>
-        <small>再開予定日は申し送りです。自動で活動を再開せず、再開申請と承認で復帰します。</small>
-        <label>理由<input name="reason" maxlength="300" required /></label>
-        <label>担当中の作業・引き継ぎメモ<textarea name="note" maxlength="2000"></textarea></label>
-        <label class="confirm"><input name="confirm" type="checkbox" /><span>退会を申請する場合は確認してください</span></label>
-        <button type="submit" disabled>申請する</button><output data-form-message aria-live="polite"></output>
-      </form>
+      <div class="procedure-grid" data-applications>
+        <section class="procedure-card" data-card="pause" aria-labelledby="pause-heading">
+          <div class="card-heading"><span class="card-icon card-icon--pause" aria-hidden="true">Ⅱ</span><div><h2 id="pause-heading">活動休止</h2></div></div>
+          <p class="card-description">学業や仕事などの事情で、一定期間活動をお休みする申請です。再開予定が未定の場合は空欄にできます。</p>
+          <form data-procedure-form="pause"><input type="hidden" name="type" value="pause" />
+            <label>活動休止開始日<span class="required">必須</span><input name="effectiveFrom" type="date" required /></label>
+            <label>活動再開予定日<span class="optional">任意</span><input name="effectiveUntil" type="date" /></label>
+            <small>再開予定日は申し送りです。自動で活動を再開せず、再開申請と承認で復帰します。</small>
+            <label>タイムゾーン<input name="timezone" value="Asia/Tokyo" maxlength="80" required /></label>
+            <label>理由<span class="required">必須</span><input name="reason" maxlength="300" required /></label>
+            <label>運営への申し送り<span class="optional">任意</span><textarea name="note" rows="4" maxlength="2000" placeholder="担当中の作業や引き継ぎに関するメモ"></textarea></label>
+            <button type="submit" disabled>活動休止を申請</button><output data-form-message aria-live="polite"></output>
+          </form>
+        </section>
+        <section class="procedure-card procedure-card--withdrawal" data-card="withdrawal" aria-labelledby="withdrawal-heading">
+          <div class="card-heading"><span class="card-icon card-icon--withdrawal" aria-hidden="true">×</span><div><h2 id="withdrawal-heading">退会</h2></div></div>
+          <p class="card-description">プロジェクトでの活動を終了する申請です。運営が確認し、必要な引き継ぎを行ってから処理を進めます。</p>
+          <form data-procedure-form="withdrawal"><input type="hidden" name="type" value="withdrawal" />
+            <label>退会希望日<span class="required">必須</span><input name="effectiveFrom" type="date" required /></label>
+            <label>タイムゾーン<input name="timezone" value="Asia/Tokyo" maxlength="80" required /></label>
+            <label>理由<span class="required">必須</span><input name="reason" maxlength="300" required /></label>
+            <label>運営への申し送り<span class="optional">任意</span><textarea name="note" rows="4" maxlength="2000" placeholder="担当中の作業や引き継ぎに関するメモ"></textarea></label>
+            <label class="confirm"><input name="confirm" type="checkbox" required /><span>退会申請であることを確認しました</span></label>
+            <button class="danger-button" type="submit" disabled>退会を申請</button><output data-form-message aria-live="polite"></output>
+          </form>
+        </section>
+        <section class="procedure-card" data-card="restart" aria-labelledby="restart-heading">
+          <div class="card-heading"><span class="card-icon card-icon--restart" aria-hidden="true">↻</span><div><h2 id="restart-heading">活動再開</h2></div></div>
+          <p class="card-description">休止中のプロジェクトで活動を再開する申請です。運営の確認後、指定日に復帰します。</p>
+          <form data-procedure-form="restart"><input type="hidden" name="type" value="restart" />
+            <label>活動再開希望日<span class="required">必須</span><input name="effectiveFrom" type="date" required /></label>
+            <label>タイムゾーン<input name="timezone" value="Asia/Tokyo" maxlength="80" required /></label>
+            <label>理由<span class="required">必須</span><input name="reason" maxlength="300" required /></label>
+            <label>運営への申し送り<span class="optional">任意</span><textarea name="note" rows="4" maxlength="2000" placeholder="参加可能な時期や連絡事項"></textarea></label>
+            <button type="submit" disabled>活動再開を申請</button><output data-form-message aria-live="polite"></output>
+          </form>
+        </section>
+      </div>
+      <p class="empty" data-no-procedure hidden>このプロジェクトでは現在申請できる手続きがありません。</p>
     </section>
-    <section class="history" data-admin-load-surface aria-busy="true"><p data-admin-load-skeleton>申請を読み込んでいます…</p><h2 data-history-title>自分の申請履歴</h2><div data-history></div><AdminRetryNotice /><output data-message aria-live="polite"></output></section>
+    <section class="history" data-admin-load-surface aria-busy="true"><p data-admin-load-skeleton>申請を読み込んでいます…</p><div class="history-heading"><h2 data-history-title>自分の申請履歴</h2><span>最新20件</span></div><div data-history></div><AdminRetryNotice /><output data-message aria-live="polite"></output></section>
   </main>
 </AdminLayout>
 
@@ -166,9 +201,22 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     margin: 1rem 0;
   }
 
-  .procedures-page .procedure-grid {
+.procedures-page .procedure-grid {
     gap: 0.8rem;
   }
+
+  .procedures-page [hidden] { display: none !important; }
+  .procedures-page .project-picker { display: grid; gap: .4rem; grid-template-columns: minmax(12rem, .35fr) minmax(15rem, 1fr); align-items: center; max-width: 42rem; }
+  .procedures-page nav { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+  .procedures-page nav button[data-own], .procedures-page nav button[data-review] { background: var(--background-secondary); border-color: var(--border-default); color: var(--text-primary); }
+  .procedures-page nav button[aria-pressed="true"] { background: var(--accent-primary); border-color: var(--accent-primary); color: #fff; }
+  .procedures-page [data-membership-state] { color: var(--text-secondary); font-size: .82rem; margin: .6rem 0; }
+  .procedures-page .procedure-card small { color: var(--text-secondary); font-size: .75rem; line-height: 1.55; }
+  .procedures-page .card-icon--restart { color: var(--accent-primary); }
+  .procedures-page .history article { border-radius: .4rem; }
+  .procedures-page .history article h3 { font-size: .95rem; margin: 0; }
+  .procedures-page .history article p { color: var(--text-secondary); font-size: .8rem; margin: .4rem 0; }
+  .procedures-page .history article a { display: inline-block; margin: .2rem .35rem .2rem 0; }
 
   .procedures-page .procedure-card {
     background: var(--background-primary);
@@ -262,23 +310,25 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 <script>
 import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
 import { readAdminApiJson } from "../../lib/admin-api";
+
 type Row = { id:string; email:string; procedure_type:string; effective_from:string; effective_until:string; timezone:string; reason:string; note:string; status:string; updated_at:string; review_note:string; applied_at?:string;execution_error?:string; handover?:{tasks:Array<{id:string;title:string}>;documents:Array<{id:string;title:string}>} };
 type Project = {id:string;name:string;state:string};
 type Data = {error?:string;projects?:Project[];project?:Project;canReview?:boolean;requests?:Row[]};
+
 const initialize=()=>{
  const root=document.querySelector<HTMLElement>("[data-procedures-page]");if(!root||root.dataset.ready)return;root.dataset.ready="true";
- const select=root.querySelector<HTMLSelectElement>("[data-project]")!,history=root.querySelector<HTMLElement>("[data-history]")!,message=root.querySelector<HTMLOutputElement>("[data-message]")!,reviewButton=root.querySelector<HTMLButtonElement>("[data-review]")!,form=root.querySelector<HTMLFormElement>("[data-procedure-form]")!;
+ const select=root.querySelector<HTMLSelectElement>("[data-project]")!,history=root.querySelector<HTMLElement>("[data-history]")!,message=root.querySelector<HTMLOutputElement>("[data-message]")!,reviewButton=root.querySelector<HTMLButtonElement>("[data-review]")!,forms=[...root.querySelectorAll<HTMLFormElement>("[data-procedure-form]")];
  const initialParams=new URLSearchParams(location.search),initialProject=initialParams.get("project")??"";
- let review=initialParams.get("view")==="review",rows:Row[]=[];const escape=(value:unknown)=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]!);
+ let review=initialParams.get("view")==="review",rows:Row[]=[],currentProject:Project|undefined;const escape=(value:unknown)=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]!);
  const labels:Record<string,string>={pause:"活動休止",withdrawal:"退会",restart:"活動再開",pending:"確認待ち",reviewing:"確認中",scheduled:"承認済み・実行待ち",applied:"反映済み",completed:"旧手順で処理済み",cancelled:"取り下げ・実行停止",rejected:"却下"};
  const endpoint=()=>`/api/admin/member-procedures?project=${encodeURIComponent(select.value||initialProject)}${review?"&view=review":""}`;
- const render=()=>{history.innerHTML=rows.length?rows.map(row=>`<article class="procedure-card"><h3>${escape(labels[row.procedure_type])}${review?` ・ ${escape(row.email)}`:""}</h3><p>${escape(row.effective_from)} (${escape(row.timezone)}) ・ ${escape(labels[row.status]??row.status)}${row.applied_at?` ・ 実行日時 ${escape(row.applied_at)}`:""}</p><p>${escape(row.reason)}</p><p>${escape(row.note)}</p>${row.execution_error?`<p>実行待ちの理由：${escape(row.execution_error)}</p>`:""}${row.review_note?`<p>処理メモ：${escape(row.review_note)}</p>`:""}${review&&["pending","reviewing"].includes(row.status)?`<div><p>未完了の本番担当タスク：${row.handover?.tasks.length??0}件。承認前に担当変更または完了が必要です。</p>${(row.handover?.tasks??[]).map(t=>`<a href="/admin/task-detail/?task=${encodeURIComponent(t.id)}">${escape(t.title)}</a>`).join("<br>")}<p>担当原稿：${row.handover?.documents.length??0}件</p>${(row.handover?.documents??[]).map(d=>`<a href="/admin/editor/?document=${encodeURIComponent(d.id)}">${escape(d.title)}</a>`).join("<br>")}<label>処理理由<input data-note="${escape(row.id)}" maxlength="2000" /></label><label>原稿・作業の引き継ぎ記録<textarea data-handover="${escape(row.id)}" maxlength="2000"></textarea></label><label class="confirm"><input type="checkbox" data-confirm="${escape(row.id)}" />引き継ぎと担当作業を確認しました</label><button type="button" data-action="approve" data-id="${escape(row.id)}">承認する</button><button type="button" data-action="reject" data-id="${escape(row.id)}">却下する</button></div>`:!review&&["pending","reviewing","scheduled"].includes(row.status)?`<button type="button" data-action="cancel" data-id="${escape(row.id)}">取り下げる</button>`:""}</article>`).join(""):'<p class="empty">申請はありません。</p>';};
+ const render=()=>{history.innerHTML=rows.length?rows.map(row=>`<article class="procedure-card"><h3>${escape(labels[row.procedure_type])}${review?` ・ ${escape(row.email)}`:""}</h3><p>${escape(row.effective_from)} (${escape(row.timezone)}) ・ ${escape(labels[row.status]??row.status)}${row.applied_at?` ・ 実行日時 ${escape(row.applied_at)}`:""}</p><p>${escape(row.reason)}</p><p>${escape(row.note)}</p>${row.execution_error?`<p>実行待ちの理由：${escape(row.execution_error)}</p>`:""}${row.review_note?`<p>処理メモ：${escape(row.review_note)}</p>`:""}${review&&["pending","reviewing"].includes(row.status)?`<div><p>未完了の本番担当タスク：${row.handover?.tasks.length??0}件。承認前に担当変更または完了が必要です。</p>${(row.handover?.tasks??[]).map(t=>`<a href="/admin/task-detail/?task=${encodeURIComponent(t.id)}">${escape(t.title)}</a>`).join("<br>") }<p>担当原稿：${row.handover?.documents.length??0}件</p>${(row.handover?.documents??[]).map(d=>`<a href="/admin/editor/?document=${encodeURIComponent(d.id)}">${escape(d.title)}</a>`).join("<br>")}<label>処理理由<input data-note="${escape(row.id)}" maxlength="2000" /></label><label>原稿・作業の引き継ぎ記録<textarea data-handover="${escape(row.id)}" maxlength="2000"></textarea></label><label class="confirm"><input type="checkbox" data-confirm="${escape(row.id)}" />引き継ぎと担当作業を確認しました</label><button type="button" data-action="approve" data-id="${escape(row.id)}">承認する</button><button type="button" data-action="reject" data-id="${escape(row.id)}">却下する</button></div>`:!review&&["pending","reviewing","scheduled"].includes(row.status)?`<button type="button" data-action="cancel" data-id="${escape(row.id)}">取り下げる</button>`:""}</article>`).join(""):'<p class="empty">申請はありません。</p>';};
  let load:()=>Promise<void>;const retry=createAdminLoadRetry(root,()=>load(),"申請を読み込めませんでした。");
- load=async()=>{retry.begin();form.querySelector<HTMLButtonElement>("button")!.disabled=true;try{const url=select.value||initialProject?endpoint():"/api/admin/member-procedures";const response=await fetch(url,{credentials:"same-origin",cache:"no-store"});const data=await readAdminApiJson<Data>(response,"申請を読み込めませんでした。");if(!response.ok)throw Error(data.error);if(!select.value||select.options[0]?.value==="読み込み中…"){select.replaceChildren(...(data.projects??[]).map(p=>{const option=document.createElement("option");option.value=p.id;option.textContent=p.name;return option;}));if(data.project)select.value=data.project.id;}reviewButton.hidden=!data.canReview;root.querySelector<HTMLElement>("[data-self]")!.hidden=review;root.querySelector<HTMLElement>("[data-history-title]")!.textContent=review?"プロジェクトの申請確認":"自分の申請履歴";root.querySelector<HTMLElement>("[data-membership-state]")!.textContent=data.project?`現在の状態：${({active:"活動中",paused:"休止中",withdrawn:"退会済み"} as Record<string,string>)[data.project.state]??data.project.state}`:"参加中のプロジェクトがありません。";form.querySelector<HTMLButtonElement>("button")!.disabled=!data.project;rows=data.requests??[];render();retry.success();}catch(error){retry.fail(error);throw error;}};
+ load=async()=>{retry.begin();forms.forEach(form=>form.querySelector<HTMLButtonElement>("button")!.disabled=true);try{const url=select.value||initialProject?endpoint():"/api/admin/member-procedures";const response=await fetch(url,{credentials:"same-origin",cache:"no-store"});const data=await readAdminApiJson<Data>(response,"申請を読み込めませんでした。");if(!response.ok)throw Error(data.error);if(!select.value||select.options[0]?.value==="読み込み中…"){select.replaceChildren(...(data.projects??[]).map(p=>{const option=document.createElement("option");option.value=p.id;option.textContent=p.name;return option;}));if(data.project)select.value=data.project.id;}currentProject=data.project;reviewButton.hidden=!data.canReview;reviewButton.setAttribute("aria-pressed",String(review));root.querySelector<HTMLButtonElement>("[data-own]")!.setAttribute("aria-pressed",String(!review));root.querySelector<HTMLElement>("[data-self]")!.hidden=review;root.querySelector<HTMLElement>("[data-history-title]")!.textContent=review?"プロジェクトの申請確認":"自分の申請履歴";root.querySelector<HTMLElement>("[data-membership-state]")!.textContent=data.project?`現在の状態：${({active:"活動中",paused:"休止中",withdrawn:"退会済み"} as Record<string,string>)[data.project.state]??data.project.state}`:"参加中のプロジェクトがありません。";const available:Record<string,string[]>={active:["pause","withdrawal"],paused:["restart","withdrawal"],withdrawn:["restart"]};let shown=0;root.querySelectorAll<HTMLElement>("[data-card]").forEach(card=>{const visible=(available[data.project?.state??""]??[]).includes(card.dataset.card??"");card.hidden=!visible;if(visible)shown++;});root.querySelector<HTMLElement>("[data-no-procedure]")!.hidden=shown>0;forms.forEach(form=>{const enabled=Boolean(data.project)&&!review&&!form.closest<HTMLElement>("[data-card]")!.hidden;form.querySelector<HTMLButtonElement>("button")!.disabled=!enabled;});rows=data.requests??[];render();retry.success();}catch(error){retry.fail(error);throw error;}};
  const reload=()=>void load().catch(e=>message.textContent=e instanceof Error?e.message:"読み込めませんでした。");
  select.addEventListener("change",()=>{review=false;reload();});root.querySelector("[data-own]")!.addEventListener("click",()=>{review=false;reload();});reviewButton.addEventListener("click",()=>{review=true;reload();});
  const post=async(payload:unknown)=>{const response=await fetch(endpoint(),{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});const data=await readAdminApiJson<Data>(response,"処理できませんでした。");if(!response.ok)throw Error(data.error);await load();};
- form.addEventListener("submit",async event=>{event.preventDefault();const output=root.querySelector<HTMLOutputElement>("[data-form-message]")!,button=form.querySelector<HTMLButtonElement>("button")!;button.disabled=true;try{await post({...Object.fromEntries(new FormData(form)),confirm:form.querySelector<HTMLInputElement>("[name=confirm]")!.checked});output.textContent="申請を受け付けました。履歴で結果を確認してください。";form.reset();}catch(error){output.textContent=error instanceof Error?error.message:"申請できませんでした。";}finally{button.disabled=false;}});
+ forms.forEach(form=>form.addEventListener("submit",async event=>{event.preventDefault();const output=form.querySelector<HTMLOutputElement>("[data-form-message]")!,button=form.querySelector<HTMLButtonElement>("button")!;button.disabled=true;const value=(name:string)=>new FormData(form).get(name)?.toString()??"";try{await post({type:value("type"),effectiveFrom:value("effectiveFrom"),effectiveUntil:value("effectiveUntil"),timezone:value("timezone"),reason:value("reason"),note:value("note"),confirm:form.querySelector<HTMLInputElement>("[name=confirm]")?.checked??false});output.textContent="申請を受け付けました。履歴で結果を確認してください。";form.reset();}catch(error){output.textContent=error instanceof Error?error.message:"申請できませんでした。";}finally{button.disabled=!currentProject||review||Boolean(form.closest<HTMLElement>("[data-card]")?.hidden);}}));
  history.addEventListener("click",async event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");if(!button)return;const id=button.dataset.id!,row=rows.find(r=>r.id===id);if(!row)return;button.disabled=true;try{await post({id,action:button.dataset.action,expectedUpdatedAt:row.updated_at,reviewNote:root.querySelector<HTMLInputElement>(`[data-note="${CSS.escape(id)}"]`)?.value,handoverNote:root.querySelector<HTMLTextAreaElement>(`[data-handover="${CSS.escape(id)}"]`)?.value,handoverConfirmed:root.querySelector<HTMLInputElement>(`[data-confirm="${CSS.escape(id)}"]`)?.checked});message.textContent="処理しました。";}catch(error){message.textContent=error instanceof Error?error.message:"処理できませんでした。";}finally{button.disabled=false;}});reload();
 };document.addEventListener("astro:page-load",initialize);initialize();
 </script>
