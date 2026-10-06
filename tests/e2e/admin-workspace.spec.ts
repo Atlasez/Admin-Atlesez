@@ -433,6 +433,11 @@ test("各ジャンル概要で担当メンバーと進捗を確認・更新で�
   await expect(
     mathematics.getByText("山田 花子", { exact: true }),
   ).toBeVisible();
+  const kanji = page.locator("#kanji");
+  await expect(kanji.locator(".member-note")).toHaveText(
+    "担当者はまだ登録されていません。",
+  );
+  await expect(kanji.locator(".loading-note")).toHaveCount(0);
   await expect(mathematics.getByText("上杉和輝", { exact: true })).toHaveCount(
     0,
   );
