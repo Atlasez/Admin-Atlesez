@@ -17,6 +17,39 @@
 
 公開Worker、Route、Account、D1、DOの付替えは切替の対象に含めない。
 
+## 2026-10-08 本番停止の調査記録
+
+Cloudflare DashboardのAccount `812021e62fa20465950b61be55dfe064`にあるWorker `atlasez-admin`のProduction Settingsを確認した。Build欄のGit repositoryは`接続`と表示され、Workers Buildsは未接続だった。現在の構成では、GitHub `main`へのマージだけでADMIN本番は更新されない。これは今回の反映停止の直接原因である。
+
+読み取り専用の本番照合では次を確認した。
+
+- `https://admin.atlasez.org/build-info.json`: commit `cebf65dd17c31d6bdc7f62fc41fdce24f4d336a4`、ref `main`、target `admin`、builtAt `2026-10-05T14:26:26.505Z`。
+- GitHub `admin/main`: `28b5f321af4bdd7177c92038935d0a5f1dc2f285`。公開SHAとの差分にはアプリケーションコードとテストの変更がある。
+- 最新DeploymentはVersion `aa9766f5-7fda-40f4-97c3-094a776ef1b5`を100%配信中だが、配信元は`Unknown (version_upload)`。build-infoはビルドmetadataであり、このVersionとの独立した紐付け証跡ではない。
+- `https://admin.atlasez.org/xai-prototype/`はHTTP 404。
+- 旧GitHub deploy Workflowの実行中runはなく、現行Workflowは検証専用。固定D1の読み取り専用migration一覧は`No migrations to apply`。
+- UI prototype PR #516はDraft・未レビュー。PR CIは成功しているが、mainへ未反映。
+
+Workers Builds未接続の原因は特定できたが、現在配信中Versionを検証済みBuildへ結び付ける証拠はなく、公開SHAとmainも異なる。したがってこの記録は不一致を解消した扱いにせず、配信停止条件を維持する。Unknown sourceを推測でmain由来と扱わず、promote、rollback、手動upload、別のdeploy経路も使わない。
+
+### 設定レビュー対象
+
+レビュー完了後に設定する値は次のとおり。Cloudflareの設定保存は、PRレビューとその後の権限確認が済むまで行わない。
+
+- GitHub repository: `Atlasez/Admin-Atlesez`
+- Production branch: `main`
+- Root directory: `/`
+- Build command: 本文書の「Workers Buildsのコマンド案」に記載した全検証、ADMIN build、deploy dry-run
+- Deploy command: `npx wrangler deploy --config wrangler.admin.jsonc --keep-vars`
+- Preview builds: disabled
+- Worker名、Account、Custom Domain、D1、Durable Object、bindings、既存vars: 固定値を維持。新しいrouteや別Workerを作らない
+
+この接続は、以後`main`へ入った変更を固定ADMIN Workerへ継続的に配信できる権限を持つ。Dashboardの自動API TokenはWorker以外のアカウント機能とZone Routesまで含むため使わない。Cloudflareが`atlasez-admin`だけに制限したtokenを提供できない場合、アカウント範囲の`Workers Scripts Edit`を含むtokenの使用は、対象・権限・保存先を明示した別のユーザー承認なしに進めない。
+
+### 設定変更時の復旧
+
+初回Buildの前提確認、checkout SHA、全検証、build-info、Worker Version、100%配信を一つでも照合できなければ、以降のmainマージとBuildを止めてrun ID・SHA・Version・時刻を記録する。設定を戻す必要がある場合は、別のレビュー済みPRでWorkers Builds接続を解除し、別の書込み経路は有効にしない。誤ったVersionのpromote/rollback、cache purge、Route変更は対象Versionと影響をレビューするまで行わない。再開は原因を修正したレビュー済みmain commitのWorkers Buildsから行い、build-infoとCloudflare Versionの対応を検証してから完了とする。
+
 ## 切替順序
 
 1. 運用文書、AGENTS.md、Actions deploy workflow、配信検証workflow、設定検証の関連テストを変更するPRを作り、CI成功・レビュー完了を確認する。Workers Buildsのみを通常経路とすることと、監査だけのworkflowを残すことを明記する。
