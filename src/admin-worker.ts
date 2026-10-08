@@ -23372,6 +23372,19 @@ async function handleAdminRequest(
   // 応募フォームから遷移する個人情報保護方針は、認証不要の静的ページとして公開する。
   if (url.pathname === "/privacy-policy" || url.pathname === "/privacy-policy/")
     return fetchAdminAsset(request, env);
+  // The xAI-inspired prototype is an isolated static site. Keep it in its own
+  // URL namespace and serve only read-only requests without ADMIN auth/data.
+  if (
+    url.pathname === "/xai-prototype" ||
+    url.pathname.startsWith("/xai-prototype/")
+  ) {
+    if (request.method !== "GET" && request.method !== "HEAD")
+      return new Response("Method not allowed", {
+        status: 405,
+        headers: { Allow: "GET, HEAD" },
+      });
+    return env.ASSETS.fetch(request);
+  }
   if (
     url.pathname === "/api/onboarding/atlas-writing-practice" &&
     request.method === "POST"
