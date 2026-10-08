@@ -27,7 +27,7 @@ npm run build
 npm test
 ```
 
-The Playwright suite starts the isolated development server on port 4322, checks direct routes and interactions, verifies common viewport widths, and writes local screenshots to `test-results/`. It does not fetch or compare a reference screenshot, so it reports functional and layout checks rather than a pixel-difference score.
+The Playwright suite builds the standalone site and starts Astro's production preview on port 4325, checks direct routes and interactions, verifies common viewport widths, and writes local screenshots to `test-results/`. It does not fetch or compare a reference screenshot, so it reports functional and layout checks rather than a pixel-difference score.
 
 ## Design and implementation notes
 

@@ -12,8 +12,8 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "ASTRO_DEV_BACKGROUND=1 npx astro dev --ignore-lock --host 127.0.0.1 --port 4322",
-    url: "http://127.0.0.1:4322",
+      "npx astro build && ASTRO_PREVIEW_BACKGROUND=0 npx astro preview --host 127.0.0.1 --port 4325 --strictPort",
+    url: "http://127.0.0.1:4325",
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },
