@@ -44,11 +44,15 @@ Cloudflareの権限変更後に再確認し、通常のWorkers Builds接続が�
 - clean checkoutで`verify:deploy-config`、`check`、`lint`、`test`、`format:check`、ADMIN build、`verify:build-info`、`git diff --check`が成功。認証済みChromeでログイン後、ポータル、カレンダー、タスク、マイページ、管理画面、手順画面を確認した。
 - Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509) に復旧結果を記録した。
 
-継続的な配信停止の原因もCloudflareの現行権限仕様で再調査した。Dashboardの既存ユーザーToken候補は`Workers Builds Configuration: Edit`と`Workers Scripts: Read`であり、Builds設定APIの構成権限に使える一方、Workerをdeployする権限ではない。Buildsは現在user-scoped tokenのみ対応し、account-scoped tokenは未対応とCloudflareが明記している（[Build configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)、[Builds API](https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/)）。
+継続的な配信停止の原因もCloudflareの現行権限仕様で再調査した。既存のユーザーtoken `Atlasez ADMIN Workers Builds - fresh`と`Atlasez ADMIN Workers Builds - scoped`はいずれも`Workers Builds Configuration: Edit`と`Workers Scripts: Read`であり、Builds設定APIの構成には使えるがWorkerをdeployする権限はない。CloudflareはWorkers Buildsがuser-scoped tokenのみ対応し、account-owned tokenは未対応と明記している（[Build configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)、[Builds API](https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/)）。
 
-Deploy用Build tokenを新規作成するCloudflare APIはlegacy `Workers CI Write` permissionを要求する。Cloudflareの現行資料ではlegacy Workers permissionはaccount-levelであり、Workers CI EditおよびWorkers Scripts EditはWorkers productのEditorに対応する。[新しいWorkers Editor roleはWorker単位にscope可能](https://developers.cloudflare.com/workers/authorization/workers/)だが、account-owned tokenが必要で、Workers Builds側がそのtokenを受け付けない。したがって、現在の接続経路では`atlasez-admin`単体に限定したDeploy tokenを構成できない。
+Cloudflareは2026-09-15にWorker単位のEditor roleを追加し、自動化にはAccount API Tokenを作り、対象Workerだけへscopeする方法を案内している（[Workers roles and permissions](https://developers.cloudflare.com/workers/authorization/workers/)、[role追加の案内](https://developers.cloudflare.com/changelog/post/2026-09-15-granular-worker-permissions/)）。一方、Workers Buildsはaccount-owned tokenに未対応であるため、この最小権限経路を利用できない。
 
-Dashboardが提示する自動tokenは、Worker Scripts Editに加えてKV/R2や全ZoneのRoutesなど広い権限を含むため使用していない。既存の読み取り専用tokenも書き込み権限を持たない。アカウント全体のWorkers編集権限を持つtokenを作成・選択する操作はまだ実施しておらず、本PRレビューと対象・権限・影響・復旧方法への明示承認がない限り実施しない。この権限境界のため、Workers Builds接続と継続的自動配信は未完了である。
+CloudflareのMy Profile > API Tokensで既存tokenとカスタムtoken作成画面を読み取り確認した。既存2 tokenは上記の読み取り権限だった。カスタムユーザーtokenではresourceをAccountまたはZoneから選択する画面で、Accountの`Workers`を選ぶと権限レベルの選択肢は`Admin`のみであり、Worker単体のEditorは設定できなかった。Account API Tokensへの画面遷移は`403 Unauthorized`となり、このユーザーには作成権限もなかった。仮にAccount API Tokenを作成できても、現行Workers Buildsはそれを受け付けない。
+
+Build token作成APIはlegacy `Workers CI Write`を要求する。Cloudflareはlegacy Workers permissionをaccount-levelとし、Workers CI EditおよびWorkers Scripts EditはWorkers product全体のEditorに対応すると説明している。[Workers EditorをWorker単位にscopeする方法](https://developers.cloudflare.com/workers/authorization/workers/)はAccount API Token向けのため、Buildsのuser-token制約と両立しない。したがって、現在のWorkers Buildsでは`atlasez-admin`単体に限定したDeploy tokenを構成できない。
+
+Dashboardが提示する自動tokenは、Worker Scripts Editに加えてKV/R2や全ZoneのRoutesなど広い権限を含むため使用していない。既存の`Atlasez Admin GitHub Deploy`にはアカウント範囲のWorkers Scripts Editに加えてD1権限があるが、これもWorkers Buildsへ渡していない。ユーザー指定AGENTS.mdはWorker単体にscopeできないWorkers Scripts Edit tokenを使う場合、別の明示承認を要求している。アカウント全体へのdeploy権限を持つtokenを新設・選択していないため、Workers Builds接続と継続的自動配信は未完了である。
 
 ### 設定レビュー対象
 
