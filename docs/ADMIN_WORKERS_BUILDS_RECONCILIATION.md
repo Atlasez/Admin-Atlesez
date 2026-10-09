@@ -4,7 +4,7 @@
 
 ユーザーが今回指定したAGENTS.mdは、通常配信をCloudflare Workers Buildsに限定している。一方、作業開始時のmainの`ADMIN_DEPLOYMENT_POLICY.md`、`ADMIN_CHANGE_WORKFLOW.md`、`DEPLOYMENT.md`、`ADMIN_KNOWLEDGE_BASE.md`と`deploy-admin-from-github.yml`はGitHub Actions配信を定めていた。このPRではユーザー指定を優先し、文書とWorkflowを一組としてWorkers Buildsへ統一する。ローカルの変更をmain反映済みと扱わない。
 
-この文書は切替案であり、配信設定の変更・接続保存・本番migration・本番デプロイを実行した記録ではない。接続画面で`Atlasez/Admin-Atlesez`と`main`が候補に表示されたことは、接続成功やBuildの動作確認を意味しない。
+このPRは切替案と復旧記録を更新するもので、Cloudflareの配信設定を変更・保存しない。接続画面で`Atlasez/Admin-Atlesez`と`main`が候補に表示されたことは、接続成功やBuildの動作確認を意味しない。2026-10-09に実施した本番復旧は、Workers Builds接続とは独立した、ユーザー指定AGENTS.mdに定める緊急経路の記録として以下に記載する。
 
 | 対象               | 固定値                                                     |
 | ------------------ | ---------------------------------------------------------- |
@@ -30,7 +30,25 @@ Cloudflare DashboardのAccount `812021e62fa20465950b61be55dfe064`にあるWorker
 - 旧GitHub deploy Workflowの実行中runはなく、現行Workflowは検証専用。固定D1の読み取り専用migration一覧は`No migrations to apply`。
 - UI prototype PR #516はDraft・未レビュー。PR CIは成功しているが、mainへ未反映。
 
-Workers Builds未接続の原因は特定できたが、現在配信中Versionを検証済みBuildへ結び付ける証拠はなく、公開SHAとmainも異なる。したがってこの記録は不一致を解消した扱いにせず、配信停止条件を維持する。Unknown sourceを推測でmain由来と扱わず、promote、rollback、手動upload、別のdeploy経路も使わない。
+この不一致と停止判断は2026-10-08時点の記録である。2026-10-09の復旧結果は次節に記載する。
+
+## 2026-10-09 本番復旧とWorkers Builds権限の再調査
+
+Cloudflareの権限変更後に再確認し、通常のWorkers Builds接続が未完了のままADMIN本番が古いことを確認した。レビュー済みmain `28b5f321af4bdd7177c92038935d0a5f1dc2f285`だけを使い、ユーザー指定AGENTS.mdの緊急手順で本番を復旧した。作業はcanonical GitHub `main`のclean checkoutで行い、deploy context、config、全検証とADMIN buildを照合した。`CF_BRANCH=main`を指定して再ビルド後に配信し、migration一覧は`No migrations to apply`だった。
+
+- Worker: `atlasez-admin`、Account `812021e62fa20465950b61be55dfe064`、custom domain `admin.atlasez.org`。
+- Cloudflare Version: `9ec745ba-3860-4277-ad11-8e476ed1c806`、2026-10-09 11:31:36 UTC、100%配信。
+- 公開build-info: repository=`Atlasez/Admin-Atlesez`、commit=`28b5f321af4bdd7177c92038935d0a5f1dc2f285`、ref=`main`、target=`admin`。Build情報はVersion metadataではないため、Worker/Version/100%配信と公開SHAを個別に照合した。
+- Cloudflareはsourceを`Unknown (deployment)`と表示した。手動の緊急経路による配信と一致する値で、main由来の根拠には公開build-infoの完全一致を使用した。
+- GitHubの読み取り専用 `Verify admin production sync` run [37924656754](https://github.com/Atlasez/Admin-Atlesez/actions/runs/37924656754) は対象main SHAで成功。
+- clean checkoutで`verify:deploy-config`、`check`、`lint`、`test`、`format:check`、ADMIN build、`verify:build-info`、`git diff --check`が成功。認証済みChromeでログイン後、ポータル、カレンダー、タスク、マイページ、管理画面、手順画面を確認した。
+- Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509) に復旧結果を記録した。
+
+継続的な配信停止の原因もCloudflareの現行権限仕様で再調査した。Dashboardの既存ユーザーToken候補は`Workers Builds Configuration: Edit`と`Workers Scripts: Read`であり、Builds設定APIの構成権限に使える一方、Workerをdeployする権限ではない。Buildsは現在user-scoped tokenのみ対応し、account-scoped tokenは未対応とCloudflareが明記している（[Build configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)、[Builds API](https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/)）。
+
+Deploy用Build tokenを新規作成するCloudflare APIはlegacy `Workers CI Write` permissionを要求する。Cloudflareの現行資料ではlegacy Workers permissionはaccount-levelであり、Workers CI EditおよびWorkers Scripts EditはWorkers productのEditorに対応する。[新しいWorkers Editor roleはWorker単位にscope可能](https://developers.cloudflare.com/workers/authorization/workers/)だが、account-owned tokenが必要で、Workers Builds側がそのtokenを受け付けない。したがって、現在の接続経路では`atlasez-admin`単体に限定したDeploy tokenを構成できない。
+
+Dashboardが提示する自動tokenは、Worker Scripts Editに加えてKV/R2や全ZoneのRoutesなど広い権限を含むため使用していない。既存の読み取り専用tokenも書き込み権限を持たない。アカウント全体のWorkers編集権限を持つtokenを作成・選択する操作はまだ実施しておらず、本PRレビューと対象・権限・影響・復旧方法への明示承認がない限り実施しない。この権限境界のため、Workers Builds接続と継続的自動配信は未完了である。
 
 ### 設定レビュー対象
 
@@ -44,7 +62,7 @@ Workers Builds未接続の原因は特定できたが、現在配信中Version�
 - Preview builds: disabled
 - Worker名、Account、Custom Domain、D1、Durable Object、bindings、既存vars: 固定値を維持。新しいrouteや別Workerを作らない
 
-この接続は、以後`main`へ入った変更を固定ADMIN Workerへ継続的に配信できる権限を持つ。Dashboardの自動API TokenはWorker以外のアカウント機能とZone Routesまで含むため使わない。Cloudflareが`atlasez-admin`だけに制限したtokenを提供できない場合、アカウント範囲の`Workers Scripts Edit`を含むtokenの使用は、対象・権限・保存先を明示した別のユーザー承認なしに進めない。
+この接続は、以後`main`へ入った変更を固定ADMIN Workerへ継続的に配信できる権限を持つ。Dashboardの自動API TokenはWorker以外のアカウント機能とZone Routesまで含むため使わない。現在のWorkers Builds APIではaccount-owned・Worker単位tokenを利用できないため、アカウント全体のWorkers編集権限を含むtokenの作成・選択は、PRレビューと対象・権限・影響・保存先・復旧方法を明示した別のユーザー承認なしに進めない。
 
 ### 設定変更時の復旧
 
