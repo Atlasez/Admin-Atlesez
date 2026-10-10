@@ -168,6 +168,15 @@ describe("admin local deploy context guard", () => {
     expect(runGuard(checkout, localSha).stderr).toContain("remote main");
   });
 
+  it("rejects a main branch without a configured remote-tracking upstream", () => {
+    const { checkout, sha } = createMainCheckout();
+    git(checkout, "config", "--unset", "branch.main.remote");
+
+    expect(runGuard(checkout, sha).stderr).toContain(
+      "remote-tracking upstream",
+    );
+  });
+
   it("rejects a main branch tracking a non-canonical repository", () => {
     const { checkout, sha } = createMainCheckout();
     git(

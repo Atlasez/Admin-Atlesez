@@ -43,17 +43,15 @@ if (target === "admin" && branch !== "main") {
 }
 
 if (target === "admin" && branch === "main") {
-  const upstream = git([
-    "rev-parse",
-    "--abbrev-ref",
-    "--symbolic-full-name",
-    "main@{upstream}",
-  ]);
-  const upstreamRef = upstream
-    ? git(["rev-parse", "--symbolic-full-name", upstream])
-    : "";
-  const upstreamRemote = upstream.endsWith("/main")
-    ? upstream.slice(0, -"/main".length)
+  const upstreamRemote = git(["config", "--get", "branch.main.remote"]);
+  const upstreamMerge = git(["config", "--get", "branch.main.merge"]);
+  const upstream = upstreamRemote ? `${upstreamRemote}/main` : "";
+  const upstreamRef =
+    upstreamRemote && upstreamMerge === "refs/heads/main"
+      ? `refs/remotes/${upstreamRemote}/main`
+      : "";
+  const upstreamSha = upstreamRef
+    ? git(["rev-parse", "--verify", `${upstreamRef}^{commit}`])
     : "";
   const remoteUrl = upstreamRemote
     ? git(["remote", "get-url", upstreamRemote])
@@ -68,8 +66,8 @@ if (target === "admin" && branch === "main") {
 
   if (
     !upstream ||
-    !upstreamRef.startsWith("refs/remotes/") ||
-    !upstream.endsWith("/main") ||
+    !upstreamRef ||
+    !upstreamSha ||
     normalizedRemoteUrl !== "github.com/atlasez/admin-atlesez"
   ) {
     failures.push(
