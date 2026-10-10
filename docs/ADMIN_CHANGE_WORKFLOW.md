@@ -59,7 +59,7 @@ ADMIN本番の唯一の通常デプロイ経路はCloudflare Workers Buildsで�
 
 ```bash
 # Workers Builds: Build command
-npm ci && npm run verify:deploy-config && npm run check && npm run lint && npm test && npm run format:check && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ CF_BRANCH=main npm run build && npm run verify:build-info && npx wrangler deploy --dry-run --config wrangler.admin.jsonc --keep-vars
+npm ci && npm ci --prefix prototypes/xai && npm run verify:deploy-config && npm run check && npm run lint && npm test && npm run format:check && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ CF_BRANCH=main npm run build && npm run verify:build-info && npx wrangler deploy --dry-run --config wrangler.admin.jsonc --keep-vars
 
 # Workers Builds: Deploy command
 npx wrangler deploy --config wrangler.admin.jsonc --keep-vars

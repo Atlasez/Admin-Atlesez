@@ -27,7 +27,7 @@ Cloudflare Workers Buildsでrepositoryを`Atlasez/Admin-Atlesez`、Production br
 3. Workers BuildsのBuild commandを次に固定する。全検証が成功した場合だけDeployへ進む。
 
    ```bash
-   npm ci && npm run verify:deploy-config && npm run check && npm run lint && npm test && npm run format:check && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ CF_BRANCH=main npm run build && npm run verify:build-info && npx wrangler deploy --dry-run --config wrangler.admin.jsonc --keep-vars
+   npm ci && npm ci --prefix prototypes/xai && npm run verify:deploy-config && npm run check && npm run lint && npm test && npm run format:check && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ CF_BRANCH=main npm run build && npm run verify:build-info && npx wrangler deploy --dry-run --config wrangler.admin.jsonc --keep-vars
    ```
 
 4. Workers BuildsのDeploy commandを次に固定する。
