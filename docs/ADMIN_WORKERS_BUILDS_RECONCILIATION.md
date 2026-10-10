@@ -4,7 +4,7 @@
 
 ユーザーが今回指定したAGENTS.mdは、通常配信をCloudflare Workers Buildsに限定している。一方、作業開始時のmainの`ADMIN_DEPLOYMENT_POLICY.md`、`ADMIN_CHANGE_WORKFLOW.md`、`DEPLOYMENT.md`、`ADMIN_KNOWLEDGE_BASE.md`と`deploy-admin-from-github.yml`はGitHub Actions配信を定めていた。このPRではユーザー指定を優先し、文書とWorkflowを一組としてWorkers Buildsへ統一する。ローカルの変更をmain反映済みと扱わない。
 
-この文書は切替案であり、配信設定の変更・接続保存・本番migration・本番デプロイを実行した記録ではない。接続画面で`Atlasez/Admin-Atlesez`と`main`が候補に表示されたことは、接続成功やBuildの動作確認を意味しない。
+このPRは切替案と復旧記録を更新するもので、Cloudflareの配信設定を変更・保存しない。接続画面で`Atlasez/Admin-Atlesez`と`main`が候補に表示されたことは、接続成功やBuildの動作確認を意味しない。2026-10-09に実施した本番復旧は、Workers Builds接続とは独立した、ユーザー指定AGENTS.mdに定める緊急経路の記録として以下に記載する。
 
 | 対象               | 固定値                                                     |
 | ------------------ | ---------------------------------------------------------- |
@@ -16,6 +16,61 @@
 | Durable Object     | `atlasez-editorial-collaboration`                          |
 
 公開Worker、Route、Account、D1、DOの付替えは切替の対象に含めない。
+
+## 2026-10-08 本番停止の調査記録
+
+Cloudflare DashboardのAccount `812021e62fa20465950b61be55dfe064`にあるWorker `atlasez-admin`のProduction Settingsを確認した。Build欄のGit repositoryは`接続`と表示され、Workers Buildsは未接続だった。現在の構成では、GitHub `main`へのマージだけでADMIN本番は更新されない。これは今回の反映停止の直接原因である。
+
+読み取り専用の本番照合では次を確認した。
+
+- `https://admin.atlasez.org/build-info.json`: commit `cebf65dd17c31d6bdc7f62fc41fdce24f4d336a4`、ref `main`、target `admin`、builtAt `2026-10-05T14:26:26.505Z`。
+- GitHub `admin/main`: `28b5f321af4bdd7177c92038935d0a5f1dc2f285`。公開SHAとの差分にはアプリケーションコードとテストの変更がある。
+- 最新DeploymentはVersion `aa9766f5-7fda-40f4-97c3-094a776ef1b5`を100%配信中だが、配信元は`Unknown (version_upload)`。build-infoはビルドmetadataであり、このVersionとの独立した紐付け証跡ではない。
+- `https://admin.atlasez.org/xai-prototype/`はHTTP 404。
+- 旧GitHub deploy Workflowの実行中runはなく、現行Workflowは検証専用。固定D1の読み取り専用migration一覧は`No migrations to apply`。
+- UI prototype PR #516はDraft・未レビュー。PR CIは成功しているが、mainへ未反映。
+
+この不一致と停止判断は2026-10-08時点の記録である。2026-10-09の復旧結果は次節に記載する。
+
+## 2026-10-09 本番復旧とWorkers Builds権限の再調査
+
+Cloudflareの権限変更後に再確認し、通常のWorkers Builds接続が未完了のままADMIN本番が古いことを確認した。レビュー済みmain `28b5f321af4bdd7177c92038935d0a5f1dc2f285`だけを使い、ユーザー指定AGENTS.mdの緊急手順で本番を復旧した。作業はcanonical GitHub `main`のclean checkoutで行い、deploy context、config、全検証とADMIN buildを照合した。`CF_BRANCH=main`を指定して再ビルド後に配信し、migration一覧は`No migrations to apply`だった。
+
+- Worker: `atlasez-admin`、Account `812021e62fa20465950b61be55dfe064`、custom domain `admin.atlasez.org`。
+- Cloudflare Version: `9ec745ba-3860-4277-ad11-8e476ed1c806`、2026-10-09 11:31:36 UTC、100%配信。
+- 公開build-info: repository=`Atlasez/Admin-Atlesez`、commit=`28b5f321af4bdd7177c92038935d0a5f1dc2f285`、ref=`main`、target=`admin`。Build情報はVersion metadataではないため、Worker/Version/100%配信と公開SHAを個別に照合した。
+- Cloudflareはsourceを`Unknown (deployment)`と表示した。手動の緊急経路による配信と一致する値で、main由来の根拠には公開build-infoの完全一致を使用した。
+- GitHubの読み取り専用 `Verify admin production sync` run [37924656754](https://github.com/Atlasez/Admin-Atlesez/actions/runs/37924656754) は対象main SHAで成功。
+- clean checkoutで`verify:deploy-config`、`check`、`lint`、`test`、`format:check`、ADMIN build、`verify:build-info`、`git diff --check`が成功。認証済みChromeでログイン後、ポータル、カレンダー、タスク、マイページ、管理画面、手順画面を確認した。
+- Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509) に復旧結果を記録した。
+
+継続的な配信停止の原因もCloudflareの現行権限仕様で再調査した。既存のユーザーtoken `Atlasez ADMIN Workers Builds - fresh`と`Atlasez ADMIN Workers Builds - scoped`はいずれも`Workers Builds Configuration: Edit`と`Workers Scripts: Read`であり、Builds設定APIの構成には使えるがWorkerをdeployする権限はない。CloudflareはWorkers Buildsがuser-scoped tokenのみ対応し、account-owned tokenは未対応と明記している（[Build configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)、[Builds API](https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/)）。
+
+Cloudflareは2026-09-15にWorker単位のEditor roleを追加し、自動化にはAccount API Tokenを作り、対象Workerだけへscopeする方法を案内している（[Workers roles and permissions](https://developers.cloudflare.com/workers/authorization/workers/)、[role追加の案内](https://developers.cloudflare.com/changelog/post/2026-09-15-granular-worker-permissions/)）。一方、Workers Buildsはaccount-owned tokenに未対応であるため、この最小権限経路を利用できない。
+
+CloudflareのMy Profile > API Tokensで既存tokenとカスタムtoken作成画面を読み取り確認した。既存2 tokenは上記の読み取り権限だった。カスタムユーザーtokenではresourceをAccountまたはZoneから選択する画面で、Accountの`Workers`を選ぶと権限レベルの選択肢は`Admin`のみであり、Worker単体のEditorは設定できなかった。Account API Tokensへの画面遷移は`403 Unauthorized`となり、このユーザーには作成権限もなかった。仮にAccount API Tokenを作成できても、現行Workers Buildsはそれを受け付けない。
+
+Build token作成APIはlegacy `Workers CI Write`を要求する。Cloudflareはlegacy Workers permissionをaccount-levelとし、Workers CI EditおよびWorkers Scripts EditはWorkers product全体のEditorに対応すると説明している。[Workers EditorをWorker単位にscopeする方法](https://developers.cloudflare.com/workers/authorization/workers/)はAccount API Token向けのため、Buildsのuser-token制約と両立しない。したがって、現在のWorkers Buildsでは`atlasez-admin`単体に限定したDeploy tokenを構成できない。
+
+Dashboardが提示する自動tokenは、Worker Scripts Editに加えてKV/R2や全ZoneのRoutesなど広い権限を含むため使用していない。既存の`Atlasez Admin GitHub Deploy`にはアカウント範囲のWorkers Scripts Editに加えてD1権限があるが、これもWorkers Buildsへ渡していない。ユーザー指定AGENTS.mdはWorker単体にscopeできないWorkers Scripts Edit tokenを使う場合、別の明示承認を要求している。アカウント全体へのdeploy権限を持つtokenを新設・選択していないため、Workers Builds接続と継続的自動配信は未完了である。
+
+### 設定レビュー対象
+
+レビュー完了後に設定する値は次のとおり。Cloudflareの設定保存は、PRレビューとその後の権限確認が済むまで行わない。
+
+- GitHub repository: `Atlasez/Admin-Atlesez`
+- Production branch: `main`
+- Root directory: `/`
+- Build command: 本文書の「Workers Buildsのコマンド案」に記載した全検証、ADMIN build、deploy dry-run
+- Deploy command: `npx wrangler deploy --config wrangler.admin.jsonc --keep-vars`
+- Preview builds: disabled
+- Worker名、Account、Custom Domain、D1、Durable Object、bindings、既存vars: 固定値を維持。新しいrouteや別Workerを作らない
+
+この接続は、以後`main`へ入った変更を固定ADMIN Workerへ継続的に配信できる権限を持つ。Dashboardの自動API TokenはWorker以外のアカウント機能とZone Routesまで含むため使わない。現在のWorkers Builds APIではaccount-owned・Worker単位tokenを利用できないため、アカウント全体のWorkers編集権限を含むtokenの作成・選択は、PRレビューと対象・権限・影響・保存先・復旧方法を明示した別のユーザー承認なしに進めない。
+
+### 設定変更時の復旧
+
+初回Buildの前提確認、checkout SHA、全検証、build-info、Worker Version、100%配信を一つでも照合できなければ、以降のmainマージとBuildを止めてrun ID・SHA・Version・時刻を記録する。設定を戻す必要がある場合は、別のレビュー済みPRでWorkers Builds接続を解除し、別の書込み経路は有効にしない。誤ったVersionのpromote/rollback、cache purge、Route変更は対象Versionと影響をレビューするまで行わない。再開は原因を修正したレビュー済みmain commitのWorkers Buildsから行い、build-infoとCloudflare Versionの対応を検証してから完了とする。
 
 ## 切替順序
 
