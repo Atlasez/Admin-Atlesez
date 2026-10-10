@@ -48,8 +48,18 @@ function createMainCheckout() {
   git(checkout, "push", "--set-upstream", "admin", "main");
   // Push does not populate remote-tracking refs consistently across Git versions.
   git(checkout, "fetch", "admin", "main:refs/remotes/admin/main");
-  git(checkout, "config", "branch.main.remote", "admin");
-  git(checkout, "config", "branch.main.merge", "refs/heads/main");
+  const sha = git(checkout, "rev-parse", "HEAD");
+  git(checkout, "update-ref", "refs/remotes/admin/main", sha);
+  git(checkout, "branch", "--set-upstream-to=admin/main", "main");
+  expect(
+    git(
+      checkout,
+      "rev-parse",
+      "--abbrev-ref",
+      "--symbolic-full-name",
+      "main@{upstream}",
+    ),
+  ).toBe("admin/main");
   git(
     checkout,
     "remote",
@@ -66,13 +76,14 @@ function runGuard(
   target = "admin",
 ) {
   try {
+    const env = withoutGitEnvironment();
+    env.GIT_DIR = join(checkout, ".git");
+    env.GIT_WORK_TREE = checkout;
+    env.DEPLOY_MAIN_SHA = approvedSha;
     const stdout = execFileSync("node", [script.pathname, target], {
       cwd: checkout,
       encoding: "utf8",
-      env: {
-        ...withoutGitEnvironment(),
-        DEPLOY_MAIN_SHA: approvedSha,
-      },
+      env,
     });
     return { code: 0, stdout, stderr: "" };
   } catch (error) {
