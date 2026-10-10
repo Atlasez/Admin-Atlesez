@@ -1,0 +1,395 @@
+---
+import "../styles/xai-prototype.css";
+import { featuredStories, xaiStories, type XaiStory } from "./news-data";
+
+type Props = { page: string; story?: XaiStory };
+const { page, story } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const localPath = (path: string) => `${base}${path}`;
+
+const products = [
+  { name: "Chat", href: `${base}/grok/`, note: "Reasoning, search, and voice", tone: "chat" },
+  { name: "Build", href: `${base}/build/`, note: "A coding agent for your work", tone: "build" },
+  { name: "Bot", href: `${base}/bot/`, note: "Persistent AI teammates", tone: "bot" },
+  { name: "Imagine", href: `${base}/api/imagine/`, note: "Images and video", tone: "imagine" },
+  { name: "Voice", href: `${base}/voice/`, note: "Natural voice agents", tone: "voice" },
+];
+
+const navGroups = [
+  { id: "products", label: "Products", links: products },
+  {
+    id: "solutions",
+    label: "Solutions",
+    links: [
+      { name: "Business", href: "https://x.ai/grok/business", note: "For teams", tone: "" },
+      { name: "Government", href: "https://x.ai/grok/government", note: "Public sector", tone: "" },
+      { name: "Customer support", href: "https://x.ai/solutions/customer-support", note: "Support operations", tone: "" },
+      { name: "Legal", href: "https://x.ai/solutions/legal", note: "Legal teams", tone: "" },
+    ],
+  },
+  {
+    id: "developer",
+    label: "Developer",
+    links: [
+      { name: "API", href: `${base}/api/`, note: "One API, every modality", tone: "" },
+      { name: "Pricing", href: `${base}/pricing/`, note: "Plans and usage", tone: "" },
+      { name: "Documentation", href: "https://docs.x.ai/", note: "Guides and references", tone: "" },
+      { name: "Console", href: "https://console.x.ai/", note: "Manage your account", tone: "" },
+    ],
+  },
+  {
+    id: "company",
+    label: "Company",
+    links: [
+      { name: "About", href: `${base}/company/`, note: "Our mission", tone: "" },
+      { name: "Colossus", href: `${base}/colossus/`, note: "Compute at scale", tone: "" },
+      { name: "Careers", href: `${base}/careers/`, note: "Join the team", tone: "" },
+      { name: "News", href: `${base}/news/`, note: "Latest updates", tone: "" },
+    ],
+  },
+];
+
+const benefits = [
+  ["Competitive compensation", "Competitive cash and equity-based compensation packages to attract top talent."],
+  ["Health and wellness", "Comprehensive health insurance including medical, dental, vision, and disability coverage."],
+  ["Life and family", "Life and AD&D insurance and fertility benefits to ensure our team's well-being."],
+  ["Flexible vacation", "We work hard but avoid burnout. Take time off when you need it."],
+  ["Visa sponsorship", "We support international talent with visa sponsorship to join our team."],
+  ["401(k) plan", "Retirement savings plan to secure your financial future."],
+];
+
+const roles = [
+  ["Construction Scheduler - Memphis Southaven, MS", "Memphis, TN", "Infrastructure", "https://job-boards.greenhouse.io/xai/jobs/5242789007"],
+  ["Controls Technician - Memphis Southaven, MS", "Memphis, TN", "Infrastructure", "https://job-boards.greenhouse.io/xai/jobs/5225280007"],
+  ["Plumbing Technician - Memphis Southaven, MS", "Memphis, TN", "Infrastructure", "https://job-boards.greenhouse.io/xai/jobs/5224741007"],
+  ["Fire Protection Technician - Memphis", "Memphis, TN", "Infrastructure", "https://job-boards.greenhouse.io/xai/jobs/5224723007"],
+  ["Lead Engineer, Data Center - Memphis", "Memphis, TN", "Infrastructure", "https://job-boards.greenhouse.io/xai/jobs/5214918007"],
+  ["Software Engineer - Network (C++)", "Palo Alto, CA · Seattle, WA", "Engineering", "https://job-boards.greenhouse.io/xai/jobs/5179367007"],
+];
+
+const apiCode = {
+  Python: `import os\nfrom xai_sdk import Client\nfrom xai_sdk.chat import user\n\nclient = Client(api_key=os.getenv("XAI_API_KEY"))\nchat = client.chat.create(model="grok-4.7")\nchat.append(user("Explain quantum computing"))\nresponse = chat.sample()\nprint(response.content)`,
+  TypeScript: `import { xai } from "@ai-sdk/xai";\nimport { generateText } from "ai";\n\nconst { text } = await generateText({\n  model: xai("grok-4.7"),\n  prompt: "Explain quantum computing",\n});\nconsole.log(text);`,
+  "TypeScript (OpenAI SDK)": `import OpenAI from "openai";\n\nconst client = new OpenAI({\n  apiKey: process.env.XAI_API_KEY,\n  baseURL: "https://api.x.ai/v1",\n});\n\nconst response = await client.chat.completions.create({\n  model: "grok-4.7",\n  messages: [{ role: "user", content: "Explain quantum computing" }],\n});\nconsole.log(response.choices[0].message.content);`,
+  cURL: `curl https://api.x.ai/v1/chat/completions \\\n  -H "Authorization: Bearer $XAI_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"grok-4.7","messages":[{"role":"user","content":"Explain quantum computing"}]}'`,
+};
+
+const plans = {
+  Individual: [
+    { name: "Free", price: "$0", period: "/ month", description: "Explore Grok with a generous set of everyday limits.", features: ["Web and X search", "Voice conversations", "Connectors", "SOC 2 controls"] },
+    { name: "SuperGrok", price: "$30", period: "/ month", description: "More room for advanced models and creative work.", features: ["Grok 4.6 model", "Grok Bot access", "Higher usage limits", "Image and video generation", "Expert mode"] },
+    { name: "SuperGrok Plus", price: "$100", period: "/ month", description: "Higher usage, priority access, and 1080p video creation.", features: ["Everything in SuperGrok", "1080p video", "Priority during peak use", "Early feature access", "Expanded usage across products"] },
+  ],
+  Team: [
+    { name: "Business", price: "$30", period: "/ seat / month", description: "A shared workspace for teams building with Grok.", features: ["All Grok models", "Grok Build access", "Seat management", "Consolidated billing", "Role-based access", "Custom data retention"] },
+    { name: "Enterprise", price: "Custom", period: "", description: "Advanced controls and support for large organizations.", features: ["Everything in Business", "Single sign-on and SCIM", "Custom access controls", "Dedicated onboarding", "Customer-managed keys", "Dedicated data plane"] },
+  ],
+  API: [
+    { name: "API", price: "Usage-based", period: "", description: "Build with text, voice, vision, image generation, and video.", features: ["All Grok models", "Usage-based billing", "Tool calling and agents", "Live web and X search", "Files and retrieval", "Batch processing"] },
+  ],
+};
+
+const questions = [
+  ["How do I get an API key?", "Create a Console account, then generate a key from the API Keys page."],
+  ["Can I use an existing SDK?", "Yes. Use the OpenAI-compatible endpoint and set the base URL to https://api.x.ai/v1."],
+  ["How is API usage billed?", "API usage is billed by model and modality. Prepaid credits and enterprise invoicing are available."],
+  ["Where are the full model details?", "The developer documentation lists model capabilities, limits, and current pricing."],
+];
+
+const milestones = [
+  { date: "May 2024", title: "Rapid construction", detail: "Construction starts, gear arriving. Floor, piping, and structure stood up. Power plant online." },
+  { date: "June 2024", title: "GPUs start arriving", detail: "First production racks arrive. Datahall 1 power and cooling ready. Two datahalls powered, 50% of GPUs onsite." },
+  { date: "July 2024", title: "Bottlenecks and breakthroughs", detail: "Fiber connections holding us up. Power flux issue discovered and resolved. Megapacks stabilize the power plant." },
+  { date: "August 2024", title: "25K GPUs delivered weekly", detail: "First 25K used for useful workloads. First job ran across all 4 datahalls." },
+  { date: "September 2024", title: "Training begins", detail: "42K-GPU job with elastic training, running across 4 data halls." },
+  { date: "January 2025", title: "Grok 3 trained", detail: "Training finished with 80K+ GPUs. 122 days from groundbreak to training." },
+  { date: "February 2025", title: "Full scale", detail: "Doubled to 200K GPUs." },
+];
+
+const companyPrinciples = [
+  ["Reasoning from first principles", "We challenge conventional thinking by breaking down problems to their fundamental truths, grounded in logic and evidence rather than consensus."],
+  ["No goal is too ambitious", "We embrace the most challenging obstacles by always pushing the limits of what's possible. We are motivated by what has never been done before."],
+  ["Move quickly and fix things", "Rapid development and iteration lets us innovate at breakneck speeds. We're not interested in speed for speed's sake — we're here to solve real problems fast."],
+];
+
+const companyStories = [
+  ["Grok 4.7", "Our most capable reasoning model.", "https://docs.x.ai/developers/models/grok-4.7", "blue"],
+  ["Colossus", "200K GPUs. Built in 122 days.", `${base}/colossus/`, "orange"],
+  ["Voice API", "#1 on Big Bench Audio.", `${base}/voice/`, "teal"],
+  ["Careers", "Join the team.", `${base}/careers/`, "violet"],
+];
+
+const productsByPage: Record<string, { eyebrow: string; title: string; description: string; cta: string; href: string; sections: Array<[string, string, string[]]> }> = {
+  grok: {
+    eyebrow: "Grok · web, iOS, and Android",
+    title: "AI that helps everyone move forward.",
+    description: "Chat, search, reason, and create in one assistant, with answers grounded in what is happening now.",
+    cta: "Try Grok",
+    href: "https://grok.com/?referrer=website",
+    sections: [
+      ["Chat", "A practical assistant for research, writing, and daily questions.", ["Step-by-step reasoning", "Images, video, and code in a conversation", "Natural voice exchanges"]],
+      ["Multi-agent", "Parallel agents investigate difficult questions and bring their work together.", ["Parallel sub-problems", "Inspectable reasoning", "One cited response"]],
+      ["Search", "Live web and X results keep answers current.", ["Citations to live sources", "Fresh posts and trends", "Follow-up exploration"]],
+      ["Imagine", "Create images and video from prompts or reference material.", ["Text-to-image and video", "Iterative editing", "High-resolution output"]],
+    ],
+  },
+  build: {
+    eyebrow: "Grok Build · coding agent",
+    title: "Bring Grok to your computer.",
+    description: "A coding agent for complex work, with plans, skills, plugins, and parallel subagents in one workflow.",
+    cta: "Read the docs",
+    href: "https://docs.x.ai/build/overview",
+    sections: [
+      ["Skills", "Make recurring workflows available when a task calls for them.", ["Project instructions and plugins", "Auto-invocation or slash commands", "Capture a session as a reusable skill"]],
+      ["Plan", "Shape a clear approach before changes begin.", ["Review the plan first", "Comment on individual steps", "Inspect every approved change"]],
+      ["Plugins", "Share tools and capabilities across a team.", ["Bundle skills, agents, hooks, and MCP", "Install from a marketplace or Git", "Connect common developer tools"]],
+      ["Subagents", "Let focused agents research, build, and review in parallel.", ["Independent context windows", "Parallel investigation", "Dedicated worktrees"]],
+    ],
+  },
+  bot: {
+    eyebrow: "Grok Bot · persistent AI teammates",
+    title: "Meet your next AI teammate.",
+    description: "Give a Bot a real task. It can use its own computer, work inside your tools, and return when it needs your input.",
+    cta: "Get started",
+    href: "https://grok.com/?product=grok-bot",
+    sections: [
+      ["Message a Bot", "Hand off work in a conversation and stay in the loop as it progresses.", ["Work from desktop or iOS", "Long-running task context", "Approval when it is needed"]],
+      ["Work in parallel", "Assign different jobs to several Bots and let them collaborate.", ["Independent tasks", "Shared project context", "Always-on progress"]],
+      ["Teach a workflow", "Show a Bot how a routine works once, then let it repeat the steps.", ["Follow along with a task", "Save the routine", "Run it again later"]],
+      ["Choose a role", "Explore practical starting points for a team of agents.", ["Sales outreach", "Expense review", "Product and support operations"]],
+    ],
+  },
+  imagine: {
+    eyebrow: "Grok Imagine · API",
+    title: "From prompt to polished visual.",
+    description: "Generate and edit images or create video with one API across visual modalities.",
+    cta: "Explore the playground",
+    href: "https://console.x.ai/team/default/image?flow=explore",
+    sections: [
+      ["Video generation", "Turn prompts and reference images into moving scenes.", ["Text-to-video and image-to-video", "Clips up to 15 seconds", "Motion-aware output"]],
+      ["Product imagery", "Create new scenes and angles from one reference photo.", ["Stage a product in a new setting", "Change perspective", "Generate multiple variations"]],
+      ["Precision edits", "Change selected attributes while preserving the rest of an image.", ["Target color or material", "Iterate on details", "Switch between image and video"]],
+      ["Creative restyle", "Explore distinct visual treatments from a common source.", ["Compare before and after", "Move across visual styles", "Keep the source in view"]],
+    ],
+  },
+  voice: {
+    eyebrow: "Grok Voice · agent builder beta",
+    title: "Voice agents built for real outcomes.",
+    description: "Build, tune, and deploy conversational voice agents with fast reasoning and clear controls.",
+    cta: "Try it free",
+    href: "https://console.x.ai/team/default/voice/agents",
+    sections: [
+      ["Natural conversation", "A voice experience with real timing and expressive delivery.", ["Responsive turn-taking", "25+ languages", "Browser-based setup"]],
+      ["Trained for real calls", "Handle interruptions and resolve a request from start to finish.", ["Look up records", "Take actions during a call", "Transfer to a person"]],
+      ["Connect your tools", "Bring existing systems into the conversation flow.", ["Google and Microsoft apps", "Calendar and task tools", "Custom MCP connections"]],
+      ["Set guardrails", "Define what an agent can do and when it should hand off.", ["Custom instructions", "Protect sensitive data", "Keep a clear human path"]],
+    ],
+  },
+};
+
+const isHome = page === "home";
+const isCompany = page === "company";
+const isCareers = page === "careers";
+const isNews = page === "news";
+const isColossus = page === "colossus";
+const isApi = page === "api";
+const isPricing = page === "pricing";
+const product = productsByPage[page];
+const storyPage = page === "article";
+const title = story?.title ?? "Grok 4.7";
+const description = story?.summary ?? "Public SpaceXAI announcement.";
+---
+
+<!doctype html>
+<html lang="en" data-theme={isColossus ? "light" : "dark"} data-page={page}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content={`${description} Independent local UI prototype inspired by the public SpaceXAI website.`} />
+    <meta name="theme-color" content={isColossus ? "#ffffff" : "#080808"} />
+    <title>{isHome ? "SpaceXAI" : `${isCompany ? "Company" : isCareers ? "Careers" : isNews ? "News" : isColossus ? "Colossus" : isApi ? "API" : isPricing ? "Pricing" : storyPage ? title : product?.eyebrow.split(" · ")[0] ?? "SpaceXAI"} | SpaceXAI`} — Independent Prototype</title>
+  </head>
+  <body>
+    <div class="xai-prototype" data-site data-page={page}>
+      <header class="xai-header">
+        <a class="xai-mark" href={localPath("/")} aria-label="SpaceXAI prototype home"><img src={localPath("/brand-mark.svg")} alt="" /></a>
+        <nav class="desktop-nav" aria-label="Primary navigation">
+          <button type="button" data-desktop-menu="products" aria-expanded="false">Products<span aria-hidden="true">⌄</span></button>
+          <button type="button" data-desktop-menu="solutions" aria-expanded="false">Solutions<span aria-hidden="true">⌄</span></button>
+          <button type="button" data-desktop-menu="developer" aria-expanded="false">Developer<span aria-hidden="true">⌄</span></button>
+          <button type="button" data-desktop-menu="company" aria-expanded="false">Company<span aria-hidden="true">⌄</span></button>
+          <a href={localPath("/pricing/")}>Pricing</a>
+          <a href={localPath("/news/")}>News</a>
+        </nav>
+        <div class="desktop-actions">
+          <a href="https://x.ai/contact-sales" target="_blank" rel="noreferrer" class="header-sales">Contact Sales</a>
+          <a href="https://grok.com/?referrer=website" target="_blank" rel="noreferrer" class="header-trial">Try for free <span aria-hidden="true">⌄</span></a>
+        </div>
+        <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="site-menu" data-menu-toggle>
+          <span></span><span></span>
+        </button>
+        <nav class="site-menu" id="site-menu" aria-label="Main navigation" hidden data-site-menu>
+          <div class="menu-topline">
+            <a class="xai-mark" href={localPath("/")} aria-label="SpaceXAI prototype home"><img src={localPath("/brand-mark.svg")} alt="" /></a>
+            <button class="menu-close" type="button" aria-label="Close navigation" data-menu-close>×</button>
+          </div>
+          <div class="menu-columns">
+            <div class="menu-tabs" role="tablist" aria-label="Navigation categories">
+              {navGroups.map((group, index) => <button type="button" class:list={["menu-tab", { active: index === 0 }]} role="tab" aria-selected={index === 0 ? "true" : "false"} aria-controls={`menu-${group.id}`} data-menu-tab={group.id}>{group.label}<span>↗</span></button>)}
+              <a class="menu-tab" href={`${base}/pricing/`}>Pricing<span>↗</span></a>
+              <a class="menu-tab" href={`${base}/news/`}>News<span>↗</span></a>
+            </div>
+            {navGroups.map((group, index) => <div class="menu-links" id={`menu-${group.id}`} role="tabpanel" aria-label={group.label} hidden={index !== 0} data-menu-panel={group.id}>
+              {group.links.map((link) => <a class="menu-link" href={link.href} target={link.href.startsWith("https://") ? "_blank" : undefined} rel={link.href.startsWith("https://") ? "noreferrer" : undefined}>
+                <span class="menu-link-mark">{link.tone ? <i class={`product-mark-art ${link.tone}`}></i> : <i class="menu-link-symbol">↗</i>}</span>
+                <span><strong>{link.name}</strong><small>{link.note}</small></span><span class="menu-link-arrow">↗</span>
+              </a>)}
+            </div>)}
+            <div class="menu-cta"><a class="button button-light" href="https://grok.com/?referrer=website" target="_blank" rel="noreferrer">Try Grok <span>↗</span></a><a href="https://x.ai/contact" target="_blank" rel="noreferrer">Contact</a><span>·</span><a href="https://x.ai/legal" target="_blank" rel="noreferrer">Legal</a></div>
+          </div>
+        </nav>
+      </header>
+
+      <main>
+        {isHome && <>
+          <section class="home-hero page-width">
+            <a class="announcement" href={`${base}/news/grok-4-7/`}>
+              <span class="announcement-tag">New</span><span>Meet Grok 4.7</span><span class="announcement-note">Our new model</span><span class="announcement-arrow">↗</span>
+            </a>
+            <div class="hero-title-wrap"><h1>Frontier AI models<br class="desktop-break" /> for everything you <span class="hero-verb" data-hero-verb>build</span><span class="hero-period">.</span></h1></div>
+            <div class="hero-rule" aria-hidden="true"><span></span><i></i></div>
+            <p class="hero-copy">Reasoning, code, voice, images, and video. Trained on the world's largest supercluster.</p>
+            <div class="hero-actions"><a class="button button-light" href={`${base}/api/`}>Get API Access <span>›</span></a><a class="button button-dark" href="https://docs.x.ai/" target="_blank" rel="noreferrer">View Documentation</a></div>
+            <div class="hero-product-row" aria-label="Explore products">
+              {products.map((item) => <a class="hero-product-card" href={item.href}>
+                <div class={`product-art ${item.tone}`}>
+                  {item.tone === "chat" && <div class="chat-demo"><span class="bubble-user">Why is the sky blue?</span><span class="bubble-answer">Shorter blue wavelengths scatter more off air molecules than longer red ones.</span></div>}
+                  {item.tone === "build" && <div class="build-demo"><div class="demo-window-head"><i></i><i></i><i></i><span>projects / main</span></div><div class="demo-code"><b>›</b> Migrate auth from sessions to JWT.<small>▸ read_file src/middleware/auth.ts</small><small>▸ grep "session" src/</small><small class="demo-running">Thinking…</small></div></div>}
+                  {item.tone === "imagine" && <div class="imagine-orb"><span></span><i></i></div>}
+                  {item.tone === "voice" && <div class="voice-wave" aria-hidden="true">{Array.from({ length: 22 }, (_, i) => <i style={`--bar:${18 + (i * 19 % 68)}px`}></i>)}</div>}
+                  {item.tone === "bot" && <div class="bot-face"><i></i><i></i></div>}
+                </div>
+                <span class="product-card-copy"><strong>{item.name}</strong><span>{item.note}</span></span><span class="product-card-arrow">Explore&nbsp; →</span>
+              </a>)}
+            </div>
+          </section>
+
+          <section class="section-block api-intro page-width" id="api">
+            <div class="section-heading-row"><div><p class="eyebrow">For developers</p><h2>One API.<br />Every modality.</h2></div><p class="section-intro">Text, code, voice, images, and video through one unified API. Start building in seconds.</p></div>
+            <div class="api-layout">
+              <div class="api-stats"><div><strong>1M<span>+</span></strong><small>API calls per day</small></div><div><strong>&lt;200<span>ms</span></strong><small>Median latency</small></div><div><strong>5<span>+</span></strong><small>Model families</small></div><a class="text-link" href={`${base}/api/`}>Explore the API <span>↗</span></a></div>
+              <div class="code-panel">
+                <div class="code-panel-top"><div class="window-dots"><i></i><i></i><i></i></div><button type="button" class="copy-button" data-copy-code aria-label="Copy code">Copy&nbsp; ⧉</button></div>
+                <pre><code data-code-sample>{apiCode.Python}</code></pre>
+                <div class="code-tabs" role="tablist" aria-label="Code language">{Object.keys(apiCode).map((name, index) => <button type="button" role="tab" aria-selected={index === 0 ? "true" : "false"} class:list={["code-tab", { active: index === 0 }]} data-code-tab={name} data-code-content={apiCode[name as keyof typeof apiCode]}>{name}</button>)}</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="numbers-section page-width">
+            <p class="eyebrow">By the numbers</p><div class="numbers-grid"><div><strong><span data-count="300">300</span><small>M+</small></strong><p>queries processed daily</p></div><div><strong><span data-count="150">150</span><small>K</small></strong><p>GPUs in Colossus</p><a href={`${base}/colossus/`}>Explore Colossus ↗</a></div><div><strong><span data-count="90">90</span></strong><p>days to double the cluster</p><a href={`${base}/colossus/`}>How we built it ↗</a></div></div>
+          </section>
+
+          <section class="section-block page-width news-preview">
+            <div class="section-heading-row"><div><p class="eyebrow">What we're building</p><h2>Latest news</h2></div><a class="text-link" href={`${base}/news/`}>All posts <span>↗</span></a></div>
+            <div class="news-grid">{featuredStories.map((item) => <a class="news-card" href={`${base}/news/${item.slug}/`}>
+              <div class={`news-cover tone-${item.tone}`}><span class="cover-label">{item.category}</span><span class="cover-glyph">{item.tone === "orange" ? "BOT" : item.tone === "pink" ? "✳" : item.tone === "teal" ? "◌" : "G"}</span></div>
+              <div class="news-meta"><span>{item.category}</span><time>{item.date}</time></div><h3>{item.title}</h3><span class="card-arrow">Read more&nbsp; ↗</span>
+            </a>)}</div>
+          </section>
+
+          <section class="section-block get-started-section page-width">
+            <div class="section-heading-row"><div><p class="eyebrow">Start building</p><h2>Choose how to get started</h2></div><p class="section-intro">Bring Grok into your product or get a team plan with extra support.</p></div>
+            <div class="start-grid"><article class="start-card"><p class="eyebrow">Build on your own</p><h3>Start with the API</h3><p>Launch a product with access to the model family and usage-based pricing.</p><ul><li>Access to Grok models</li><li>Usage-based pricing</li><li>Documentation and guides</li><li>Playground in Console</li></ul><a class="button button-light" href={`${base}/api/`}>Start building <span>↗</span></a></article><article class="start-card"><p class="eyebrow">For your team</p><h3>Get extra support</h3><p>Set up custom limits and a support path for your organization.</p><ul><li>Dedicated onboarding</li><li>Custom rate limits</li><li>Monthly invoicing</li><li>SSO and audit logging</li></ul><a class="button button-dark" href="https://x.ai/contact-sales" target="_blank" rel="noreferrer">Contact sales <span>↗</span></a></article></div>
+          </section>
+        </>}
+
+        {isCompany && <>
+          <section class="company-hero page-width">
+            <div class="company-intro"><p class="eyebrow">Our mission</p><h1>Accelerate human<br class="desktop-break" /> scientific discovery.</h1><p class="inner-lede">We build AI to understand the universe. Frontier reasoning, real-time voice, and generative media — designed to extend what humanity can know and do.</p><div class="hero-actions"><a class="button button-light" href={`${base}/careers/`}>Join us</a><a class="button button-dark" href="https://x.ai/contact" target="_blank" rel="noreferrer">Contact</a></div></div>
+            <div class="company-links">{companyStories.map((item) => <a class="company-link" href={item[2]} target={item[2].startsWith("https://") ? "_blank" : undefined} rel={item[2].startsWith("https://") ? "noreferrer" : undefined}><span><strong>{item[0]}</strong><small>{item[1]}</small></span><span class="company-link-arrow" aria-hidden="true">↗</span></a>)}</div>
+          </section>
+          <section class="section-block page-width principles-section"><div class="section-heading-row"><div><h2>At our core</h2></div><p class="section-intro">We're a focused and mighty team connected by our curiosity, commitment, and unwavering drive.</p></div><div class="principles-grid">{companyPrinciples.map((item, index) => <article class="principle-card"><span>0{index + 1}</span><h3>{item[0]}</h3><p>{item[1]}</p></article>)}</div></section>
+          <section class="section-block offices-section"><div class="page-width office-layout"><div><p class="eyebrow">Offices</p><h2>Collaboration across borders</h2><p>We are hiring across all our offices. We prioritize in-person work to support our fast-paced, collaborative projects.</p><div class="city-list"><span>Palo Alto</span><span>Seattle</span><span>Memphis</span><span>London</span></div><a class="text-link" href="https://x.ai/careers/open-roles" target="_blank" rel="noreferrer">Open Roles <span>↗</span></a><a class="text-link" href={`${base}/careers/`}>Careers <span>↗</span></a></div><div class="world-map" aria-label="Office locations"><span class="map-grid"></span><i class="pin pin-west"></i><i class="pin pin-northwest"></i><i class="pin pin-south"></i><i class="pin pin-europe"></i><span class="map-label map-palo">Palo Alto</span><span class="map-label map-seattle">Seattle</span><span class="map-label map-memphis">Memphis</span><span class="map-label map-london">London</span></div></div></section>
+          <section class="section-block page-width history-section"><div class="section-heading-row"><div><h2>Our path of progress</h2></div><p class="section-intro">From founding to frontier models — every milestone on the way.</p></div><div class="company-history">{["2026", "2025", "2024", "2023"].map((year) => <section class="company-year" id={`milestones-${year}`}><h3>{year}</h3><div>{xaiStories.filter((item) => item.date.endsWith(year)).sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).map((item) => <a href={`${base}/news/${item.slug}/`}><span>{item.title}</span><time>{item.date.split(",")[0]}</time><span aria-hidden="true">↗</span></a>)}</div></section>)}</div></section>
+        </>}
+
+        {isCareers && <>
+          <section class="inner-hero page-width careers-hero"><p class="eyebrow">Careers</p><h1>Build AI that<br class="desktop-break" /> advances humanity.</h1><p class="inner-lede">We are a team of researchers, engineers, and builders on a mission to understand the universe. Join us if you want to shape the next generation of AI.</p><a class="button button-light" href="https://x.ai/careers/open-roles" target="_blank" rel="noreferrer">View Open Roles <span>›</span></a></section>
+          <section class="careers-benefits page-width"><div class="careers-benefits-intro"><p class="eyebrow">Why SpaceXAI</p><h2>Ambitious goals, fast execution</h2><p>We are driven by curiosity, commitment, and a strong sense of urgency. Join us if you want to work on frontier AI models and ship products that matter.</p></div><div class="benefits-grid">{benefits.map((item, index) => <article class="benefit-card"><span class="benefit-icon">{["◉", "↗", "⌂", "◷", "◎", "＋"][index]}</span><h3>{item[0]}</h3><p>{item[1]}</p></article>)}</div></section>
+          <section class="section-block page-width roles-section" id="open-roles"><div class="section-heading-row"><div><p class="eyebrow">Join us</p><h2>Featured roles</h2></div><a class="text-link" href="https://x.ai/careers/open-roles" target="_blank" rel="noreferrer">View All Open Roles <span>↗</span></a></div><div class="role-list">{roles.map((role) => <a class="role-row" href={role[3]} target="_blank" rel="noreferrer"><span><strong>{role[0]}</strong></span><span>{role[1]}</span><span class="role-arrow">↗</span></a>)}</div></section>
+          <section class="section-block page-width interview-section"><div><p class="eyebrow">What to expect</p><h2>Interview process</h2><p class="section-intro">We generally do not use recruiters for assessments. Applications are evaluated by our technical team members.</p></div><div class="interview-steps">{[["1", "Submit your application", "Our team will review your CV and statement of exceptional work."], ["2", "Screening interview", "A short interview to learn more about you and assess if the role fits. Prepare for short technical questions and a review of your background."], ["3", "Technical interviews", "Sessions where we dive deep into your technical expertise. We want to understand how you approach complex problems and think critically."], ["4", "Offer extended", "If you've demonstrated the exceptional skills and mindset we're looking for, we'll extend an offer to join SpaceXAI."]].map((item) => <article><span>{item[0]}</span><div><h3>{item[1]}</h3><p>{item[2]}</p></div></article>)}</div></section>
+          <section class="offices-band page-width"><div><p class="eyebrow">Offices</p><h2>Collaboration across borders</h2><p>We are hiring across all our offices in Palo Alto, Seattle, Tennessee, and London. We prioritize in-person work to support fast-paced, collaborative projects.</p></div><a class="button button-light" href="https://x.ai/careers/open-roles" target="_blank" rel="noreferrer">View Open Roles <span>↗</span></a></section>
+        </>}
+
+        {isNews && <>
+          <h1 class="sr-only">News</h1>
+          <section class="page-width news-featured"><a class="featured-news" href={`${base}/news/${featuredStories[0].slug}/`}>
+            <div class="featured-copy"><div class="news-meta"><time>{featuredStories[0].date}</time></div><h2>Introducing<br />Grok 4.7</h2><p>{featuredStories[0].summary}</p><span class="button button-dark">Read More <span>›</span></span></div>
+            <div class={`news-cover featured-cover tone-${featuredStories[0].tone}`}><span class="cover-glyph">Grok 4.7</span></div>
+          </a></section>
+          <section class="page-width news-archive"><div class="news-grid">{xaiStories.slice(1).map((item) => <a class="news-card" href={`${base}/news/${item.slug}/`}>
+            <div class={`news-cover tone-${item.tone}`}><span class="cover-glyph">{item.slug === "team-bots" ? "Team Bots" : item.slug === "grok-bot-customer-support" ? "Grok Bot" : item.slug === "grok-voice-transcribe-2" ? "Voice Transcribe 2.0" : item.slug === "grok-build-memory" ? "Memory in Grok Build" : item.title.split(" ").slice(0, 3).join(" ")}</span></div><div class="news-meta"><span>{item.category}</span><time>{item.date}</time></div><h3>{item.title}</h3><span class="card-arrow">Read more&nbsp; ↗</span>
+          </a>)}</div></section>
+        </>}
+
+        {isColossus && <>
+          <section class="colossus-hero page-width"><div class="colossus-copy"><div class="colossus-lockup"><span class="colossus-wordmark">COLOSSUS</span><a class="colossus-announcement" href={`${base}/news/anthropic-compute-partnership/`}><span>New: Anthropic partners with Colossus</span><span aria-hidden="true">›</span></a></div><h1>Our gigafactory<br />of compute.</h1><p class="inner-lede">Built in 122 days — outpacing every estimate — Colossus was the most powerful AI training system yet. Then we doubled it in 92 days to 200k GPUs. This is just the beginning.</p></div><img class="colossus-wireframe" src="https://media.x.ai/cdn-cgi/image/fit=scale-down,onerror=redirect,width=2560,f=auto/v1/website/colossus-wireframe-d430593f.webp" alt="Wireframe illustration of the Colossus supercomputer" fetchpriority="high" /></section>
+          <section class="colossus-stat-band"><div class="page-width"><strong>200,000</strong><p><b>NVIDIA</b> H100 GPUs in a single interconnected cluster</p></div></section>
+          <section class="section-block page-width build-story" id="the-build"><div class="build-copy"><p class="eyebrow">The build</p><h2>We go further, faster</h2><p>We were told it would take 24 months to build. So we took the project into our own hands, questioned everything, removed whatever was unnecessary, and accomplished our goal in four months.</p></div><img class="colossus-site-photo" src="https://media.x.ai/cdn-cgi/image/fit=scale-down,onerror=redirect,width=1668,f=auto/v1/website/colossussite2-aac5dac3.jpg" alt="Aerial shot of Colossus's site" loading="lazy" decoding="async" /></section>
+          <section class="section-block page-width colossus-numbers"><div class="section-heading-row"><div><p class="eyebrow">By the numbers</p><h2>Unprecedented scale</h2></div><p class="section-intro">We doubled our compute at an unprecedented rate, with a roadmap to 1M GPUs. Progress in AI is driven by compute and no one has come close to building at this magnitude and speed.</p></div><div class="metric-grid"><article><strong><span class="metric-primary" data-count-start="180" data-count-end="200" data-count-suffix="K">180K</span><small>GPUs</small></strong><p>NVIDIA H100 GPUs in a single interconnected cluster</p></article><article><strong><span class="metric-primary" data-count-start="170" data-count-end="194">170</span><small>PB/s</small></strong><p>Aggregate memory bandwidth across the full system</p></article><article><strong><span class="metric-primary" data-count-start="2.8" data-count-end="3.6" data-count-decimals="1">2.8</span><small>Tb/s</small></strong><p>Per-server network bandwidth for distributed training</p></article><article><strong><span class="metric-primary" data-count-start="0.5" data-count-end="1" data-count-prefix="&gt;" data-count-decimals="0">&gt;0.5</span><small>EB</small></strong><p>Total storage for training data and checkpoints</p></article></div></section>
+          <section class="section-block page-width timeline-section"><div class="section-heading-row"><div><p class="eyebrow">Timeline</p><h2><span data-timeline-count>276</span> days from groundbreak</h2></div></div><div class="timeline-visual"><div class="timeline-line"><span data-timeline-progress></span></div><div class="timeline-points">{milestones.map((item, index) => <button type="button" class:list={["timeline-point", { active: index === milestones.length - 1 }]} aria-label={`${item.date}: ${item.title}`} aria-pressed={index === milestones.length - 1 ? "true" : "false"} data-timeline-point={index} data-timeline-item={JSON.stringify(item)}><i></i><small>{item.date}</small></button>)}</div><div class="timeline-labels"><span>May 2024</span><span>Feb 2025</span></div><div class="timeline-result"><span data-timeline-date>February 2025</span><strong data-timeline-title>Full scale</strong><span data-timeline-copy>Doubled to 200K GPUs.</span></div></div></section>
+          <section class="section-block page-width news-preview"><div class="section-heading-row"><div><p class="eyebrow">More from the team</p><h2>Latest news</h2></div><a class="text-link" href={`${base}/news/`}>All posts <span>↗</span></a></div><div class="news-grid">{featuredStories.slice(0, 3).map((item) => <a class="news-card" href={`${base}/news/${item.slug}/`}><div class={`news-cover tone-${item.tone}`}><span class="cover-label">{item.category}</span><span class="cover-glyph">↗</span></div><div class="news-meta"><span>{item.category}</span><time>{item.date}</time></div><h3>{item.title}</h3></a>)}</div></section>
+        </>}
+
+        {isApi && <>
+          <section class="api-hero page-width"><div class="api-hero-copy"><p class="eyebrow">SpaceXAI API</p><h1>Build with Grok.</h1><p class="inner-lede">Generate text and code, create images and video, build voice agents, and search the web through one API.</p><div class="hero-actions"><a class="button button-light" href="https://console.x.ai/" target="_blank" rel="noreferrer">Get your API key <span>↗</span></a><a class="button button-dark" href="https://docs.x.ai/" target="_blank" rel="noreferrer">Read the docs</a></div><ul class="check-points"><li>Works with existing SDKs</li><li>Usage-based pricing</li><li>Console playground included</li></ul></div><aside class="api-hero-art"><div class="api-orbit orbit-a"></div><div class="api-orbit orbit-b"></div><div class="api-core">GROK</div><span>TEXT</span><span>VOICE</span><span>IMAGE</span><span>VIDEO</span></aside></section>
+          <div class="api-toc page-width"><span>On this page</span><a href="#quickstart">API keys</a><a href="#api-pricing">Models &amp; pricing</a><a href="#playground">Playground</a><a href="#capabilities">What you can build</a><a href="#enterprise">Enterprise</a><a href="#api-faq">FAQ</a></div>
+          <section class="section-block page-width api-quickstart" id="quickstart"><div class="section-heading-row"><div><p class="eyebrow">Zero to first token</p><h2>Start building with your API key.</h2></div><p class="section-intro">Create an account, make a key, and send your first Grok request.</p></div><div class="quickstart-grid"><ol><li><span>01</span><p>Create a Console account.</p></li><li><span>02</span><p>Generate a key on the API Keys page.</p></li><li><span>03</span><p>Use <code>https://api.x.ai/v1</code> and call <code>grok-4.7</code>.</p></li></ol><div class="code-panel"><div class="code-panel-top"><div class="window-dots"><i></i><i></i><i></i></div><button type="button" class="copy-button" data-copy-code aria-label="Copy code">Copy&nbsp; ⧉</button></div><pre><code data-code-sample>{apiCode.Python}</code></pre><div class="code-tabs" role="tablist" aria-label="Code language">{Object.keys(apiCode).map((name, index) => <button type="button" role="tab" aria-selected={index === 0 ? "true" : "false"} class:list={["code-tab", { active: index === 0 }]} data-code-tab={name} data-code-content={apiCode[name as keyof typeof apiCode]}>{name}</button>)}</div></div></div></section>
+          <section class="section-block page-width api-pricing" id="api-pricing"><div class="section-heading-row"><div><p class="eyebrow">Models &amp; pricing</p><h2>API pricing.</h2></div><a class="text-link" href={`${base}/pricing/`}>View all pricing <span>↗</span></a></div><p class="section-intro">Usage is billed by model and modality. Prepaid credit and enterprise invoicing are available.</p><div class="model-card"><div class="model-card-head"><span class="eyebrow">Flagship model · new</span><strong>grok-4.7</strong><p>A long-context model for code and knowledge work.</p><span class="model-context">500K context window</span></div><div class="model-rates"><div><span>Input / 1M tokens</span><strong>$2.00</strong></div><div><span>Output / 1M tokens</span><strong>$6.00</strong></div></div></div><div class="modality-grid"><a href={`${base}/api/imagine/`}><span>Image &amp; video</span><strong>Generate and edit</strong><small>Image generation from $0.02</small><i>↗</i></a><a href={`${base}/voice/`}><span>Voice API</span><strong>Speech in real time</strong><small>Speech, transcription, and synthesis</small><i>↗</i></a></div></section>
+          <section class="section-block page-width capability-section" id="capabilities"><div class="section-heading-row"><div><p class="eyebrow">What you can build</p><h2>One API, many ways to build.</h2></div></div><div class="capability-grid">{[["Code", "Build software and orchestrate agents."], ["Text", "Reason, analyze, and write."], ["Live search", "Retrieve current information from web and X."], ["Files", "Search and reason over uploaded documents."], ["Imagine", "Create and edit images or video."], ["Voice", "Make real-time voice agents."]].map((item, index) => <a href={index === 4 ? `${base}/api/imagine/` : index === 5 ? `${base}/voice/` : "https://docs.x.ai/"} class="capability-card"><span>0{index + 1}</span><h3>{item[0]}</h3><p>{item[1]}</p><i>↗</i></a>)}</div></section>
+          <section class="section-block enterprise-callout page-width" id="enterprise"><div><p class="eyebrow">Enterprise</p><h2>Controls, compliance, and support.</h2><p>SSO, audit logging, invoicing, data residency, and a dedicated support path.</p><a class="button button-light" href="https://x.ai/contact-sales" target="_blank" rel="noreferrer">Contact sales <span>↗</span></a></div><div class="enterprise-tags"><span>SOC 2 Type II</span><span>HIPAA eligible</span><span>Data residency</span><span>Zero data retention</span><span>Custom limits</span><span>Dedicated support</span></div></section>
+          <section class="section-block page-width faq-section" id="api-faq"><div class="section-heading-row"><div><p class="eyebrow">Help</p><h2>Frequently asked questions</h2></div></div><div class="faq-list">{questions.map((item, index) => <details class="faq-item" open={index === 0}><summary>{item[0]}<span>+</span></summary><p>{item[1]}</p></details>)}</div></section>
+        </>}
+
+        {isPricing && <>
+          <section class="pricing-hero page-width"><p class="eyebrow">Pricing</p><h1>Start free.<br />Scale as you grow.</h1><div class="pricing-tabs" role="tablist" aria-label="Pricing plans">{Object.keys(plans).map((name, index) => <button type="button" role="tab" aria-selected={index === 0 ? "true" : "false"} class:list={["pricing-tab", { active: index === 0 }]} data-pricing-tab={name}>{name}</button>)}</div></section>
+          <section class="page-width plan-grid" data-plan-panel data-plan-data={JSON.stringify(plans)}>{plans.Individual.map((plan, index) => <article class:list={["plan-card", { featured: index === 1 }]}><div class="plan-top"><p class="eyebrow">{index === 1 ? "Most popular" : "Individual"}</p><h2>{plan.name}</h2><p class="plan-price"><strong>{plan.price}</strong><span>{plan.period}</span></p><p class="plan-description">{plan.description}</p></div><ul>{plan.features.map((feature) => <li><span>✓</span>{feature}</li>)}</ul><a class:list={["button", index === 1 ? "button-light" : "button-outline"]} href="https://grok.com/?referrer=pricing" target="_blank" rel="noreferrer">{index === 0 ? "Get started" : index === 1 ? "Choose SuperGrok" : "Choose plan"}<span>↗</span></a></article>)}</section>
+          <section class="section-block page-width plan-comparison"><div class="section-heading-row"><div><p class="eyebrow">Compare plans</p><h2>Find the right fit.</h2></div></div><div class="comparison-scroll"><table class="comparison-table"><thead><tr><th>Features</th><th>Free</th><th>SuperGrok</th><th>Plus</th><th>Business</th><th>Enterprise</th></tr></thead><tbody>{[["Model access", "Core", "Frontier", "Frontier", "Frontier", "Frontier"], ["Imagine", "Limited", "Included", "More usage", "Included", "Included"], ["Grok Bot", "—", "Included", "Included", "Team access", "Team access"], ["Admin controls", "—", "—", "—", "Included", "Advanced"], ["Support", "Community", "Standard", "Priority", "Priority", "Dedicated"], ["SSO / SCIM", "—", "—", "—", "—", "Included"]].map((row, index) => <tr><th>{row[0]}</th>{row.slice(1).map((value) => <td>{value === "—" ? <span class="table-empty">—</span> : index < 3 ? <span class="table-check">✓</span> : value}</td>)}</tr>)}</tbody></table></div></section>
+          <section class="section-block page-width enterprise-callout"><div><p class="eyebrow">Enterprise</p><h2>Need a custom plan?</h2><p>Discuss throughput, dedicated infrastructure, compliance, and volume pricing with the sales team.</p><a class="button button-light" href="https://x.ai/contact-sales" target="_blank" rel="noreferrer">Contact sales <span>↗</span></a></div><div class="enterprise-tags"><span>Custom rate limits</span><span>Dedicated support</span><span>SSO &amp; SCIM</span><span>Data residency</span><span>Volume pricing</span></div></section>
+        </>}
+
+        {product && <>
+          <section class="product-hero page-width"><div class="product-hero-copy"><p class="eyebrow">{product.eyebrow}</p><h1>{product.title}</h1><p class="inner-lede">{product.description}</p><div class="hero-actions"><a class="button button-light" href={product.href} target="_blank" rel="noreferrer">{product.cta} <span>↗</span></a><a class="button button-dark" href={`${base}/api/`}>Build with the API</a></div></div><div class={`product-hero-art art-${page}`}>
+            {page === "grok" && <div class="chat-window"><span class="chat-user-line">How do black holes form?</span><span class="chat-response">Massive stars collapse when they run out of fuel. Gravity pulls everything inward.</span><span class="chat-input-line">Ask anything <i>↑</i></span></div>}
+            {page === "build" && <div class="terminal-window"><div class="terminal-bar">grok-build <span>···</span></div><p><b>❯</b> Refactor the request handler</p><small>Plan approved · 3 files changed</small><div class="terminal-diff"><i></i><i></i><i></i><i></i></div></div>}
+            {page === "bot" && <div class="bot-roster"><span class="bot-face"><i></i><i></i></span><p><b>Research Bot</b><small>Working on the brief…</small></p><span class="bot-online"></span></div>}
+            {page === "imagine" && <div class="imagine-orb large"><span></span><i></i></div>}
+            {page === "voice" && <div class="voice-preview-card"><span class="voice-live">LIVE PREVIEW</span><p>“Hi, thanks for calling. How can I help?”</p><div class="voice-wave">{Array.from({ length: 28 }, (_, i) => <i style={`--bar:${14 + (i * 23 % 74)}px`}></i>)}</div><button type="button" data-voice-demo>▶&nbsp; Play sample</button></div>}
+          </div></section>
+          <section class="section-block page-width product-features">{product.sections.map((item, index) => <article class="product-feature-row"><div class="product-feature-art"><span class="feature-orbit orbit-${index}"></span><b>0{index + 1}</b><i>{["✳", "⌘", "◌", "↗"][index]}</i></div><div class="product-feature-copy"><p class="eyebrow">{product.eyebrow.split(" · ")[0]}</p><h2>{item[0]}</h2><p>{item[1]}</p><ul>{item[2].map((feature) => <li>✓&nbsp;&nbsp;{feature}</li>)}</ul></div></article>)}</section>
+          {page === "imagine" && <section class="section-block page-width imagine-playground"><div class="section-heading-row"><div><p class="eyebrow">Interactive preview</p><h2>Describe a visual.</h2></div><span class="preview-badge">Visual demo · no API connected</span></div><div class="prompt-demo"><textarea aria-label="Describe what you want to generate" placeholder="A glass greenhouse on a moonlit coast…" data-imagine-prompt></textarea><div class="prompt-demo-actions"><div class="prompt-mode" role="tablist"><button class="active" type="button" data-imagine-mode="Image">Image</button><button type="button" data-imagine-mode="Video">Video</button></div><button class="button button-light" type="button" data-imagine-generate>Generate <span>↗</span></button></div><p class="demo-status" aria-live="polite" data-imagine-status>Try the visual controls; generation is not connected.</p></div></section>}
+          {page === "bot" && <section class="section-block page-width bot-usecases"><div class="section-heading-row"><div><p class="eyebrow">Use cases</p><h2>Choose a job for each Bot.</h2></div></div><div class="usecase-tabs" role="tablist">{["Sales", "Research", "Expenses", "Support", "Product"].map((item, index) => <button type="button" role="tab" aria-selected={index === 0 ? "true" : "false"} class:list={[{ active: index === 0 }]} data-usecase-tab={item}>{item}</button>)}</div><div class="usecase-demo"><span class="bot-face"><i></i><i></i></span><div><strong data-usecase-title>Sales outreach</strong><p data-usecase-description>Preparing a short account brief and drafting a first message.</p></div><span class="bot-online">Working</span></div></section>}
+          {page === "voice" && <section class="section-block page-width voice-samples"><div class="section-heading-row"><div><p class="eyebrow">Voice samples</p><h2>Hear the difference.</h2></div><span class="preview-badge">Playback is a visual demonstration</span></div><div class="sample-grid">{[["Customer support", "Eve"], ["Sales associate", "Carina"], ["Lead qualification", "Zenith"]].map((item) => <button type="button" class="sample-card" data-voice-sample={item[0]}><span class="sample-play">▶</span><span><strong>{item[0]}</strong><small>Voice · {item[1]}</small></span><span class="sample-bars">▂ ▅ ▃ ▇ ▄ ▆ ▂</span></button>)}</div><p class="demo-status" aria-live="polite" data-voice-status>Select a sample to view its transcript. Audio is not connected.</p></section>}
+          <section class="section-block page-width product-cta"><div><p class="eyebrow">Build with Grok</p><h2>Bring the same models into your product.</h2></div><a class="button button-light" href={`${base}/api/`}>Explore the API <span>↗</span></a></section>
+        </>}
+
+        {storyPage && story && <article class="article-page page-width"><a class="back-link" href={`${base}/news/`}>←&nbsp; All news</a><div class={`article-cover tone-${story.tone}`}><span>{story.category}</span><strong>{story.title}</strong></div><p class="eyebrow">{story.category} &nbsp;·&nbsp; {story.date}</p><h1>{story.title}</h1>{story.summary && <p class="article-lede">{story.summary}</p>}<div class="article-body">{story.summary && <p>{story.summary}</p>}<p>The full public announcement is available from SpaceXAI.</p><a class="text-link" href={`https://x.ai/news/${story.slug}`} target="_blank" rel="noreferrer">Open the official article <span>↗</span></a></div></article>}
+      </main>
+
+      <footer class="xai-footer page-width">
+        <div class="footer-brand"><a class="xai-mark" href={localPath("/")} aria-label="SpaceXAI prototype home"><img src={localPath("/brand-mark.svg")} alt="" /></a><p>Independent interface prototype</p><small>Not affiliated with xAI or SpaceXAI. Product controls are visual demonstrations; no live API is connected.</small><a class="built-link" href="https://grok.com/?referrer=website" target="_blank" rel="noreferrer">Built with Grok&nbsp; ↗</a></div>
+        <div class="footer-column"><h2>Products</h2><a href={`${base}/grok/`}>Chat</a><a href={`${base}/build/`}>Build</a><a href={`${base}/api/imagine/`}>Imagine</a><a href={`${base}/voice/`}>Voice</a><a href={`${base}/bot/`}>Bot</a><a href="https://grokipedia.com/" target="_blank" rel="noreferrer">Grokipedia</a></div>
+        <div class="footer-column"><h2>Solutions</h2><a href="https://x.ai/grok/business" target="_blank" rel="noreferrer">Business</a><a href="https://x.ai/grok/government" target="_blank" rel="noreferrer">Government</a><a href="https://x.ai/solutions/customer-support" target="_blank" rel="noreferrer">Customer support</a><a href="https://x.ai/solutions/legal" target="_blank" rel="noreferrer">Legal</a><a href="https://x.ai/security" target="_blank" rel="noreferrer">Security</a></div>
+        <div class="footer-column"><h2>Developers</h2><a href={`${base}/api/`}>API overview</a><a href={`${base}/pricing/`}>Pricing</a><a href="https://docs.x.ai/developers/models" target="_blank" rel="noreferrer">Models</a><a href="https://docs.x.ai/" target="_blank" rel="noreferrer">Docs</a><a href="https://status.x.ai/" target="_blank" rel="noreferrer">Status</a></div>
+        <div class="footer-column"><h2>Company</h2><a href={`${base}/company/`}>About</a><a href={`${base}/colossus/`}>Colossus</a><a href={`${base}/careers/`}>Careers</a><a href={`${base}/news/`}>News</a><a href="https://x.ai/contact" target="_blank" rel="noreferrer">Contact</a></div>
+        <div class="footer-column"><h2>Trust</h2><a href="https://x.ai/safety" target="_blank" rel="noreferrer">Safety</a><a href="https://x.ai/legal/privacy-policy" target="_blank" rel="noreferrer">Privacy</a><a href="https://x.ai/legal/terms-of-service" target="_blank" rel="noreferrer">Terms</a><a href="https://x.ai/legal/brand-guidelines" target="_blank" rel="noreferrer">Brand</a><button type="button" data-theme-toggle aria-label={`Switch to ${isColossus ? "dark" : "light"} mode`}>◐&nbsp; <span data-theme-label>{isColossus ? "Dark" : "Light"} mode</span></button></div>
+      </footer>
+    </div>
+  </body>
+</html>
+
+<script>
+  import "../scripts/xai-prototype";
+</script>

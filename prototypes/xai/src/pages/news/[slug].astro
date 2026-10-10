@@ -1,0 +1,11 @@
+---
+import XaiSite from "../../components/XaiSite.astro";
+import { xaiStories } from "../../components/news-data";
+
+export function getStaticPaths() {
+  return xaiStories.map((story) => ({ params: { slug: story.slug }, props: { story } }));
+}
+
+const { story } = Astro.props;
+---
+<XaiSite page="article" story={story} />
