@@ -14,10 +14,19 @@ const packageJson = JSON.parse(
 ) as { scripts: Record<string, string> };
 const tempDirs: string[] = [];
 
+function withoutGitEnvironment() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("GIT_")) delete env[key];
+  }
+  return env;
+}
+
 function git(cwd: string, ...args: string[]) {
   return execFileSync("git", args, {
     cwd,
     encoding: "utf8",
+    env: withoutGitEnvironment(),
     stdio: ["ignore", "pipe", "ignore"],
   }).trim();
 }
@@ -37,6 +46,20 @@ function createMainCheckout() {
   git(checkout, "init", "--bare", remote);
   git(checkout, "remote", "add", "admin", remote);
   git(checkout, "push", "--set-upstream", "admin", "main");
+  // Push does not populate remote-tracking refs consistently across Git versions.
+  git(checkout, "fetch", "admin", "main:refs/remotes/admin/main");
+  const sha = git(checkout, "rev-parse", "HEAD");
+  git(checkout, "update-ref", "refs/remotes/admin/main", sha);
+  git(checkout, "branch", "--set-upstream-to=admin/main", "main");
+  expect(
+    git(
+      checkout,
+      "rev-parse",
+      "--abbrev-ref",
+      "--symbolic-full-name",
+      "main@{upstream}",
+    ),
+  ).toBe("admin/main");
   git(
     checkout,
     "remote",
@@ -51,15 +74,18 @@ function runGuard(
   checkout: string,
   approvedSha: string | undefined,
   target = "admin",
+  envOverrides: Record<string, string> = {},
 ) {
   try {
+    const env = withoutGitEnvironment();
+    env.GIT_DIR = join(checkout, ".git");
+    env.GIT_WORK_TREE = checkout;
+    env.DEPLOY_MAIN_SHA = approvedSha;
+    Object.assign(env, envOverrides);
     const stdout = execFileSync("node", [script.pathname, target], {
       cwd: checkout,
       encoding: "utf8",
-      env: {
-        ...process.env,
-        DEPLOY_MAIN_SHA: approvedSha,
-      },
+      env,
     });
     return { code: 0, stdout, stderr: "" };
   } catch (error) {
@@ -110,6 +136,18 @@ describe("admin local deploy context guard", () => {
     expect(result.stdout).toContain(`main SHA ${sha}`);
   });
 
+  it("uses the canonical configured URL despite global Git URL rewrites", () => {
+    const { checkout, sha } = createMainCheckout();
+    const result = runGuard(checkout, sha, "admin", {
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "url.https://mirror.invalid/.insteadOf",
+      GIT_CONFIG_VALUE_0: "https://github.com/",
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`main SHA ${sha}`);
+  });
+
   it("requires an explicit approved SHA that exactly matches HEAD", () => {
     const { checkout, sha } = createMainCheckout();
 
@@ -142,6 +180,15 @@ describe("admin local deploy context guard", () => {
     const localSha = git(checkout, "rev-parse", "HEAD");
 
     expect(runGuard(checkout, localSha).stderr).toContain("remote main");
+  });
+
+  it("rejects a main branch without a configured remote-tracking upstream", () => {
+    const { checkout, sha } = createMainCheckout();
+    git(checkout, "config", "--unset", "branch.main.remote");
+
+    expect(runGuard(checkout, sha).stderr).toContain(
+      "remote-tracking upstream",
+    );
   });
 
   it("rejects a main branch tracking a non-canonical repository", () => {

@@ -43,20 +43,31 @@ if (target === "admin" && branch !== "main") {
 }
 
 if (target === "admin" && branch === "main") {
-  const upstream = git([
-    "rev-parse",
-    "--abbrev-ref",
-    "--symbolic-full-name",
-    "main@{upstream}",
+  const upstreamRemote = git([
+    "config",
+    "--local",
+    "--get",
+    "branch.main.remote",
   ]);
-  const upstreamRef = upstream
-    ? git(["rev-parse", "--symbolic-full-name", upstream])
+  const upstreamMerge = git([
+    "config",
+    "--local",
+    "--get",
+    "branch.main.merge",
+  ]);
+  const upstream = upstreamRemote ? `${upstreamRemote}/main` : "";
+  const upstreamRef =
+    upstreamRemote && upstreamMerge === "refs/heads/main"
+      ? `refs/remotes/${upstreamRemote}/main`
+      : "";
+  const upstreamSha = upstreamRef
+    ? git(["rev-parse", "--verify", `${upstreamRef}^{commit}`])
     : "";
-  const upstreamRemote = upstream.endsWith("/main")
-    ? upstream.slice(0, -"/main".length)
-    : "";
+  // Read the repository's configured URL literally. `git remote get-url`
+  // applies global `url.*.insteadOf` rewrites, which hosted build environments
+  // may use for mirrors and which do not change the canonical repository.
   const remoteUrl = upstreamRemote
-    ? git(["remote", "get-url", upstreamRemote])
+    ? git(["config", "--local", "--get", `remote.${upstreamRemote}.url`])
     : "";
   const normalizedRemoteUrl = remoteUrl
     .trim()
@@ -68,8 +79,8 @@ if (target === "admin" && branch === "main") {
 
   if (
     !upstream ||
-    !upstreamRef.startsWith("refs/remotes/") ||
-    !upstream.endsWith("/main") ||
+    !upstreamRef ||
+    !upstreamSha ||
     normalizedRemoteUrl !== "github.com/atlasez/admin-atlesez"
   ) {
     failures.push(
