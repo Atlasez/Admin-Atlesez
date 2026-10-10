@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+const editorDocumentListRoute = /\/api\/admin\/editor\/documents(?:\?.*)?$/;
+
 test.describe("A/D 原稿一覧の作業導線", () => {
   test("運営トップを指定どおり4グループに分け、プロジェクト側マイページを表示しない", async ({
     page,
@@ -300,35 +302,32 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("D-2: 原稿一覧で現在編集中のメンバーと項目を確認できる", async ({
     page,
   }) => {
-    await page.route(
-      /\/api\/admin\/editor\/documents(?:\?.*)?$/,
-      async (route) => {
-        await route.fulfill({
-          json: {
-            scope: { email: "alice@example.com" },
-            documents: [
-              {
-                id: "presence-doc",
-                subject: "mathematics",
-                category: "algebra",
-                title: "編集中の記事",
-                status: "draft",
-                updated_at: "2026-08-28T00:00:00.000Z",
-                published_at: null,
-                active_editors: [
-                  {
-                    sessionId: "session-1",
-                    email: "bob@example.com",
-                    displayName: "山田花子",
-                    field: "body",
-                  },
-                ],
-              },
-            ],
-          },
-        });
-      },
-    );
+    await page.route(editorDocumentListRoute, async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: "presence-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "編集中の記事",
+              status: "draft",
+              updated_at: "2026-08-28T00:00:00.000Z",
+              published_at: null,
+              active_editors: [
+                {
+                  sessionId: "session-1",
+                  email: "bob@example.com",
+                  displayName: "山田花子",
+                  field: "body",
+                },
+              ],
+            },
+          ],
+        },
+      });
+    });
 
     await page.goto("admin/articles/?verify=presence");
 
@@ -352,31 +351,28 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("D-3c: 公開済み記事の更新案作成中を一覧のボタンで示す", async ({
     page,
   }) => {
-    await page.route(
-      /\/api\/admin\/editor\/documents(?:\?.*)?$/,
-      async (route) => {
-        const requestUrl = new URL(route.request().url());
-        if (requestUrl.pathname !== "/api/admin/editor/documents")
-          return route.fallback();
-        await route.fulfill({
-          json: {
-            scope: { email: "alice@example.com", allSubjects: true },
-            documents: [
-              {
-                id: "update-progress-doc",
-                subject: "mathematics",
-                category: "group-theory",
-                slug: "group-definition",
-                title: "更新案作成中の記事",
-                status: "draft",
-                published_at: "2026-08-30T01:34:00.000Z",
-                updated_at: "2026-09-01T01:34:00.000Z",
-              },
-            ],
-          },
-        });
-      },
-    );
+    await page.route("**/api/admin/editor/documents**", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (requestUrl.pathname !== "/api/admin/editor/documents")
+        return route.fallback();
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com", allSubjects: true },
+          documents: [
+            {
+              id: "update-progress-doc",
+              subject: "mathematics",
+              category: "group-theory",
+              slug: "group-definition",
+              title: "更新案作成中の記事",
+              status: "draft",
+              published_at: "2026-08-30T01:34:00.000Z",
+              updated_at: "2026-09-01T01:34:00.000Z",
+            },
+          ],
+        },
+      });
+    });
 
     await page.goto("admin/articles/?verify=update-progress");
     await expect(page.locator("[data-subject]")).toHaveValue("all");
@@ -395,45 +391,42 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   });
 
   test("D-3: 原稿一覧を分野とカテゴリで絞り込める", async ({ page }) => {
-    await page.route(
-      /\/api\/admin\/editor\/documents(?:\?.*)?$/,
-      async (route) => {
-        await route.fulfill({
-          json: {
-            scope: { email: "alice@example.com" },
-            documents: [
-              {
-                id: "ring-doc",
-                subject: "mathematics",
-                category: "ring-theory",
-                title: "環論の記事",
-                status: "draft",
-                updated_at: "2026-08-28T00:00:00.000Z",
-                published_at: null,
-              },
-              {
-                id: "group-doc",
-                subject: "mathematics",
-                category: "group-theory",
-                title: "群論の記事",
-                status: "draft",
-                updated_at: "2026-08-27T00:00:00.000Z",
-                published_at: null,
-              },
-              {
-                id: "physics-doc",
-                subject: "physics",
-                category: "newtonian-mechanics",
-                title: "力学の記事",
-                status: "draft",
-                updated_at: "2026-08-26T00:00:00.000Z",
-                published_at: null,
-              },
-            ],
-          },
-        });
-      },
-    );
+    await page.route(editorDocumentListRoute, async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: "ring-doc",
+              subject: "mathematics",
+              category: "ring-theory",
+              title: "環論の記事",
+              status: "draft",
+              updated_at: "2026-08-28T00:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: "group-doc",
+              subject: "mathematics",
+              category: "group-theory",
+              title: "群論の記事",
+              status: "draft",
+              updated_at: "2026-08-27T00:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: "physics-doc",
+              subject: "physics",
+              category: "newtonian-mechanics",
+              title: "力学の記事",
+              status: "draft",
+              updated_at: "2026-08-26T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+        },
+      });
+    });
 
     await page.goto("admin/articles/?verify=taxonomy-filter");
 
@@ -472,38 +465,35 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("D-3a: 公開予約済みの記事を日時付きで表示し、絞り込める", async ({
     page,
   }) => {
-    await page.route(
-      /\/api\/admin\/editor\/documents(?:\?.*)?$/,
-      async (route) => {
-        await route.fulfill({
-          json: {
-            scope: { email: "alice@example.com" },
-            documents: [
-              {
-                id: "scheduled-doc",
-                subject: "mathematics",
-                category: "algebra",
-                title: "予約公開の記事",
-                status: "approved",
-                updated_at: "2026-09-01T00:00:00.000Z",
-                published_at: null,
-                scheduled_publish_at: "2026-09-10T03:00:00.000Z",
-              },
-              {
-                id: "draft-doc",
-                subject: "mathematics",
-                category: "algebra",
-                title: "未予約の下書き",
-                status: "draft",
-                updated_at: "2026-08-31T00:00:00.000Z",
-                published_at: null,
-                scheduled_publish_at: null,
-              },
-            ],
-          },
-        });
-      },
-    );
+    await page.route(editorDocumentListRoute, async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: "scheduled-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "予約公開の記事",
+              status: "approved",
+              updated_at: "2026-09-01T00:00:00.000Z",
+              published_at: null,
+              scheduled_publish_at: "2026-09-10T03:00:00.000Z",
+            },
+            {
+              id: "draft-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "未予約の下書き",
+              status: "draft",
+              updated_at: "2026-08-31T00:00:00.000Z",
+              published_at: null,
+              scheduled_publish_at: null,
+            },
+          ],
+        },
+      });
+    });
 
     await page.goto("admin/articles/?verify=scheduled");
     const scheduledCard = page.locator('[data-document-id="scheduled-doc"]');
@@ -529,41 +519,38 @@ test.describe("A/D 原稿一覧の作業導線", () => {
         );
       }
     });
-    await page.route(
-      /\/api\/admin\/editor\/documents(?:\?.*)?$/,
-      async (route) => {
-        await route.fulfill({
-          json: {
-            scope: {
-              email: "alice@example.com",
-              subjects: ["mathematics"],
-              coordinatorSubjects: [],
-              allSubjects: false,
-            },
-            documents: [
-              {
-                id: "math-doc",
-                subject: "mathematics",
-                category: "algebra",
-                title: "数学の記事",
-                status: "approved",
-                updated_at: "2026-09-01T00:00:00.000Z",
-                published_at: null,
-              },
-              {
-                id: "physics-doc",
-                subject: "physics",
-                category: "mechanics",
-                title: "担当外の記事",
-                status: "draft",
-                updated_at: "2026-08-31T00:00:00.000Z",
-                published_at: null,
-              },
-            ],
+    await page.route(editorDocumentListRoute, async (route) => {
+      await route.fulfill({
+        json: {
+          scope: {
+            email: "alice@example.com",
+            subjects: ["mathematics"],
+            coordinatorSubjects: [],
+            allSubjects: false,
           },
-        });
-      },
-    );
+          documents: [
+            {
+              id: "math-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "数学の記事",
+              status: "approved",
+              updated_at: "2026-09-01T00:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: "physics-doc",
+              subject: "physics",
+              category: "mechanics",
+              title: "担当外の記事",
+              status: "draft",
+              updated_at: "2026-08-31T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+        },
+      });
+    });
 
     await page.goto("admin/articles/?verify=filter-memory");
     await expect(page.locator("[data-management]")).toHaveCount(0);
@@ -610,33 +597,9 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   }) => {
     let requestCount = 0;
     let releaseRefresh: (() => void) | null = null;
-    await page.route(
-      /\/api\/admin\/editor\/documents(?:\?.*)?$/,
-      async (route) => {
-        requestCount += 1;
-        if (requestCount === 1) {
-          await route.fulfill({
-            json: {
-              scope: { email: "alice@example.com", allSubjects: true },
-              documents: [
-                {
-                  id: "stable-doc",
-                  subject: "mathematics",
-                  category: "algebra",
-                  title: "更新前も表示される記事",
-                  status: "draft",
-                  updated_at: "2026-09-01T00:00:00.000Z",
-                  published_at: null,
-                },
-              ],
-              pagination: { hasMore: false, nextCursor: null },
-            },
-          });
-          return;
-        }
-        await new Promise<void>((resolve) => {
-          releaseRefresh = resolve;
-        });
+    await page.route("**/api/admin/editor/documents**", async (route) => {
+      requestCount += 1;
+      if (requestCount === 1) {
         await route.fulfill({
           json: {
             scope: { email: "alice@example.com", allSubjects: true },
@@ -645,17 +608,38 @@ test.describe("A/D 原稿一覧の作業導線", () => {
                 id: "stable-doc",
                 subject: "mathematics",
                 category: "algebra",
-                title: "更新後に差し替わる記事",
+                title: "更新前も表示される記事",
                 status: "draft",
-                updated_at: "2026-09-02T00:00:00.000Z",
+                updated_at: "2026-09-01T00:00:00.000Z",
                 published_at: null,
               },
             ],
             pagination: { hasMore: false, nextCursor: null },
           },
         });
-      },
-    );
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        releaseRefresh = resolve;
+      });
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com", allSubjects: true },
+          documents: [
+            {
+              id: "stable-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "更新後に差し替わる記事",
+              status: "draft",
+              updated_at: "2026-09-02T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+          pagination: { hasMore: false, nextCursor: null },
+        },
+      });
+    });
 
     await page.goto("admin/articles/?verify=background-refresh");
     await expect(page.locator("[data-list]")).toContainText(
@@ -685,42 +669,39 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     page,
   }) => {
     let attempts = 0;
-    await page.route(
-      /\/api\/admin\/editor\/documents(?:\?.*)?$/,
-      async (route) => {
-        attempts += 1;
-        if (attempts === 1) {
-          await route.fulfill({
-            status: 503,
-            contentType: "application/json",
-            body: JSON.stringify({ error: "一時的な障害" }),
-          });
-          return;
-        }
+    await page.route("**/api/admin/editor/documents**", async (route) => {
+      attempts += 1;
+      if (attempts === 1) {
         await route.fulfill({
-          json: {
-            scope: {
-              email: "alice@example.com",
-              subjects: ["mathematics"],
-              coordinatorSubjects: [],
-              allSubjects: false,
-            },
-            documents: [
-              {
-                id: "retry-doc",
-                subject: "mathematics",
-                category: "algebra",
-                title: "再試行で表示される記事",
-                status: "draft",
-                updated_at: "2026-09-01T00:00:00.000Z",
-                published_at: null,
-              },
-            ],
-            pagination: { hasMore: false, nextCursor: null },
-          },
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "一時的な障害" }),
         });
-      },
-    );
+        return;
+      }
+      await route.fulfill({
+        json: {
+          scope: {
+            email: "alice@example.com",
+            subjects: ["mathematics"],
+            coordinatorSubjects: [],
+            allSubjects: false,
+          },
+          documents: [
+            {
+              id: "retry-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "再試行で表示される記事",
+              status: "draft",
+              updated_at: "2026-09-01T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+          pagination: { hasMore: false, nextCursor: null },
+        },
+      });
+    });
 
     await page.goto("admin/articles/?verify=retry");
     await expect(page.locator("[data-admin-load-error]")).toBeVisible();
@@ -777,27 +758,24 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     page,
   }) => {
     let attempts = 0;
-    await page.route(
-      /\/api\/admin\/editor\/documents(?:\?.*)?$/,
-      async (route) => {
-        attempts += 1;
-        if (attempts === 1) {
-          await route.fulfill({
-            status: 502,
-            contentType: "text/html",
-            body: "<!doctype html><title>temporary upstream error</title>",
-          });
-          return;
-        }
+    await page.route("**/api/admin/editor/documents**", async (route) => {
+      attempts += 1;
+      if (attempts === 1) {
         await route.fulfill({
-          json: {
-            scope: { email: "alice@example.com", subjects: ["mathematics"] },
-            documents: [],
-            pagination: { hasMore: false, nextCursor: null },
-          },
+          status: 502,
+          contentType: "text/html",
+          body: "<!doctype html><title>temporary upstream error</title>",
         });
-      },
-    );
+        return;
+      }
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com", subjects: ["mathematics"] },
+          documents: [],
+          pagination: { hasMore: false, nextCursor: null },
+        },
+      });
+    });
 
     await page.goto("admin/articles/?verify=html-error");
     await expect(page.locator("[data-admin-load-error]")).toContainText(
@@ -828,46 +806,43 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       now + 28 * 24 * 60 * 60 * 1_000,
     ).toISOString();
     let activeArchived = false;
-    await page.route(
-      /\/api\/admin\/editor\/documents(?:\?.*)?$/,
-      async (route) => {
-        await route.fulfill({
-          json: {
-            scope: { email: "alice@example.com" },
-            documents: [
-              {
-                id: activeId,
-                subject: "mathematics",
-                category: "algebra",
-                title: "整理前の下書き",
-                status: "draft",
-                created_by: "alice@example.com",
-                updated_at: "2026-08-28T00:00:00.000Z",
-                published_at: null,
-                ...(activeArchived
-                  ? {
-                      archived_at: activeArchivedAt,
-                      archive_expires_at: activeArchiveExpiresAt,
-                    }
-                  : {}),
-              },
-              {
-                id: archivedId,
-                subject: "mathematics",
-                category: "algebra",
-                title: "保管中の下書き",
-                status: "draft",
-                created_by: "alice@example.com",
-                updated_at: "2026-08-27T00:00:00.000Z",
-                published_at: null,
-                archived_at: existingArchivedAt,
-                archive_expires_at: existingArchiveExpiresAt,
-              },
-            ],
-          },
-        });
-      },
-    );
+    await page.route("**/api/admin/editor/documents**", async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: activeId,
+              subject: "mathematics",
+              category: "algebra",
+              title: "整理前の下書き",
+              status: "draft",
+              created_by: "alice@example.com",
+              updated_at: "2026-08-28T00:00:00.000Z",
+              published_at: null,
+              ...(activeArchived
+                ? {
+                    archived_at: activeArchivedAt,
+                    archive_expires_at: activeArchiveExpiresAt,
+                  }
+                : {}),
+            },
+            {
+              id: archivedId,
+              subject: "mathematics",
+              category: "algebra",
+              title: "保管中の下書き",
+              status: "draft",
+              created_by: "alice@example.com",
+              updated_at: "2026-08-27T00:00:00.000Z",
+              published_at: null,
+              archived_at: existingArchivedAt,
+              archive_expires_at: existingArchiveExpiresAt,
+            },
+          ],
+        },
+      });
+    });
     await page.route(
       `**/api/admin/editor/documents/${activeId}/archive`,
       async (route) => {
@@ -934,60 +909,57 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("V-1 フィードバックは原稿一覧で未確認に絞り、自分への依頼を優先する", async ({
     page,
   }) => {
-    await page.route(
-      /\/api\/admin\/editor\/documents(?:\?.*)?$/,
-      async (route) => {
-        await route.fulfill({
-          json: {
-            scope: { email: "alice@example.com" },
-            documents: [
-              {
-                id: "other-review",
-                subject: "physics",
-                category: "mechanics",
-                slug: "other-review",
-                title: "別の担当者への査読",
-                status: "in-review",
-                updated_at: "2026-08-20T02:00:00.000Z",
-                published_at: null,
-                reviewer_email: "bob@example.com",
-              },
-              {
-                id: "my-review",
-                subject: "mathematics",
-                category: "algebra",
-                slug: "my-review",
-                title: "自分への査読依頼",
-                status: "in-review",
-                updated_at: "2026-08-20T01:00:00.000Z",
-                published_at: null,
-                reviewer_email: "alice@example.com",
-              },
-              {
-                id: "approved",
-                subject: "mathematics",
-                category: "algebra",
-                slug: "approved",
-                title: "査読済み原稿",
-                status: "approved",
-                updated_at: "2026-08-20T03:00:00.000Z",
-                published_at: null,
-              },
-              {
-                id: "draft",
-                subject: "mathematics",
-                category: "algebra",
-                slug: "draft",
-                title: "まだ下書きの原稿",
-                status: "draft",
-                updated_at: "2026-08-20T04:00:00.000Z",
-                published_at: null,
-              },
-            ],
-          },
-        });
-      },
-    );
+    await page.route(editorDocumentListRoute, async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: "other-review",
+              subject: "physics",
+              category: "mechanics",
+              slug: "other-review",
+              title: "別の担当者への査読",
+              status: "in-review",
+              updated_at: "2026-08-20T02:00:00.000Z",
+              published_at: null,
+              reviewer_email: "bob@example.com",
+            },
+            {
+              id: "my-review",
+              subject: "mathematics",
+              category: "algebra",
+              slug: "my-review",
+              title: "自分への査読依頼",
+              status: "in-review",
+              updated_at: "2026-08-20T01:00:00.000Z",
+              published_at: null,
+              reviewer_email: "alice@example.com",
+            },
+            {
+              id: "approved",
+              subject: "mathematics",
+              category: "algebra",
+              slug: "approved",
+              title: "査読済み原稿",
+              status: "approved",
+              updated_at: "2026-08-20T03:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: "draft",
+              subject: "mathematics",
+              category: "algebra",
+              slug: "draft",
+              title: "まだ下書きの原稿",
+              status: "draft",
+              updated_at: "2026-08-20T04:00:00.000Z",
+              published_at: null,
+            },
+          ],
+        },
+      });
+    });
 
     await page.goto("admin/articles/?mode=review#article-list");
 
