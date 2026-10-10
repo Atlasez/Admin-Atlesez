@@ -69,7 +69,7 @@ Build checkoutのHEAD、接続Production branch、build-infoのcommit/ref/target
 
 `.github/workflows/deploy-admin-from-github.yml`は検証専用で、main CI成功後にbuild/dry-run/artifact保存だけを行う。production Environment、deploy job、Cloudflare書き込みtokenは持たない。切替PRをmainへ反映しても旧定義で待機・実行中のrunは残るため、別途停止・記録してからWorkers Buildsを接続する。詳細は[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照する。
 
-D1 migrationは通常Build/Deployに含めない。バックアップ・旧Workerと共有D1への影響・復旧手順をレビューし、新Workerに必要なmigrationの適用記録を先に確定する。今回の0127・0128・0129が未適用なら、Build接続・初回配信を進めない。
+D1 migrationは通常Build/Deployに含めない。バックアップ・旧Workerと共有D1への影響・復旧手順をレビューし、新Workerに必要なmigrationの適用記録を先に確定する。今回の0127・0128・0129・0130が未適用なら、Build接続・初回配信を進めない。
 
 接続が正常な場合だけ、レビュー・CI成功後のmainマージでBuildを起動する。Git接続保存だけを完了扱いにせず、Workers Builds run ID・checkout SHA・成功時刻・固定Worker Version・100%配信・build-infoを記録する。Workers Buildsが使えない緊急時だけ、[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)の対象SHAへの明示承認を得て、cleanなmain checkoutから`npm run deploy:admin`を実行できる。SHAはその場でHEADから生成せず、レビュー済みmain commitに対して明示承認された40桁値をリテラル指定する。
 
