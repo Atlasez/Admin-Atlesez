@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+const editorDocumentListRoute = /\/api\/admin\/editor\/documents(?:\?.*)?$/;
+
 test.describe("A/D 原稿一覧の作業導線", () => {
   test("運営トップを指定どおり4グループに分け、プロジェクト側マイページを表示しない", async ({
     page,
@@ -300,7 +302,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("D-2: 原稿一覧で現在編集中のメンバーと項目を確認できる", async ({
     page,
   }) => {
-    await page.route("**/api/admin/editor/documents", async (route) => {
+    await page.route(editorDocumentListRoute, async (route) => {
       await route.fulfill({
         json: {
           scope: { email: "alice@example.com" },
@@ -389,7 +391,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   });
 
   test("D-3: 原稿一覧を分野とカテゴリで絞り込める", async ({ page }) => {
-    await page.route("**/api/admin/editor/documents", async (route) => {
+    await page.route(editorDocumentListRoute, async (route) => {
       await route.fulfill({
         json: {
           scope: { email: "alice@example.com" },
@@ -463,7 +465,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("D-3a: 公開予約済みの記事を日時付きで表示し、絞り込める", async ({
     page,
   }) => {
-    await page.route("**/api/admin/editor/documents", async (route) => {
+    await page.route(editorDocumentListRoute, async (route) => {
       await route.fulfill({
         json: {
           scope: { email: "alice@example.com" },
@@ -517,7 +519,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
         );
       }
     });
-    await page.route("**/api/admin/editor/documents", async (route) => {
+    await page.route(editorDocumentListRoute, async (route) => {
       await route.fulfill({
         json: {
           scope: {
@@ -907,7 +909,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("V-1 フィードバックは原稿一覧で未確認に絞り、自分への依頼を優先する", async ({
     page,
   }) => {
-    await page.route("**/api/admin/editor/documents", async (route) => {
+    await page.route(editorDocumentListRoute, async (route) => {
       await route.fulfill({
         json: {
           scope: { email: "alice@example.com" },

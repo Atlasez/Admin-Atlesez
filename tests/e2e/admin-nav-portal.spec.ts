@@ -348,7 +348,7 @@ test("ポータルのサマリーは表示上限を超えたタスク・通知�
   );
 });
 
-test("通知panelは全体の未読件数を示し、通知一覧へ移動できる", async ({
+test("通知panelは未読件数の上限超過を示し、通知一覧へ移動できる", async ({
   page,
 }) => {
   await mockAdminShell(page, { unreadNotificationsCount: 24 });
@@ -356,7 +356,7 @@ test("通知panelは全体の未読件数を示し、通知一覧へ移動でき
 
   const toggle = page.locator("[data-admin-notifications]");
   await expect(toggle.locator("[data-admin-notification-count]")).toHaveText(
-    "24",
+    "24+",
   );
   await toggle.click();
   await page

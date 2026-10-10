@@ -4668,7 +4668,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const loadDocuments = async () => {
       editorLoadRetry?.begin();
-      const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" });
+      const response = await fetch("/api/admin/editor/documents?includeMentionNames=1", { credentials: "same-origin" });
       const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response);
       if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。");
       documents = data.documents ?? [];

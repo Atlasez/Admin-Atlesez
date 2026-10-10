@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import * as Y from "yjs";
 
+const editorDocumentListRoute = /\/api\/admin\/editor\/documents(?:\?.*)?$/;
+
 const documentItem = {
   id: "doc-1",
   source_article_id: null,
@@ -1062,7 +1064,7 @@ test("個別記事の読み込み失敗時も公開記事の登録パネルを�
   page,
 }) => {
   await mockAdminApi(page);
-  await page.route("**/api/admin/editor/documents", async (route) => {
+  await page.route(editorDocumentListRoute, async (route) => {
     await route.fulfill({
       status: 503,
       contentType: "application/json",
@@ -1077,7 +1079,7 @@ test("個別記事の読み込み失敗時も公開記事の登録パネルを�
 
 test("記事読み込み中の表示は編集パネル中央に固定される", async ({ page }) => {
   await mockAdminApi(page);
-  await page.route("**/api/admin/editor/documents", async (route) => {
+  await page.route(editorDocumentListRoute, async (route) => {
     // Keep the request pending long enough to observe the reserved loading
     // layout even on a fast CI runner. `page.goto` below only waits for the
     // initial document, so the editor-starting marker is guaranteed to be
@@ -3154,7 +3156,7 @@ test("既存原稿の応答でIDが欠落しても画像アップロード先を
       json: { document: { ...documentItem, id: undefined }, comments },
     });
   });
-  await page.route("**/api/admin/editor/documents", async (route) => {
+  await page.route(editorDocumentListRoute, async (route) => {
     if (route.request().method() === "POST") {
       documentPosts += 1;
       await route.fulfill({ status: 201, json: { ok: true, id: "new-doc" } });

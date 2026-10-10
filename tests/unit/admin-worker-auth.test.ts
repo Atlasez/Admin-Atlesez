@@ -2882,8 +2882,7 @@ describe("applicant stage server-side access", () => {
     expect(secondPage.status).toBe(200);
     expect(await secondPage.json()).toMatchObject({
       notifications: [{ id: "comment-unread456", read: false }],
-      unreadNotificationsCount: 2,
-      totalNotifications: 2,
+      unreadNotificationsCount: 1,
       nextOffset: null,
     });
 
@@ -2893,7 +2892,7 @@ describe("applicant stage server-side access", () => {
     );
     expect(await unreadPage.json()).toMatchObject({
       notifications: [{ id: "comment-unread123", read: false }],
-      totalNotifications: 2,
+      notificationsTruncated: true,
       nextOffset: 1,
     });
 
@@ -2939,7 +2938,6 @@ describe("applicant stage server-side access", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       notifications: [],
-      totalNotifications: 0,
       unreadNotificationsCount: 0,
       legacyReminderNormalizationPending: true,
     });
@@ -2967,7 +2965,7 @@ describe("applicant stage server-side access", () => {
     expect(writes).toBe(0);
   });
 
-  it("counts every SQL notification candidate and marks all unread rows beyond 500", async () => {
+  it("uses bounded notification pages and marks all unread rows beyond 500", async () => {
     const memberEnvironment = stageEnv("accepted", false, true);
     const notificationDb = new DatabaseSync(":memory:");
     notificationDb.exec(`
@@ -3058,19 +3056,19 @@ describe("applicant stage server-side access", () => {
     };
 
     const response = await worker.fetch(
-      loggedInRequest("/api/admin/notifications?limit=100"),
+      loggedInRequest("/api/admin/notifications?limit=50"),
       memberEnvironment as never,
     );
 
     expect(response.status).toBe(200);
     const data = (await response.json()) as {
       notifications: Array<{ id: string; read: boolean }>;
-      totalNotifications: number;
-      unreadNotificationsCount: number;
+      notificationsTruncated: boolean;
+      unreadNotificationsCount?: number;
     };
-    expect(data.notifications).toHaveLength(100);
-    expect(data.totalNotifications).toBe(candidateCount);
-    expect(data.unreadNotificationsCount).toBe(10_389);
+    expect(data.notifications).toHaveLength(50);
+    expect(data.notificationsTruncated).toBe(true);
+    expect(data.unreadNotificationsCount).toBeUndefined();
     expect(
       notificationCandidateQueries.some((query) => /\bLIMIT\s+\?/i.test(query)),
     ).toBe(true);
@@ -3078,7 +3076,7 @@ describe("applicant stage server-side access", () => {
       notificationCandidateQueries.some((query) =>
         query.includes("COUNT(*) AS total"),
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       data.notifications.every(
         (notification) =>
@@ -3100,24 +3098,22 @@ describe("applicant stage server-side access", () => {
       .replace(/\//g, "_")
       .replace(/=+$/g, "");
     const deepPageResponse = await worker.fetch(
-      loggedInRequest(
-        `/api/admin/notifications?limit=100&cursor=${deepCursor}`,
-      ),
+      loggedInRequest(`/api/admin/notifications?limit=50&cursor=${deepCursor}`),
       memberEnvironment as never,
     );
     expect(deepPageResponse.status).toBe(200);
     const deepPageData = (await deepPageResponse.json()) as {
       notifications: Array<{ id: string }>;
-      totalNotifications: number;
+      notificationsTruncated: boolean;
       nextCursor: string | null;
     };
-    expect(deepPageData.notifications).toHaveLength(100);
+    expect(deepPageData.notifications).toHaveLength(50);
     expect(deepPageData.notifications[0]?.id).toBe("comment-unread10001");
-    expect(deepPageData.totalNotifications).toBe(candidateCount);
+    expect(deepPageData.notificationsTruncated).toBe(true);
     expect(deepPageData.nextCursor).toEqual(expect.any(String));
 
     const unsupportedOffset = await worker.fetch(
-      loggedInRequest("/api/admin/notifications?limit=100&offset=10001"),
+      loggedInRequest("/api/admin/notifications?limit=50&offset=101"),
       memberEnvironment as never,
     );
     expect(unsupportedOffset.status).toBe(400);
@@ -3147,16 +3143,28 @@ describe("applicant stage server-side access", () => {
       }
       return statement;
     };
-    const markAllResponse = await worker.fetch(
-      loggedInJsonRequest("/api/admin/notifications/read", { all: true }),
-      memberEnvironment as never,
-    );
-    expect(markAllResponse.status).toBe(200);
-    expect(await markAllResponse.json()).toMatchObject({
-      ok: true,
-      markedCount: 10_389,
-    });
-    expect(insertStatementQueries).toHaveLength(21);
+    let cursor: string | null = null;
+    let markedCount = 0;
+    do {
+      const markAllResponse = await worker.fetch(
+        loggedInJsonRequest("/api/admin/notifications/read", {
+          all: true,
+          ...(cursor ? { cursor } : {}),
+        }),
+        memberEnvironment as never,
+      );
+      expect(markAllResponse.status).toBe(200);
+      const data = (await markAllResponse.json()) as {
+        ok: boolean;
+        markedCount: number;
+        nextCursor: string | null;
+      };
+      expect(data.ok).toBe(true);
+      markedCount += data.markedCount;
+      cursor = data.nextCursor;
+    } while (cursor);
+    expect(markedCount).toBe(10_389);
+    expect(insertStatementQueries).toHaveLength(208);
     expect(
       insertStatementQueries.every(
         (query) =>
@@ -3164,10 +3172,7 @@ describe("applicant stage server-side access", () => {
           (query.match(/\?/g) ?? []).length === 3,
       ),
     ).toBe(true);
-    expect(notificationReadBatchSizes).toEqual([
-      ...Array<number>(10).fill(2),
-      1,
-    ]);
+    expect(notificationReadBatchSizes).toEqual(Array<number>(208).fill(1));
     expect(insertedNotificationIds).toHaveLength(10_389);
     expect(insertedNotificationIds).toEqual(
       Array.from(
