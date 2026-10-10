@@ -37,6 +37,8 @@ function createMainCheckout() {
   git(checkout, "init", "--bare", remote);
   git(checkout, "remote", "add", "admin", remote);
   git(checkout, "push", "--set-upstream", "admin", "main");
+  // Push does not populate remote-tracking refs consistently across Git versions.
+  git(checkout, "fetch", "admin", "main");
   git(
     checkout,
     "remote",
