@@ -14,10 +14,19 @@ const packageJson = JSON.parse(
 ) as { scripts: Record<string, string> };
 const tempDirs: string[] = [];
 
+function withoutGitEnvironment() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("GIT_")) delete env[key];
+  }
+  return env;
+}
+
 function git(cwd: string, ...args: string[]) {
   return execFileSync("git", args, {
     cwd,
     encoding: "utf8",
+    env: withoutGitEnvironment(),
     stdio: ["ignore", "pipe", "ignore"],
   }).trim();
 }
@@ -39,6 +48,8 @@ function createMainCheckout() {
   git(checkout, "push", "--set-upstream", "admin", "main");
   // Push does not populate remote-tracking refs consistently across Git versions.
   git(checkout, "fetch", "admin", "main:refs/remotes/admin/main");
+  git(checkout, "config", "branch.main.remote", "admin");
+  git(checkout, "config", "branch.main.merge", "refs/heads/main");
   git(
     checkout,
     "remote",
@@ -59,7 +70,7 @@ function runGuard(
       cwd: checkout,
       encoding: "utf8",
       env: {
-        ...process.env,
+        ...withoutGitEnvironment(),
         DEPLOY_MAIN_SHA: approvedSha,
       },
     });
