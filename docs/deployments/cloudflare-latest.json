@@ -197,7 +197,7 @@
       "name": "atlasez01",
       "config": "wrangler.jsonc",
       "production": {
-        "error": "\u001b[31m✘ \u001b[41;31m[\u001b[41;97mERROR\u001b[41;31m]\u001b[0m \u001b[1mA request to the Cloudflare API (/accounts/812021e62fa20465950b61be55dfe064/workers/scripts/atlasez01/deployments) failed.\u001b[0m\n\n  No access to the specified resource.\n  \n  If you think this is a bug, please open an issue at: \u001b[4mhttps://github.com/cloudflare/workers-sdk/issues/new/choose\u001b[0m\n\n\n🪵  Logs were written to \"/home/runner/.config/.wrangler/logs/wrangler-2026-10-09_23-30-43_906.log\""
+        "error": "\u001b[31m✘ \u001b[41;31m[\u001b[41;97mERROR\u001b[41;31m]\u001b[0m \u001b[1mA request to the Cloudflare API (/accounts/812021e62fa20465950b61be55dfe064/workers/scripts/atlasez01/deployments) failed.\u001b[0m\n\n  No access to the specified resource.\n  \n  If you think this is a bug, please open an issue at: \u001b[4mhttps://github.com/cloudflare/workers-sdk/issues/new/choose\u001b[0m\n\n\n🪵  Logs were written to \"/home/runner/.config/.wrangler/logs/wrangler-2026-10-10_02-46-10_900.log\""
       },
       "recentDeployments": [],
       "buildInfo": {
