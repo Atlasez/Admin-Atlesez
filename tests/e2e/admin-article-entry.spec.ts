@@ -300,7 +300,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("D-2: 原稿一覧で現在編集中のメンバーと項目を確認できる", async ({
     page,
   }) => {
-    await page.route("**/api/admin/editor/documents**", async (route) => {
+    await page.route(/\/api\/admin\/editor\/documents(?:\?.*)?$/, async (route) => {
       await route.fulfill({
         json: {
           scope: { email: "alice@example.com" },
@@ -349,7 +349,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("D-3c: 公開済み記事の更新案作成中を一覧のボタンで示す", async ({
     page,
   }) => {
-    await page.route("**/api/admin/editor/documents**", async (route) => {
+    await page.route(/\/api\/admin\/editor\/documents(?:\?.*)?$/, async (route) => {
       const requestUrl = new URL(route.request().url());
       if (requestUrl.pathname !== "/api/admin/editor/documents")
         return route.fallback();
@@ -389,7 +389,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   });
 
   test("D-3: 原稿一覧を分野とカテゴリで絞り込める", async ({ page }) => {
-    await page.route("**/api/admin/editor/documents**", async (route) => {
+    await page.route(/\/api\/admin\/editor\/documents(?:\?.*)?$/, async (route) => {
       await route.fulfill({
         json: {
           scope: { email: "alice@example.com" },
@@ -463,7 +463,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("D-3a: 公開予約済みの記事を日時付きで表示し、絞り込める", async ({
     page,
   }) => {
-    await page.route("**/api/admin/editor/documents**", async (route) => {
+    await page.route(/\/api\/admin\/editor\/documents(?:\?.*)?$/, async (route) => {
       await route.fulfill({
         json: {
           scope: { email: "alice@example.com" },
@@ -517,7 +517,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
         );
       }
     });
-    await page.route("**/api/admin/editor/documents**", async (route) => {
+    await page.route(/\/api\/admin\/editor\/documents(?:\?.*)?$/, async (route) => {
       await route.fulfill({
         json: {
           scope: {
@@ -595,7 +595,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   }) => {
     let requestCount = 0;
     let releaseRefresh: (() => void) | null = null;
-    await page.route("**/api/admin/editor/documents**", async (route) => {
+    await page.route(/\/api\/admin\/editor\/documents(?:\?.*)?$/, async (route) => {
       requestCount += 1;
       if (requestCount === 1) {
         await route.fulfill({
@@ -667,7 +667,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     page,
   }) => {
     let attempts = 0;
-    await page.route("**/api/admin/editor/documents**", async (route) => {
+    await page.route(/\/api\/admin\/editor\/documents(?:\?.*)?$/, async (route) => {
       attempts += 1;
       if (attempts === 1) {
         await route.fulfill({
@@ -756,7 +756,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     page,
   }) => {
     let attempts = 0;
-    await page.route("**/api/admin/editor/documents**", async (route) => {
+    await page.route(/\/api\/admin\/editor\/documents(?:\?.*)?$/, async (route) => {
       attempts += 1;
       if (attempts === 1) {
         await route.fulfill({
@@ -804,7 +804,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       now + 28 * 24 * 60 * 60 * 1_000,
     ).toISOString();
     let activeArchived = false;
-    await page.route("**/api/admin/editor/documents**", async (route) => {
+    await page.route(/\/api\/admin\/editor\/documents(?:\?.*)?$/, async (route) => {
       await route.fulfill({
         json: {
           scope: { email: "alice@example.com" },
@@ -907,7 +907,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   test("V-1 フィードバックは原稿一覧で未確認に絞り、自分への依頼を優先する", async ({
     page,
   }) => {
-    await page.route("**/api/admin/editor/documents**", async (route) => {
+    await page.route(/\/api\/admin\/editor\/documents(?:\?.*)?$/, async (route) => {
       await route.fulfill({
         json: {
           scope: { email: "alice@example.com" },
