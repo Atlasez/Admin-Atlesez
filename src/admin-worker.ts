@@ -6189,12 +6189,14 @@ async function listEditorialDocuments(
   // メンション候補は、原稿の担当分野だけでなく運営に登録済みの全メンバーを
   // 表示する。担当分野で絞ると、共同レビュー相手や運営内運営が候補から消え、
   // 「自分しか候補に出ない」状態になっていた。
-  const memberRows = await env.REPORTS.prepare(
-    `SELECT DISTINCT p.email, COALESCE(NULLIF(TRIM(m.display_name), ''), '') AS display_name
-     FROM report_admin_permissions p
-     LEFT JOIN editorial_member_profiles m ON lower(m.email) = lower(p.email)
-     ORDER BY display_name, p.email`,
-  ).all<{ email: string; display_name: string }>();
+  const memberRows = searchParams.get("includeMentionNames") === "1"
+    ? await env.REPORTS.prepare(
+        `SELECT DISTINCT p.email, COALESCE(NULLIF(TRIM(m.display_name), ''), '') AS display_name
+         FROM report_admin_permissions p
+         LEFT JOIN editorial_member_profiles m ON lower(m.email) = lower(p.email)
+         ORDER BY display_name, p.email`,
+      ).all<{ email: string; display_name: string }>()
+    : { results: [] as { email: string; display_name: string }[] };
   return json({
     documents: documentRows.map((document) => ({
       ...document,
@@ -18002,6 +18004,31 @@ async function storeArticleBackup(
     .run();
 }
 
+const WORKER_SYNC_PAGE_SIZE = 8;
+
+async function readWorkerSyncCursor(env: Env, job: string) {
+  const row = await env.REPORTS.prepare(
+    "SELECT cursor FROM admin_worker_sync_checkpoints WHERE job = ?",
+  )
+    .bind(job)
+    .first<{ cursor: string | null }>();
+  return row?.cursor ?? null;
+}
+
+async function writeWorkerSyncCursor(
+  env: Env,
+  job: string,
+  cursor: string | null,
+) {
+  await env.REPORTS.prepare(
+    `INSERT INTO admin_worker_sync_checkpoints (job, cursor, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(job) DO UPDATE SET cursor=excluded.cursor, updated_at=excluded.updated_at`,
+  )
+    .bind(job, cursor, new Date().toISOString())
+    .run();
+}
+
 /** GitHubの履歴に加え、公開済みMarkdownをD1へ世代バックアップする。 */
 async function syncPublishedArticleBackups(env: Env) {
   const token = (await githubToken(env))?.token;
@@ -18022,15 +18049,23 @@ async function syncPublishedArticleBackups(env: Env) {
   const tree = (await treeResponse.json()) as {
     tree?: { path?: string; type?: string; sha?: string }[];
   };
+  const cursor = await readWorkerSyncCursor(env, "published-article-backups");
   const articles = (tree.tree ?? []).filter(
     (entry) =>
       entry.type === "blob" &&
       entry.path?.startsWith("src/content/articles/") &&
       entry.path.endsWith(".md") &&
       entry.sha,
+  ).sort((left, right) =>
+    left.path! < right.path! ? -1 : left.path! > right.path! ? 1 : 0,
   );
+  const nextArticles = articles
+    .filter((entry) => !cursor || entry.path! > cursor)
+    .slice(0, WORKER_SYNC_PAGE_SIZE + 1);
+  const hasMore = nextArticles.length > WORKER_SYNC_PAGE_SIZE;
+  const page = nextArticles.slice(0, WORKER_SYNC_PAGE_SIZE);
   let synced = 0;
-  for (const entry of articles) {
+  for (const entry of page) {
     const path = entry.path!;
     const sha = entry.sha!;
     const existing = await env.REPORTS.prepare(
@@ -18059,7 +18094,12 @@ async function syncPublishedArticleBackups(env: Env) {
     );
     synced += 1;
   }
-  return { synced, skipped: false };
+  await writeWorkerSyncCursor(
+    env,
+    "published-article-backups",
+    hasMore ? page.at(-1)?.path ?? null : null,
+  );
+  return { synced, skipped: false, processed: page.length, hasMore };
 }
 
 /** GitHub main上の公開用Markdownを基準に、編集室の公開済み表示を正規化する。 */
@@ -18075,11 +18115,22 @@ async function syncEditorialPublicationStatus(env: Env, documentId?: string) {
     "x-github-api-version": "2022-11-28",
   };
   const normalizedDocumentId = documentId?.trim() || null;
+  const cursor = normalizedDocumentId
+    ? null
+    : await readWorkerSyncCursor(env, "editorial-publication-status");
   const documents = await env.REPORTS.prepare(
     `SELECT id, locale, subject, category, slug, published_at, publication_action
-       FROM editorial_documents${normalizedDocumentId ? " WHERE id = ?" : " WHERE (document_kind IS NULL OR document_kind='canonical')"}`,
+       FROM editorial_documents
+      WHERE ${normalizedDocumentId
+        ? "id = ?"
+        : "(document_kind IS NULL OR document_kind='canonical') AND id > ?"}
+      ORDER BY id ASC
+      LIMIT ?`,
   )
-    .bind(...(normalizedDocumentId ? [normalizedDocumentId] : []))
+    .bind(
+      ...(normalizedDocumentId ? [normalizedDocumentId] : [cursor ?? ""]),
+      normalizedDocumentId ? 1 : WORKER_SYNC_PAGE_SIZE + 1,
+    )
     .all<
     Pick<
       EditorialDocument,
@@ -18092,10 +18143,14 @@ async function syncEditorialPublicationStatus(env: Env, documentId?: string) {
       | "publication_action"
     >
   >();
+  const hasMore = !normalizedDocumentId && documents.results.length > WORKER_SYNC_PAGE_SIZE;
+  const page = normalizedDocumentId
+    ? documents.results
+    : documents.results.slice(0, WORKER_SYNC_PAGE_SIZE);
   let published = 0;
   let pending = 0;
   const now = new Date().toISOString();
-  for (const document of documents.results) {
+  for (const document of page) {
     const path = `src/content/articles/${editorialLocaleDirectory(document.locale)}/${document.subject}/${document.category}/${document.slug}.md`;
     const response = await fetch(
       `https://api.github.com/repos/${repository}/contents/${path}`,
@@ -18146,7 +18201,13 @@ async function syncEditorialPublicationStatus(env: Env, documentId?: string) {
         .run();
     }
   }
-  return { published, pending, total: documents.results.length };
+  if (!normalizedDocumentId)
+    await writeWorkerSyncCursor(
+      env,
+      "editorial-publication-status",
+      hasMore ? page.at(-1)?.id ?? null : null,
+    );
+  return { published, pending, total: page.length, hasMore };
 }
 
 async function syncEditorialPublicationStatusForAdmin(
@@ -22481,14 +22542,14 @@ async function adminNotifications(
   const requestedLimit = Number(notificationParams.get("limit") ?? "20");
   const includeUnreadIds = notificationParams.get("includeUnreadIds") === "true";
   const limit = Number.isFinite(requestedLimit)
-    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), includeUnreadIds ? 1_000 : 100)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 50)
     : 20;
   const requestedOffset = Number(notificationParams.get("offset") ?? "0");
   if (!Number.isSafeInteger(requestedOffset) || requestedOffset < 0)
     return json({ error: "通知ページの位置が不正です。" }, 400);
-  // Offset pagination is retained for older clients, but no longer permits
-  // deep scans. The inbox uses a keyset cursor for pages beyond the first.
-  if (requestedOffset > 10_000)
+  // Keep limited offset compatibility for older clients; the inbox uses a
+  // keyset cursor for pages beyond the first to avoid deep scans.
+  if (requestedOffset > 100)
     return json({ error: "深いページにはカーソルを使用してください。" }, 400);
   const offset = requestedOffset;
   const unreadOnly = notificationParams.get("unreadOnly") === "true";
@@ -22520,10 +22581,9 @@ async function adminNotifications(
   if (cursor && offset !== 0)
     return json({ error: "カーソルとoffsetは同時に指定できません。" }, 400);
   const notificationReadIds = new Set<string>();
-  const notificationSourceCounts: Array<{ total: number; unread: number }> = [];
   let legacyReminderNormalizationPending = false;
   let legacyReminderNormalizationFailed = false;
-  const notificationFetchLimit = cursor || includeUnreadIds ? limit + 1 : offset + limit;
+  const notificationFetchLimit = offset + limit + 1;
   const preferences=await loadNotificationPreferences(env.REPORTS,scope.email);
   const queryNotificationSource = async <T>(
     sql: string,
@@ -22548,15 +22608,11 @@ async function adminNotifications(
     const cursorBindings = cursor
       ? [cursor.updatedAt, cursor.updatedAt, cursor.id]
       : [];
-    const [page, counts, legacyReminderPending, legacyReminderFailed] = await Promise.all([
+    const [page, legacyReminderPending, legacyReminderFailed] = await Promise.all([
       env.REPORTS.prepare(
         `SELECT s.*, ${metadata.id} AS __notification_id, ${readExpr} AS __notification_read FROM ${source} WHERE ${featureFilter.sql}${dueClause}${unreadClause}1=1 ${cursorClause}ORDER BY s.${metadata.time} DESC, ${metadata.id} DESC LIMIT ?`,
       ).bind(scope.email, ...bindings, ...featureFilter.values, ...dueBindings, ...(unreadOnly || includeUnreadIds ? [scope.email] : []), ...cursorBindings, notificationFetchLimit)
         .all<T & { __notification_id: string; __notification_read: number }>(),
-      env.REPORTS.prepare(
-        `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN ${readExpr} THEN 0 ELSE 1 END), 0) AS unread FROM ${source} WHERE ${featureFilter.sql}${dueClause}1=1`,
-      ).bind(scope.email, ...bindings, ...featureFilter.values, ...dueBindings)
-        .first<{ total: number; unread: number }>(),
       "dueReminder" in metadata
         ? env.REPORTS.prepare(
             `SELECT 1 AS pending FROM ${sourceWithoutOrder}
@@ -22586,7 +22642,6 @@ async function adminNotifications(
     ]);
     if (legacyReminderPending?.pending) legacyReminderNormalizationPending = true;
     if (legacyReminderFailed?.failed) legacyReminderNormalizationFailed = true;
-    notificationSourceCounts.push({ total: Number(counts?.total ?? 0), unread: Number(counts?.unread ?? 0) });
     for (const row of page.results ?? []) {
       if (row.__notification_read) notificationReadIds.add(row.__notification_id);
     }
@@ -22862,24 +22917,11 @@ async function adminNotifications(
   ].sort((a, b) =>
     b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id),
   );
-  const totalNotifications = notificationSourceCounts.reduce(
-    (sum, source) => sum + source.total,
-    0,
-  );
-  const unreadNotificationsCount = notificationSourceCounts.reduce(
-    (sum, source) => sum + source.unread,
-    0,
-  );
-  const filteredCount = unreadOnly || includeUnreadIds
-    ? unreadNotificationsCount
-    : totalNotifications;
   const cursorMode = Boolean(cursor) || includeUnreadIds;
-  const notificationsTruncated = cursorMode
-    ? sortedNotifications.length > limit
-    : filteredCount > offset + limit;
+  const notificationsTruncated = sortedNotifications.length > offset + limit;
   const notifications = sortedNotifications.slice(
-    cursorMode ? 0 : offset,
-    (cursorMode ? 0 : offset) + limit,
+    offset,
+    offset + limit,
   );
   const lastNotification = notifications.at(-1);
   const nextCursor = notificationsTruncated && lastNotification
@@ -22904,8 +22946,13 @@ async function adminNotifications(
     })),
     preferences,
     notificationsTruncated,
-    unreadNotificationsCount,
-    totalNotifications: filteredCount,
+    ...(!notificationsTruncated
+      ? {
+          unreadNotificationsCount: notifications.filter(
+            (item) => !notificationReadIds.has(item.id),
+          ).length,
+        }
+      : {}),
     legacyReminderNormalizationPending,
     legacyReminderNormalizationFailed,
     nextOffset: cursorMode ? null : notificationsTruncated ? offset + limit : null,
@@ -22927,6 +22974,7 @@ async function markAdminNotificationsRead(
   const payload = (await request.json().catch(() => null)) as {
     ids?: unknown;
     all?: unknown;
+    cursor?: unknown;
   } | null;
   const writeReadIds = async (notificationIds: string[]) => {
     const idsPerInsert = 500;
@@ -22962,50 +23010,47 @@ async function markAdminNotificationsRead(
       ]
     : [];
   if (payload?.all === true) {
-    let cursor: string | null = null;
-    let markedCount = 0;
-    do {
-      const params = new URLSearchParams({
-        limit: "1000",
-        includeUnreadIds: "true",
-      });
-      if (cursor) params.set("cursor", cursor);
-      const notificationResponse = await adminNotifications(
-        new Request(
-          new URL(`/api/admin/notifications?${params}`, request.url),
-          { headers: request.headers },
-        ),
-        env,
-        scope,
+    const cursor = typeof payload.cursor === "string" ? payload.cursor : null;
+    if (cursor && cursor.length > 2_048)
+      return json({ error: "通知ページのカーソルが不正です。" }, 400);
+    const params = new URLSearchParams({
+      limit: "100",
+      includeUnreadIds: "true",
+    });
+    if (cursor) params.set("cursor", cursor);
+    const notificationResponse = await adminNotifications(
+      new Request(
+        new URL(`/api/admin/notifications?${params}`, request.url),
+        { headers: request.headers },
+      ),
+      env,
+      scope,
+    );
+    if (!notificationResponse.ok) return notificationResponse;
+    const notificationData = (await notificationResponse.json()) as {
+      unreadNotificationIds?: unknown;
+      nextCursor?: unknown;
+      legacyReminderNormalizationPending?: unknown;
+    };
+    if (notificationData.legacyReminderNormalizationPending === true)
+      return json(
+        { error: "古いタスクリマインダーを準備中です。時間をおいてから一括既読を再試行してください。" },
+        409,
       );
-      if (!notificationResponse.ok) return notificationResponse;
-      const notificationData = (await notificationResponse.json()) as {
-        unreadNotificationIds?: unknown;
-        nextCursor?: unknown;
-        legacyReminderNormalizationPending?: unknown;
-      };
-      if (notificationData.legacyReminderNormalizationPending === true)
-        return json(
-          { error: "古いタスクリマインダーを準備中です。時間をおいてから一括既読を再試行してください。" },
-          409,
-        );
-      ids = Array.isArray(notificationData.unreadNotificationIds)
-        ? notificationData.unreadNotificationIds.filter(
-            (id): id is string =>
-              typeof id === "string" &&
-              /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(id),
-          )
-        : [];
-      await writeReadIds(ids);
-      markedCount += ids.length;
-      const nextCursor = typeof notificationData.nextCursor === "string"
-        ? notificationData.nextCursor
-        : null;
-      if (nextCursor && nextCursor === cursor)
-        return json({ error: "通知の一括既読処理を続行できませんでした。" }, 500);
-      cursor = ids.length ? nextCursor : null;
-    } while (cursor);
-    return json({ ok: true, markedCount });
+    ids = Array.isArray(notificationData.unreadNotificationIds)
+      ? notificationData.unreadNotificationIds.filter(
+          (id): id is string =>
+            typeof id === "string" &&
+            /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(id),
+        )
+      : [];
+    await writeReadIds(ids);
+    const nextCursor = typeof notificationData.nextCursor === "string"
+      ? notificationData.nextCursor
+      : null;
+    if (nextCursor && nextCursor === cursor)
+      return json({ error: "通知の一括既読処理を続行できませんでした。" }, 500);
+    return json({ ok: true, markedCount: ids.length, nextCursor });
   }
   if (payload?.all !== true && ids.length > 500)
     return json({ error: "一度に既読にできる通知は500件までです。" }, 400);
@@ -24208,6 +24253,14 @@ export default {
       ctx.waitUntil(progressEditorialPublicationRuns(env));
       return;
     }
+    if (cron === "*/2 * * * *") {
+      ctx.waitUntil(syncEditorialPublicationStatus(env));
+      return;
+    }
+    if (cron === "1-59/2 * * * *") {
+      ctx.waitUntil(syncPublishedArticleBackups(env));
+      return;
+    }
     if (cron === "*/5 * * * *") {
       ctx.waitUntil(
         Promise.all([
@@ -24219,7 +24272,6 @@ export default {
           dispatchApplicationEmails(env),
           dispatchPendingDiscordProvisioning(env),
           syncDiscordRolesToAdmin(env),
-          syncEditorialPublicationStatus(env),
           dispatchScheduledEditorialPublications(env),
           archiveStaleAuditLogs(env),
         ]),
@@ -24229,8 +24281,6 @@ export default {
     ctx.waitUntil(
       Promise.all([
         progressEditorialPublicationRuns(env),
-        syncPublishedArticleBackups(env),
-        syncEditorialPublicationStatus(env),
         purgeExpiredPersonalData(env),
         applyDueMemberProcedures(env.REPORTS),
         dispatchDueTaskReminders(env),

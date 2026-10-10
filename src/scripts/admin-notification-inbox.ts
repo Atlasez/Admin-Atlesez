@@ -20,8 +20,7 @@ type Notification = {
 type ResponseData = {
   notifications?: Notification[];
   preferences?: NotificationPreferences;
-  unreadNotificationsCount?: number;
-  totalNotifications?: number;
+  notificationsTruncated?: boolean;
   nextCursor?: string | null;
   legacyReminderNormalizationPending?: boolean;
   legacyReminderNormalizationFailed?: boolean;
@@ -99,7 +98,7 @@ const initNotificationInbox = () => {
   };
   let rows: Notification[] = [];
   let unreadTotal = 0;
-  let total = 0;
+  let notificationsTruncated = false;
   let legacyReminderNormalizationPending = false;
   let legacyReminderNormalizationFailed = false;
   let nextCursor: string | null = null;
@@ -150,9 +149,9 @@ const initNotificationInbox = () => {
     settings.querySelector<HTMLFieldSetElement>("fieldset")!.disabled =
       !preferences.available;
 
-    unreadCount.textContent = String(unreadTotal);
-    visibleCount.textContent = `${rows.length}件を表示`;
-    markAll.hidden = unreadTotal === 0;
+    unreadCount.textContent = `${unreadTotal}${notificationsTruncated && unreadTotal ? "+" : ""}`;
+    visibleCount.textContent = `${rows.length}${notificationsTruncated ? "+" : ""}件を表示`;
+    markAll.hidden = unreadTotal === 0 && !notificationsTruncated;
     markAll.disabled = legacyReminderNormalizationPending;
     legacyReminderStatus.hidden = !legacyReminderNormalizationPending;
     legacyReminderFailed.hidden = !legacyReminderNormalizationFailed;
@@ -185,10 +184,10 @@ const initNotificationInbox = () => {
         .join("");
       retry.success();
     }
-    truncation.hidden = total <= rows.length;
+    truncation.hidden = !notificationsTruncated;
     truncation.textContent = "新しい通知を先に表示しています。";
     pagination.hidden = nextCursor === null;
-    paginationSummary.textContent = `${rows.length} / ${total}件`;
+    paginationSummary.textContent = `${rows.length}${notificationsTruncated ? "+" : ""}件`;
   };
 
   const load = async (append = false) => {
@@ -228,14 +227,8 @@ const initNotificationInbox = () => {
     preferences = data.preferences ?? preferences;
     const incoming = data.notifications;
     rows = append ? [...rows, ...incoming] : incoming;
-    unreadTotal = Math.max(
-      0,
-      Math.trunc(Number(data.unreadNotificationsCount ?? 0)),
-    );
-    total = Math.max(
-      rows.length,
-      Math.trunc(Number(data.totalNotifications ?? rows.length)),
-    );
+    unreadTotal = rows.filter((item) => !item.read).length;
+    notificationsTruncated = data.notificationsTruncated === true;
     nextCursor = typeof data.nextCursor === "string" ? data.nextCursor : null;
     legacyReminderNormalizationPending =
       data.legacyReminderNormalizationPending === true;
@@ -251,22 +244,35 @@ const initNotificationInbox = () => {
   );
 
   const setRead = async (ids: string[] = [], all = false) => {
-    const response = await fetch("/api/admin/notifications/read", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(all ? { all: true } : { ids }),
-    });
-    if (!response.ok) {
-      const data = (await response.json().catch(() => null)) as {
-        error?: unknown;
-      } | null;
-      throw new Error(
-        typeof data?.error === "string"
-          ? data.error
-          : "通知を既読にできませんでした。",
-      );
-    }
+    let cursor: string | null = null;
+    do {
+      const response = await fetch("/api/admin/notifications/read", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          all ? { all: true, ...(cursor ? { cursor } : {}) } : { ids },
+        ),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as {
+          error?: unknown;
+        } | null;
+        throw new Error(
+          typeof data?.error === "string"
+            ? data.error
+            : "通知を既読にできませんでした。",
+        );
+      }
+      if (all) {
+        const data = (await response.json()) as { nextCursor?: unknown };
+        const nextCursor =
+          typeof data.nextCursor === "string" ? data.nextCursor : null;
+        if (nextCursor && nextCursor === cursor)
+          throw new Error("通知の一括既読処理を続行できませんでした。");
+        cursor = nextCursor;
+      }
+    } while (all && cursor);
     await load();
   };
 

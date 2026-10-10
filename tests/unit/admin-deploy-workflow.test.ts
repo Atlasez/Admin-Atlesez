@@ -300,7 +300,7 @@ describe("ADMIN Workers Builds-only production policy", () => {
       );
     }
     expect(source("docs/ADMIN_DEPLOYMENT_POLICY.md")).toContain(
-      "0127・0128・0129が未適用なら初回Buildを開始しない",
+      "0127・0128・0129・0130が未適用なら初回Buildを開始しない",
     );
   });
 });

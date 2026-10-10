@@ -466,12 +466,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           const response = await fetch('/api/admin/notifications', { credentials: 'same-origin', cache: 'no-store' });
           const contentType = response.headers.get('content-type') ?? '';
           if (!response.ok || !contentType.includes('application/json')) throw new Error('notification request failed');
-          const data = await response.json() as { notifications?: typeof notifications; unreadNotificationsCount?: number; legacyReminderNormalizationPending?: boolean; legacyReminderNormalizationFailed?: boolean };
+          const data = await response.json() as { notifications?: typeof notifications; unreadNotificationsCount?: number; notificationsTruncated?: boolean; legacyReminderNormalizationPending?: boolean; legacyReminderNormalizationFailed?: boolean };
           if (!Array.isArray(data.notifications)) throw new Error('invalid notification response');
           notifications = data.notifications;
           const unreadCount = Math.max(0, Math.trunc(Number(data.unreadNotificationsCount ?? notifications.filter((item) => !item.read).length)));
-          if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : String(unreadCount); notificationCount.hidden = unreadCount === 0; }
-          if (markAllRead) markAllRead.hidden = unreadCount === 0;
+          if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : `${unreadCount}${data.notificationsTruncated && unreadCount ? "+" : ""}`; notificationCount.hidden = unreadCount === 0; }
+          if (markAllRead) markAllRead.hidden = unreadCount === 0 && data.notificationsTruncated !== true;
           if (markAllRead) markAllRead.disabled = data.legacyReminderNormalizationPending === true;
           if (legacyReminderStatus) {
             legacyReminderStatus.textContent = '古いタスクリマインダーを準備中です。一括既読は準備完了後に利用できます。';
@@ -511,11 +511,20 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       document.addEventListener('astro:before-swap', () => { setNotificationPanelOpen(false); });
       const markRead = async (ids: string[], all = false) => {
         if (!ids.length && !all) return;
-        const response = await fetch('/api/admin/notifications/read', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(all ? { all: true } : { ids }) });
-        if (!response.ok) {
-          const data = await response.json().catch(() => null) as { error?: unknown } | null;
-          throw new Error(typeof data?.error === 'string' ? data.error : '通知を既読にできませんでした。');
-        }
+        let cursor: string | null = null;
+        do {
+          const response = await fetch('/api/admin/notifications/read', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(all ? { all: true, ...(cursor ? { cursor } : {}) } : { ids }) });
+          if (!response.ok) {
+            const data = await response.json().catch(() => null) as { error?: unknown } | null;
+            throw new Error(typeof data?.error === 'string' ? data.error : '通知を既読にできませんでした。');
+          }
+          if (all) {
+            const data = await response.json() as { nextCursor?: unknown };
+            const nextCursor = typeof data.nextCursor === 'string' ? data.nextCursor : null;
+            if (nextCursor && nextCursor === cursor) throw new Error('通知の一括既読処理を続行できませんでした。');
+            cursor = nextCursor;
+          }
+        } while (all && cursor);
         await loadNotifications();
       };
       notificationList?.addEventListener('click', (event) => {
