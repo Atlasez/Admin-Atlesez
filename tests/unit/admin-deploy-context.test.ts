@@ -74,12 +74,14 @@ function runGuard(
   checkout: string,
   approvedSha: string | undefined,
   target = "admin",
+  envOverrides: Record<string, string> = {},
 ) {
   try {
     const env = withoutGitEnvironment();
     env.GIT_DIR = join(checkout, ".git");
     env.GIT_WORK_TREE = checkout;
     env.DEPLOY_MAIN_SHA = approvedSha;
+    Object.assign(env, envOverrides);
     const stdout = execFileSync("node", [script.pathname, target], {
       cwd: checkout,
       encoding: "utf8",
@@ -129,6 +131,18 @@ describe("admin local deploy context guard", () => {
   it("allows a clean main checkout pinned to a commit on its remote main", () => {
     const { checkout, sha } = createMainCheckout();
     const result = runGuard(checkout, sha);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`main SHA ${sha}`);
+  });
+
+  it("uses the canonical configured URL despite global Git URL rewrites", () => {
+    const { checkout, sha } = createMainCheckout();
+    const result = runGuard(checkout, sha, "admin", {
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "url.https://mirror.invalid/.insteadOf",
+      GIT_CONFIG_VALUE_0: "https://github.com/",
+    });
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain(`main SHA ${sha}`);
