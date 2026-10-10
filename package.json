@@ -16,7 +16,7 @@
     "db:reports:local": "npx --yes wrangler d1 migrations apply atlasez-reports-local --local --config wrangler.local.jsonc",
     "new:article": "node scripts/new-article.mjs",
     "update:institutions": "node scripts/build-institution-directory.mjs",
-    "build": "node scripts/write-build-info.mjs && astro build && npm run search:index",
+    "build": "node scripts/write-build-info.mjs && astro build && npm run search:index && node scripts/build-xai-prototype.mjs",
     "build:admin:dmg": "bash scripts/build-admin-dmg.sh",
     "build:ci": "node scripts/write-build-info.mjs && astro build",
     "verify:build-info": "node scripts/verify-build-info.mjs",

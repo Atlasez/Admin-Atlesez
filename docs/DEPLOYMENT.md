@@ -44,7 +44,9 @@ npx wrangler deploy --config wrangler.admin.jsonc --keep-vars
 
 Build checkout SHA・接続branch・build-infoを照合し、既存bindings・varsを維持します。任意のSHAを環境変数へ固定して成果物の身元を偽装しません。切替時は検証専用Workflowをmainへ先に反映し、旧Actions deployの待機・実行中runを別途停止・記録してからWorkers Buildsを接続します。二経路の同時有効化は禁止します。接続手順は[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照してください。この文書変更だけではCloudflare接続や本番反映は完了しません。
 
-D1 migrationは通常Build/Deployに含めません。今回の0127・0128・0129についてバックアップ・共有D1/旧Workerへの影響・復旧方法・隔離検証・適用記録を確定し、新Workerを配信する前に適用します。未適用なら接続・初回Buildを停止します。
+WorkerのGitHub同期はCronを分離して8件ずつ処理し、0130のD1チェックポイントから再開します。
+
+D1 migrationは通常Build/Deployに含めません。今回の0127・0128・0129・0130についてバックアップ・共有D1/旧Workerへの影響・復旧方法・隔離検証・適用記録を確定し、新Workerを配信する前に適用します。未適用なら接続・初回Buildを停止します。
 
 配信後はWorkers Builds run・checkout SHA、固定Worker Version・100%配信、公開build-info、認証済みChromeを確認します。読み取り専用の`verify-admin-production.yml`はschedule/dispatchで最大15回、60秒間隔、job20分以内に照合し、未一致を失敗として報告します。監査JSONだけのmain advanceは公開SHAがmainの祖先で、差分が`docs/deployments/cloudflare-latest.json`だけと検証できる場合だけ許容します。
 

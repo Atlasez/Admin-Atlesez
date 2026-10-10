@@ -36,8 +36,10 @@ Cloudflare Workers Buildsでrepositoryを`Atlasez/Admin-Atlesez`、Production br
    npx wrangler deploy --config wrangler.admin.jsonc --keep-vars
    ```
 
+   5分・毎時の保守処理からGitHub同期を分離し、編集室の公開状態同期（`*/2 * * * *`）と公開記事バックアップ（`1-59/2 * * * *`）を別Cronで実行する。各同期は8件ずつ進める。チェックポイント用migration `0130`を先に適用し、適用を確認できない場合は新Workerを配信しない。
+
 5. Build checkoutのHEAD、Production branch、生成されたbuild-infoのcommit/ref/targetを照合する。`CF_BRANCH=main`だけを接続branch確認の代用にしない。任意のSHAを環境変数へ固定して成果物の身元を偽装しない。Cloudflare既存bindings・varsを維持し、接続前後の値をレビューする。
-6. 通常Build/DeployではD1 migrationを実行しない。バックアップ・レビュー・適用・復旧方法を伴う別手順として、新Workerを配信する前に必要なmigrationの適用を記録する。今回の0127・0128・0129が未適用なら初回Buildを開始しない。
+6. 通常Build/DeployではD1 migrationを実行しない。バックアップ・レビュー・適用・復旧方法を伴う別手順として、新Workerを配信する前に必要なmigrationの適用を記録する。今回の0127・0128・0129・0130が未適用なら初回Buildを開始しない。
 7. Custom Domain `admin.atlasez.org`だけを本番確認先とし、`workers_dev`と`preview_urls`を無効にする。
 
 切替手順は[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照する。この方針・検証専用Workflowのレビュー済みmain反映を先に行い、旧Workflow定義で待機・実行中のActions deployを別途停止してrun ID・状態を記録する。Workflowのmergeだけでは既存runは取消されない。新しい定義にdeploy jobがないこと、旧runが残っていないこと、migration前提を確認してからWorkers Buildsを接続する。ActionsとWorkers Buildsの二経路を同時に有効にしない。

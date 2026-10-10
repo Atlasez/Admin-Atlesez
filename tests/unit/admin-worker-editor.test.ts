@@ -1783,8 +1783,8 @@ describe("admin worker editor APIs", () => {
         pending: 0,
         total: 1,
       });
-      expect(queries[0]).toContain("FROM editorial_documents WHERE id = ?");
-      expect(bindings[0]).toEqual(["document-1"]);
+      expect(queries[0]).toContain("WHERE id = ?");
+      expect(bindings[0]).toEqual(["document-1", 1]);
       expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.unstubAllGlobals();
