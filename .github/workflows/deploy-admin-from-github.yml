@@ -44,6 +44,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install xAI prototype dependencies
+        run: npm ci --prefix prototypes/xai
+
       - name: Verify deployment target
         run: npm run verify:deploy-config
 
