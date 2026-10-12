@@ -414,3 +414,22 @@ ADMINの現在Version・live `build-info.json`・認証済みChromeの過去記�
 - WEB-02は公開mainで再確認した依存監査のcriticalを含むため、一般募集の公開Go条件に既存PR #140の完了・公開後検証を維持する。PR branchの監査結果だけでmain/live解消とは扱わない。
 - Chromeの応募画面で確認した既存sessionの資格表示は、そのアカウントが専用テスト用であることや、他roleの認可境界を証明しない。利用可能なrole一覧、検証環境、合成データを管理する担当者が決まり、同意済み検証アカウントが提供された後に、権限別画面・URL/API・失効状態を`ADMIN_READINESS_ACCEPTANCE.md`の受入表に沿って実行する。
 - 本監査で実応募送信、実メール/Discord、会員状態変更、記事公開/削除、Cloudflare設定変更、deploy/rollback、D1書込み・migration・restoreは行っていない。Workers Buildsの復旧は引き続き外部復旧待ちで、Issue #509の次の状態変化を待つ。
+
+### 2026-10-13 応募メール再試行期限の修正（OPS-31 / P1）
+
+- **現在確認した不具合:** `src/lib/application-email-delivery.ts`はResendの24時間冪等性期間を、応募受付時に作られるキュー行の`created_at`で判定していた。受付からCron初回処理まで長く待った行は、初回provider要求が一時失敗した後、初回要求から24時間以内でも次のCronで`provider_idempotency_window_expired`へ終端化され、自動再試行されない。応募・運営タスクはメールとは別に保存されるが、応募者の受付/案内通知と運営通知が遅れる可能性があるためP1（限定運用の応募記録を失う問題ではないが、一般募集前に修正または担当者が確実に実行できる暫定手順が必要）とする。
+- **根本原因と修正:** D1 migration `0131_application_email_first_attempt.sql`で`first_attempt_at`を追加し、既存の試行済み行だけ`created_at`で保守的に補完する。dispatcherはprovider要求直前のclaim時刻を初回時刻として一度だけ保存し、その時刻から24時間以内だけ同じ冪等性キーを再利用する。attempt_count=0の古いpending行はqueue作成からの経過時間で止めず、試行済みで初回時刻が欠落した行は安全側で自動再送しない。Resendの24時間保持仕様は[公式発表](https://resend.com/changelog/idempotency-keys)を参照。
+- **隔離再現・回帰:** `.test`宛先とSQLite in-memory fixtureのみで、キュー作成を初回試行の3日前に設定し、初回503、6分後の同一キーでの再試行成功、`first_attempt_at`不変を確認した。migration fixtureでは未試行pending行をNULLのまま保持し、試行済み行を`created_at`へ補完し、両行の状態/件数が保たれることを確認。production D1、Resend実送信、応募実データは使用していない。
+- **データ/Worker影響:** additive D1 schema migrationが必要である。PRレビュー、承認済みバックアップ取得と適用前確認、migration実行・結果記録が完了するまで、新dispatcherコードを本番Workerへ反映してはならない。通常Buildがmigrationを適用することはない。適用前には固定D1 migration listとバックアップの最新性を再確認し、Workers Builds復旧後の正規main Build/Version/SHA照合を行う。rollbackはレビュー済みコード変更で行い、追加列をdropしたりD1行を直接書き換えたりしない。
+- **状態:** 修正・回帰テストはADMIN PR [#526](https://github.com/Atlasez/Admin-Atlesez/pull/526) branchに追加中。main/live未反映、migration未適用、Workers Builds復旧待ち。PR headとCIの確定結果は次回追補する。
+- **合格条件:** PR #526の該当headでCIと関連検証が成功し、承認済みバックアップ後にmigration `0131`の適用結果が記録され、正確なmain SHA・Workers Builds run/checkout SHA・固定Worker Version/100%配信・live `build-info.json`が一致する。その後の隔離受入で、3日滞留queueの503後再試行が同じキーで成功し、試行済み期限切れ/時刻不明行は送信されず要確認になることを確認する。
+
+### 2026-10-13 Discord連携解除のfail-closed修正（OPS-32 / P1）
+
+- **現在確認した不具合:** `/api/admin/member-discord-user`へ空のDiscord IDを保存すると、D1の連携行だけを削除して成功を返し、activeな`atlasez_member_discord_role_assignments`は残る。Discord上のロール解除は呼ばれないため、管理画面では連携解除済みに見えるのに外部権限が継続し得る。後続のアーカイブ時はOPS-20のガードが停止するが、先行する連携解除だけでもD1とDiscordの状態が乖離する。外部権限残留につながるためP1とする。
+- **修正・確認:** active割当が存在する間の連携解除を409で拒否し、会員設定でrole解除・同期成功を確認するよう案内する。隔離fixtureで拒否時に連携行とactive割当を保持すること、active割当をinactiveにした後の連携解除が成功することをunit testで確認した。Discord APIと本番データは使っていない。UIは既存のAPIエラー表示をmodal内に残す。
+- **次の操作/合格条件:** Discord運用担当が対象者の外部ロール削除と同期成功を確認してから連携を解除する。PR #526の該当headに回帰テストが含まれ、CI成功後、通常のmain配信と合成アカウント受入でactive割当がある解除は409・D1不変、解除済みroleのみの解除は成功することを確認する。実会員の連携解除は行わない。
+
+### 運営判断の一覧
+
+担当・代理・返信目安、限定運用上限、個人情報/監査ログ/backup保持、queue監視とalert、障害停止・復旧権限、休止時のDiscord role方針、Chrome受入環境の決定候補と影響は[運営決定票](ADMIN_OPERATIONAL_DECISIONS.md)に整理した。未決定の候補を実運用方針として扱わず、決定者role・証拠・開始への影響を記録する。

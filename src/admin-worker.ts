@@ -3262,6 +3262,21 @@ async function updateMemberDiscordUserId(
       { error: "参加者一覧に登録されていないメールアドレスです。" },
       404,
     );
+  if (!discordUserId) {
+    const activeAssignment = await env.REPORTS.prepare(
+      "SELECT 1 AS found FROM atlasez_member_discord_role_assignments WHERE lower(email)=lower(?) AND is_active=1 LIMIT 1",
+    )
+      .bind(email)
+      .first<{ found: number }>();
+    if (activeAssignment)
+      return json(
+        {
+          error:
+            "有効なDiscordロール割当が残っているため連携を解除できません。会員設定でロールを解除し、Discord同期成功を確認してから再試行してください。",
+        },
+        409,
+      );
+  }
   if (discordUserId) {
     if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID)
       return json(

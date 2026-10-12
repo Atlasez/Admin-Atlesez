@@ -28,6 +28,7 @@ type Delivery = {
   text_body: string;
   html_body: string;
   attempt_count: number;
+  first_attempt_at: string | null;
   created_at: string;
 };
 
@@ -112,15 +113,15 @@ export async function dispatchApplicationEmails(
   // 応募が短時間に集中してもキューを滞留させない。claim_tokenと
   // 条件付きUPDATEがあるため、複数の起動が同じ配信を二重送信することはない。
   // 15分を過ぎたsending claimを回収し、冪等性キーの保持期間内だけ再送する。
-  // created_atは最初のprovider request以前なので、24時間超の可能性がある
-  // sending/retryは自動送信せず、運営確認が必要な失敗として残す。
+  // 冪等性キーをproviderへ初めて渡す時刻を保持し、応募受付から初回配信までの
+  // 待ち時間が長くても、実際のキー保持期間を超えるまでは同じキーで再試行する。
   const limit = Math.min(100, Math.max(1, options.limit ?? 100));
   const outsideIdempotencyWindow = (await env.REPORTS.prepare(
     `UPDATE atlasez_application_email_deliveries
         SET status='failed',claim_token=NULL,claimed_at=NULL,
             last_error='provider_idempotency_window_expired',updated_at=?
       WHERE status IN ('sending','retry','pending') AND attempt_count>0
-        AND created_at<=?
+        AND (first_attempt_at IS NULL OR first_attempt_at<=?)
         AND (status!='sending' OR COALESCE(claimed_at,updated_at)<=?)`,
   )
     .bind(now, idempotencyWindowCutoff, staleClaimCutoff)
@@ -151,12 +152,12 @@ export async function dispatchApplicationEmails(
     });
 
   const ready = await env.REPORTS.prepare(
-    `SELECT id,recipient_email,subject,text_body,html_body,attempt_count,created_at
+    `SELECT id,recipient_email,subject,text_body,html_body,attempt_count,first_attempt_at,created_at
        FROM atlasez_application_email_deliveries
       WHERE attempt_count<? AND (
-        (status='pending' AND next_attempt_at<=?)
-        OR (status='retry' AND next_attempt_at<=? AND created_at>?)
-        OR (status='sending' AND created_at>?
+        (status='pending' AND next_attempt_at<=? AND (attempt_count=0 OR first_attempt_at>?))
+        OR (status='retry' AND next_attempt_at<=? AND first_attempt_at>?)
+        OR (status='sending' AND first_attempt_at>?
             AND COALESCE(claimed_at,updated_at)<=?)
       )
       ORDER BY CASE WHEN status='sending' THEN COALESCE(claimed_at,updated_at) ELSE next_attempt_at END ASC,
@@ -165,6 +166,7 @@ export async function dispatchApplicationEmails(
     .bind(
       MAX_ATTEMPTS,
       now,
+      idempotencyWindowCutoff,
       now,
       idempotencyWindowCutoff,
       idempotencyWindowCutoff,
@@ -186,11 +188,12 @@ export async function dispatchApplicationEmails(
     const claimToken = crypto.randomUUID();
     const claim = (await env.REPORTS.prepare(
       `UPDATE atlasez_application_email_deliveries
-          SET status='sending',claim_token=?,claimed_at=?,attempt_count=attempt_count+1,updated_at=?
+          SET status='sending',claim_token=?,claimed_at=?,first_attempt_at=COALESCE(first_attempt_at,?),
+              attempt_count=attempt_count+1,updated_at=?
         WHERE id=? AND attempt_count<? AND (
-          (status='pending' AND next_attempt_at<=?)
-          OR (status='retry' AND next_attempt_at<=? AND created_at>?)
-          OR (status='sending' AND created_at>?
+          (status='pending' AND next_attempt_at<=? AND (attempt_count=0 OR first_attempt_at>?))
+          OR (status='retry' AND next_attempt_at<=? AND first_attempt_at>?)
+          OR (status='sending' AND first_attempt_at>?
               AND COALESCE(claimed_at,updated_at)<=?)
         )`,
     )
@@ -198,9 +201,11 @@ export async function dispatchApplicationEmails(
         claimToken,
         now,
         now,
+        now,
         delivery.id,
         MAX_ATTEMPTS,
         now,
+        idempotencyWindowCutoff,
         now,
         idempotencyWindowCutoff,
         idempotencyWindowCutoff,

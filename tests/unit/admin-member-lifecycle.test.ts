@@ -122,6 +122,17 @@ const removalRequest = (email: string) =>
     },
   );
 
+const discordUnlinkRequest = (email: string) =>
+  new Request("https://admin.example/api/admin/member-discord-user", {
+    method: "PUT",
+    headers: {
+      "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+      origin: "https://admin.example",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ email, discordUserId: "" }),
+  });
+
 it("archives and restores only operational scopes while retaining member data and audit history", async () => {
   const { db, environment } = createEnvironment();
   db.prepare(
@@ -474,6 +485,68 @@ it("keeps Atlas and Discord permissions intact when removal cannot sync a linked
       )
       .get("member@example.org"),
   ).toMatchObject({ is_active: 1 });
+});
+
+it("blocks Discord unlink while active Discord role assignments remain", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    "INSERT INTO atlasez_member_discord_accounts (email,discord_user_id) VALUES (?,?)",
+  ).run("member@example.org", "123456789012345678");
+
+  const response = await worker.fetch(
+    discordUnlinkRequest("member@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(409);
+  await expect(response.json()).resolves.toMatchObject({
+    error: expect.stringContaining("有効なDiscordロール割当"),
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT discord_user_id FROM atlasez_member_discord_accounts WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toEqual({ discord_user_id: "123456789012345678" });
+  expect(
+    db
+      .prepare(
+        "SELECT is_active FROM atlasez_member_discord_role_assignments WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ is_active: 1 });
+});
+
+it("allows Discord unlink after all active Discord role assignments are removed", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    "INSERT INTO atlasez_member_discord_accounts (email,discord_user_id) VALUES (?,?)",
+  ).run("member@example.org", "123456789012345678");
+  db.prepare(
+    "UPDATE atlasez_member_discord_role_assignments SET is_active=0 WHERE email=?",
+  ).run("member@example.org");
+
+  const response = await worker.fetch(
+    discordUnlinkRequest("member@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(200);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_discord_accounts WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT is_active FROM atlasez_member_discord_role_assignments WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ is_active: 0 });
 });
 
 it("allows Atlas removal when no Discord account is linked", async () => {

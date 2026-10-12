@@ -65,6 +65,7 @@ function environment() {
       next_attempt_at TEXT NOT NULL,
       claim_token TEXT,
       claimed_at TEXT,
+      first_attempt_at TEXT,
       sent_at TEXT,
       last_error TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
@@ -91,13 +92,14 @@ function insertDelivery(
     claimToken: string | null;
     now: string;
     createdAt?: string;
+    firstAttemptAt?: string | null;
   },
 ) {
   db.prepare(
     `INSERT INTO atlasez_application_email_deliveries
       (id,recipient_email,subject,text_body,html_body,status,attempt_count,
-       next_attempt_at,claim_token,claimed_at,created_at,updated_at)
-     VALUES (?,?,'Test','Text','<p>Test</p>',?,?,?, ?,?,?,?)`,
+       next_attempt_at,claim_token,claimed_at,first_attempt_at,created_at,updated_at)
+     VALUES (?,?,'Test','Text','<p>Test</p>',?,?,?,?,?,?,?,?)`,
   ).run(
     delivery.id,
     `${delivery.id}@atlasez.test`,
@@ -106,6 +108,11 @@ function insertDelivery(
     delivery.now,
     delivery.claimToken,
     delivery.claimedAt,
+    delivery.firstAttemptAt === undefined
+      ? delivery.attemptCount > 0
+        ? (delivery.createdAt ?? delivery.now)
+        : null
+      : delivery.firstAttemptAt,
     delivery.createdAt ?? delivery.now,
     delivery.claimedAt ?? delivery.now,
   );
@@ -264,6 +271,75 @@ it("retries a stale sending claim just inside the provider idempotency window", 
       )
       .get("inside-window-delivery"),
   ).toMatchObject({ status: "sent" });
+});
+
+it("keeps the provider idempotency window anchored to the first attempt, not queue creation", async () => {
+  const { db, env } = environment();
+  const firstAttemptAt = new Date("2026-10-10T00:00:00.000Z");
+  const queuedAt = new Date(firstAttemptAt.getTime() - 3 * 24 * 60 * 60_000);
+  insertDelivery(db, {
+    id: "long-waiting-delivery",
+    status: "pending",
+    attemptCount: 0,
+    claimedAt: null,
+    claimToken: null,
+    now: firstAttemptAt.toISOString(),
+    createdAt: queuedAt.toISOString(),
+  });
+
+  const idempotencyKeys: string[] = [];
+  const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+    idempotencyKeys.push(
+      new Headers(init?.headers).get("Idempotency-Key") ?? "",
+    );
+    return new Response("{}", {
+      status: idempotencyKeys.length === 1 ? 503 : 200,
+    });
+  });
+  const logger = { info: vi.fn(), error: vi.fn() };
+
+  expect(
+    await dispatchApplicationEmails(env, {
+      now: firstAttemptAt,
+      fetcher,
+      logger,
+    }),
+  ).toMatchObject({ sent: 0, failed: 1, skipped: false });
+  expect(
+    db
+      .prepare(
+        "SELECT status,attempt_count,first_attempt_at FROM atlasez_application_email_deliveries WHERE id=?",
+      )
+      .get("long-waiting-delivery"),
+  ).toMatchObject({
+    status: "retry",
+    attempt_count: 1,
+    first_attempt_at: firstAttemptAt.toISOString(),
+  });
+
+  expect(
+    await dispatchApplicationEmails(env, {
+      now: new Date(firstAttemptAt.getTime() + 6 * 60_000),
+      fetcher,
+      logger,
+    }),
+  ).toMatchObject({ sent: 1, failed: 0, skipped: false });
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(idempotencyKeys).toEqual([
+    "atlasez-application-long-waiting-delivery",
+    "atlasez-application-long-waiting-delivery",
+  ]);
+  expect(
+    db
+      .prepare(
+        "SELECT status,attempt_count,first_attempt_at FROM atlasez_application_email_deliveries WHERE id=?",
+      )
+      .get("long-waiting-delivery"),
+  ).toMatchObject({
+    status: "sent",
+    attempt_count: 2,
+    first_attempt_at: firstAttemptAt.toISOString(),
+  });
 });
 
 it("fails closed for a stale sending claim just outside the provider idempotency window", async () => {
