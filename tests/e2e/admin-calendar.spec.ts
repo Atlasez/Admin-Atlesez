@@ -72,6 +72,60 @@ test("管理タブはプロジェクト遷移後も管理トップへ直接遷�
   await expectProjectManageLink(page, "secretariat");
 });
 
+test("カレンダー設定は初期化中のクリックを取りこぼさない", async ({ page }) => {
+  await page.route("**/api/admin/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/auth-status")) {
+      await route.fulfill({
+        json: { email: "manager@example.com", isManager: true },
+      });
+      return;
+    }
+    if (pathname.endsWith("/profile")) {
+      await route.fulfill({ json: { profile: { display_name: "管理者" } } });
+      return;
+    }
+    if (pathname.endsWith("/notifications")) {
+      await route.fulfill({ json: { notifications: [] } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        scope: { isManager: true, email: "manager@example.com" },
+        project: { id: "secretariat", slug: "secretariat", name: "事務局" },
+        projects: [],
+        tasks: [],
+        events: [],
+        progress: [],
+        members: [],
+        availabilityBlocks: [],
+        availabilityRules: [],
+        pagination: { hasMore: false, limit: 50 },
+        eventPagination: { hasMore: false, limit: 50 },
+        progressPagination: { hasMore: false, limit: 50 },
+      },
+    });
+  });
+  await page.route("**/_astro/*.js", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
+
+  await page.goto("admin/calendar/?project=secretariat", {
+    waitUntil: "domcontentloaded",
+  });
+
+  const openSettings = page.locator("[data-open-calendar-settings]");
+  await expect(openSettings).toBeDisabled();
+  await expect(page.locator("[data-calendar-settings-status]")).toHaveText(
+    "カレンダーを準備しています…",
+  );
+  await openSettings.click();
+  await expect(page.locator("[data-calendar-settings-dialog]")).toBeVisible();
+  await expect(openSettings).toBeEnabled();
+  await expect(page.locator("[data-calendar-settings-status]")).toBeHidden();
+});
+
 test("予定の取得に失敗してもカレンダーを表示する", async ({ page }) => {
   const now = new Date();
   const expectedDays = new Date(
@@ -546,6 +600,7 @@ for (const endpoint of ["operations", "member-calendar"]) {
     );
     // Select Tokyo explicitly so this assertion does not depend on the test runner's timezone.
     await page.locator("[data-open-calendar-settings]").click();
+    await expect(page.locator("[data-calendar-settings-dialog]")).toBeVisible();
     await page.locator("[data-calendar-timezone]").fill("Asia/Tokyo");
     await page.locator("[data-close-calendar-settings]").click();
     await expect(
@@ -564,6 +619,7 @@ for (const endpoint of ["operations", "member-calendar"]) {
       requests.some((url) => url.searchParams.get("eventCursor") === "50"),
     ).toBe(true);
     await page.locator("[data-open-calendar-settings]").click();
+    await expect(page.locator("[data-calendar-settings-dialog]")).toBeVisible();
     await page.locator("[data-calendar-timezone]").fill("America/New_York");
     await page.locator("[data-close-calendar-settings]").click();
     await expect(page.locator("[data-event-list] .item")).toHaveCount(70);
