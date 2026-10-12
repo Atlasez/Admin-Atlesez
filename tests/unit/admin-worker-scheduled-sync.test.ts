@@ -7,6 +7,8 @@ class SyncStatement {
   constructor(
     readonly query: string,
     readonly onRun: (query: string, values: unknown[]) => void,
+    readonly onFirst: (query: string, values: unknown[]) => unknown = () =>
+      null,
   ) {}
 
   bind(...values: unknown[]) {
@@ -31,7 +33,7 @@ class SyncStatement {
   }
 
   async first<T>() {
-    return null as T | null;
+    return this.onFirst(this.query, this.values) as T | null;
   }
 
   async run() {
@@ -93,7 +95,14 @@ describe("admin scheduled GitHub syncs", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       const url = String(input);
       requests.push(url);
-      if (url.includes("/git/trees/main?recursive=1"))
+      if (url.includes("/commits/main"))
+        return new Response(
+          JSON.stringify({
+            sha: "head-sha",
+            commit: { tree: { sha: "tree-sha" } },
+          }),
+        );
+      if (url.includes("/git/trees/tree-sha?recursive=1"))
         return new Response(
           JSON.stringify({
             tree: Array.from({ length: 9 }, (_, index) => ({
@@ -121,19 +130,70 @@ describe("admin scheduled GitHub syncs", () => {
         },
       });
 
-      expect(requests).toHaveLength(9);
+      expect(requests).toHaveLength(10);
       expect(
         requests.filter((url) => url.includes("/git/trees/")),
       ).toHaveLength(1);
+      expect(requests[0]).toContain("/commits/main");
       expect(
         executed.find((entry) =>
           entry.query.includes("admin_worker_sync_checkpoints"),
         )?.values,
       ).toEqual([
         "published-article-backups",
-        "src/content/articles/ja/math/overview/article-8.md",
+        JSON.stringify({
+          version: 1,
+          commitSha: "head-sha",
+          treeSha: "tree-sha",
+          cursor: "src/content/articles/ja/math/overview/article-8.md",
+          complete: false,
+        }),
         expect.any(String),
       ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("skips the recursive tree scan when main has not changed", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+      return new Response(
+        JSON.stringify({
+          sha: "head-sha",
+          commit: { tree: { sha: "tree-sha" } },
+        }),
+      );
+    });
+    try {
+      await runScheduled("1-59/2 * * * *", {
+        GITHUB_PUBLISH_TOKEN: "test-token",
+        REPORTS: {
+          prepare: (query: string) =>
+            new SyncStatement(
+              query,
+              () => {},
+              (_statement, values) =>
+                values[0] === "published-article-backups"
+                  ? {
+                      cursor: JSON.stringify({
+                        version: 1,
+                        commitSha: "head-sha",
+                        treeSha: "tree-sha",
+                        cursor: null,
+                        complete: true,
+                      }),
+                    }
+                  : null,
+            ),
+        },
+      });
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]).toContain("/commits/main");
+      expect(requests[0]).not.toContain("/git/trees/");
     } finally {
       vi.unstubAllGlobals();
     }
