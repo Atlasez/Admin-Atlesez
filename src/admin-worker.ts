@@ -18006,6 +18006,34 @@ async function storeArticleBackup(
 
 const WORKER_SYNC_PAGE_SIZE = 8;
 
+type PublishedArticleBackupState = {
+  version: 1;
+  commitSha: string;
+  treeSha: string;
+  cursor: string | null;
+  complete: boolean;
+};
+
+function parsePublishedArticleBackupState(
+  cursor: string | null,
+): PublishedArticleBackupState | null {
+  if (!cursor) return null;
+  try {
+    const value = JSON.parse(cursor) as Partial<PublishedArticleBackupState>;
+    if (
+      value.version === 1 &&
+      typeof value.commitSha === "string" &&
+      typeof value.treeSha === "string" &&
+      (typeof value.cursor === "string" || value.cursor === null) &&
+      typeof value.complete === "boolean"
+    )
+      return value as PublishedArticleBackupState;
+  } catch {
+    // 旧形式のパスだけを保存したチェックポイントは、新しい形式で再走査する。
+  }
+  return null;
+}
+
 async function readWorkerSyncCursor(env: Env, job: string) {
   const row = await env.REPORTS.prepare(
     "SELECT cursor FROM admin_worker_sync_checkpoints WHERE job = ?",
@@ -18040,8 +18068,34 @@ async function syncPublishedArticleBackups(env: Env) {
     "user-agent": "atlasez-editorial-backup",
     "x-github-api-version": "2022-11-28",
   };
+  const commitResponse = await fetch(
+    `https://api.github.com/repos/${repository}/commits/main`,
+    { headers },
+  );
+  if (!commitResponse.ok)
+    throw new Error("GitHubのバックアップ対象の更新を確認できませんでした。");
+  const commit = (await commitResponse.json()) as {
+    sha?: string;
+    commit?: { tree?: { sha?: string } };
+  };
+  if (!commit.sha || !commit.commit?.tree?.sha)
+    throw new Error("GitHubのバックアップ対象のcommit/tree SHAを取得できませんでした。");
+
+  const savedState = parsePublishedArticleBackupState(
+    await readWorkerSyncCursor(env, "published-article-backups"),
+  );
+  if (savedState?.complete && savedState.commitSha === commit.sha)
+    return { synced: 0, skipped: true, reason: "unchanged" };
+
+  // 途中までの走査は同じGit treeから続ける。同期中にmainが進んでも、
+  // 先に現在のtreeを最後まで処理し、次回実行で新しいcommitを拾う。
+  const commitSha =
+    savedState && !savedState.complete ? savedState.commitSha : commit.sha;
+  const treeSha =
+    savedState && !savedState.complete ? savedState.treeSha : commit.commit.tree.sha;
+  const cursor = savedState && !savedState.complete ? savedState.cursor : null;
   const treeResponse = await fetch(
-    `https://api.github.com/repos/${repository}/git/trees/main?recursive=1`,
+    `https://api.github.com/repos/${repository}/git/trees/${treeSha}?recursive=1`,
     { headers },
   );
   if (!treeResponse.ok)
@@ -18049,7 +18103,6 @@ async function syncPublishedArticleBackups(env: Env) {
   const tree = (await treeResponse.json()) as {
     tree?: { path?: string; type?: string; sha?: string }[];
   };
-  const cursor = await readWorkerSyncCursor(env, "published-article-backups");
   const articles = (tree.tree ?? []).filter(
     (entry) =>
       entry.type === "blob" &&
@@ -18097,7 +18150,13 @@ async function syncPublishedArticleBackups(env: Env) {
   await writeWorkerSyncCursor(
     env,
     "published-article-backups",
-    hasMore ? page.at(-1)?.path ?? null : null,
+    JSON.stringify({
+      version: 1,
+      commitSha,
+      treeSha,
+      cursor: hasMore ? page.at(-1)?.path ?? null : null,
+      complete: !hasMore,
+    } satisfies PublishedArticleBackupState),
   );
   return { synced, skipped: false, processed: page.length, hasMore };
 }
