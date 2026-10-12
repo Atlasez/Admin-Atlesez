@@ -701,6 +701,19 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     padding: 0 !important;
     width: 1.55rem;
   }
+  @media (max-width: 700px) {
+    .calendar-cell-header {
+      height: 2.5rem;
+    }
+    .calendar-date-select {
+      height: 2.375rem;
+      width: 2.375rem;
+    }
+    .calendar-head button {
+      min-height: 2.5rem;
+      min-width: 2.5rem;
+    }
+  }
   .calendar-cell-content {
     display: grid;
     gap: 0.22rem;
@@ -739,7 +752,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   @media (max-width: 700px) {
     .calendar-cell {
       min-height: 4.6rem;
-      padding: 0.25rem;
+      padding: 0.15rem;
     }
     .calendar-event {
       font-size: 0.58rem;

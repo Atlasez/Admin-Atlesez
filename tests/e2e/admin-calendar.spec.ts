@@ -174,6 +174,7 @@ test("カレンダーの日付は矢印キーで移動しTab stopを一つに保
   page,
 }) => {
   await page.clock.install({ time: new Date("2026-10-13T12:00:00Z") });
+  await page.setViewportSize({ width: 375, height: 812 });
   await page.route("**/api/admin/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname.endsWith("/auth-status")) {
@@ -217,6 +218,39 @@ test("カレンダーの日付は矢印キーで移動しTab stopを一つに保
     '[data-calendar-date="2026-10-02"] [data-calendar-select]',
   );
   await expect(dateButtons).toHaveCount(31);
+  const dateTargets = await dateButtons.evaluateAll((buttons) =>
+    buttons.map((button) => {
+      const rect = button.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    }),
+  );
+  expect(
+    Math.min(...dateTargets.map((target) => target.width)),
+  ).toBeGreaterThanOrEqual(38);
+  expect(
+    Math.min(...dateTargets.map((target) => target.height)),
+  ).toBeGreaterThanOrEqual(38);
+  const monthNavigationTargets = await page
+    .locator("[data-calendar-prev], [data-calendar-next]")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return { width: rect.width, height: rect.height };
+      }),
+    );
+  expect(
+    Math.min(...monthNavigationTargets.map((target) => target.width)),
+  ).toBeGreaterThanOrEqual(40);
+  expect(
+    Math.min(...monthNavigationTargets.map((target) => target.height)),
+  ).toBeGreaterThanOrEqual(40);
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth <=
+        document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
   await expect(firstDate).toHaveAttribute("tabindex", "0");
   await expect(secondDate).toHaveAttribute("tabindex", "-1");
   expect(
