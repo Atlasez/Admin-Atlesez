@@ -49,7 +49,7 @@
     "cytoscape": "^3.30.0",
     "date-holidays": "^3.35.0",
     "hast-util-from-html": "^2.0.3",
-    "katex": "^0.16.0",
+    "katex": "0.18.10",
     "node-tikzjax": "^1.0.5",
     "rehype-katex": "^7.0.0",
     "remark-math": "^6.0.0",
@@ -68,5 +68,8 @@
     "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.10",
     "wrangler": "4.149.0"
+  },
+  "overrides": {
+    "katex": "$katex"
   }
 }

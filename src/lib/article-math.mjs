@@ -125,6 +125,7 @@ export function rehypeArticleKatex() {
     return rehypeKatex({
       throwOnError: false,
       strict: "warn",
+      trust: false,
       macros,
     })(tree, file);
   };
