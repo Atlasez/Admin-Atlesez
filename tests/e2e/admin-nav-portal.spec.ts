@@ -217,6 +217,35 @@ test("XAI風の独立ポータル案で既存の項目と操作を表示する",
       },
     ],
   });
+  const selectors = [
+    ".portal",
+    ".portal h1",
+    ".portal .application-link",
+    ".portal .portal-summary-item strong",
+    ".portal .project-entry-card strong",
+    ".portal .home-section",
+  ];
+  const readTypographyAndPalette = async () =>
+    Promise.all(
+      selectors.map((selector) =>
+        page
+          .locator(selector)
+          .first()
+          .evaluate((element) => {
+            const style = getComputedStyle(element);
+            return {
+              fontFamily: style.fontFamily,
+              fontSize: style.fontSize,
+              fontWeight: style.fontWeight,
+              color: style.color,
+              backgroundColor: style.backgroundColor,
+            };
+          }),
+      ),
+    );
+
+  await page.goto("admin/portal/");
+  const sourceTypographyAndPalette = await readTypographyAndPalette();
   await page.goto("admin/portal-prototype/");
 
   const prototype = page.locator(".portal-xai");
@@ -236,7 +265,14 @@ test("XAI風の独立ポータル案で既存の項目と操作を表示する",
   await expect(prototype.locator(".todo-card")).toContainText(
     "プロトタイプの表示確認",
   );
-  await expect(prototype).toHaveCSS("background-color", "rgb(8, 8, 8)");
+  expect(await readTypographyAndPalette()).toEqual(sourceTypographyAndPalette);
+  await expect
+    .poll(() =>
+      prototype
+        .locator("> header > div")
+        .evaluate((element) => getComputedStyle(element, "::before").content),
+    )
+    .toBe("none");
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect
