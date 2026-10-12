@@ -1,4 +1,4 @@
-import { cp, mkdir, rm } from "node:fs/promises";
+import { access, cp, mkdir, rm, symlink } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -12,6 +12,8 @@ const repositoryRoot = path.resolve(
 const prototypeRoot = path.join(repositoryRoot, "prototypes", "xai");
 const prototypeOutput = path.join(prototypeRoot, "dist");
 const deployedOutput = path.join(repositoryRoot, "dist", "xai-prototype");
+const prototypeNodeModules = path.join(prototypeRoot, "node_modules");
+const rootNodeModules = path.join(repositoryRoot, "node_modules");
 const astroCli = path.join(
   repositoryRoot,
   "node_modules",
@@ -19,6 +21,24 @@ const astroCli = path.join(
   "bin",
   "astro.mjs",
 );
+
+try {
+  await access(path.join(prototypeNodeModules, "astro/tsconfigs/strict.json"));
+} catch {
+  await access(path.join(rootNodeModules, "astro/tsconfigs/strict.json"));
+  try {
+    await symlink(
+      rootNodeModules,
+      prototypeNodeModules,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    await access(
+      path.join(prototypeNodeModules, "astro/tsconfigs/strict.json"),
+    );
+  }
+}
 
 const result = spawnSync(process.execPath, [astroCli, "build"], {
   cwd: prototypeRoot,
