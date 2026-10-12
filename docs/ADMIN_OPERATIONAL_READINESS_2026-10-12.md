@@ -373,7 +373,7 @@ ADMINの現在Version・live `build-info.json`・認証済みChromeの過去記�
 ### 対象ref・既存作業の再照合
 
 - `git ls-remote`でADMIN `main`=`e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`、公開サイト `main`=`17abea4ed6eeb97719dee60f57bc6b26d5d2d53a`を再確認。監査時点で両方とも変化なし。
-- ADMIN PR [#526](https://github.com/Atlasez/Admin-Atlesez/pull/526)はhead `a364c8e054a5af574fc1ca9647533baaaa849f98`でOPEN、CI [38283474824](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38283474824)とmacOS native [38283474927](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38283474927)は成功。OPS-28等の修正はこのPR branch上であり、main/liveへは未反映。
+- ADMIN PR [#526](https://github.com/Atlasez/Admin-Atlesez/pull/526)はChrome監査追補時点のhead `7d914eb1e39f974a86061c04e06b6b94e5042234`でOPEN、CI [38285171896](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38285171896)とmacOS native [38285172089](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38285172089)は成功。OPS-28等の修正はこのPR branch上であり、main/liveへは未反映。
 - [Issue #509](https://github.com/Atlasez/Admin-Atlesez/issues/509)はOPEN、最終更新は2026-10-10。最新コメント[#6100818104](https://github.com/Atlasez/Admin-Atlesez/issues/509#issuecomment-6100818104)以降の復旧証拠は見つからなかった。既存のtoken識別・権限調査は繰り返していない。
 - 公開PR [#140](https://github.com/Atlasez/Atlasez01/pull/140)はhead `1d7fe0c07b76d1fff0b54c67198780931ff4f720`でOPEN、CI [38255387617](https://github.com/Atlasez/Atlasez01/actions/runs/38255387617)成功、既存protectionにより`REVIEW_REQUIRED`。保護設定は変更していない。
 - 公開PR [#141](https://github.com/Atlasez/Atlasez01/pull/141)はhead `bb5e79bf60911050e17d09341f5b007799386953`でOPEN、CI [38284756912](https://github.com/Atlasez/Atlasez01/actions/runs/38284756912)成功。mobile navigationと問い合わせページの文言修正を含むが、main/live未反映。
