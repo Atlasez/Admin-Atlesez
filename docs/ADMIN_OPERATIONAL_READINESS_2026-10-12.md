@@ -292,13 +292,20 @@ ADMINの現在Version・live `build-info.json`・認証済みChromeの過去記�
 
 - Issue #509を全コメントページから再取得。最新更新は2026-10-10のBuild token識別訂正[#6100818104](https://github.com/Atlasez/Admin-Atlesez/issues/509#issuecomment-6100818104)で、以後の復旧記録はない。ADMIN `main`は`e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`、公開`main`は`17abea4ed6eeb97719dee60f57bc6b26d5d2d53a`のまま。ADMIN required approving review countは0、公開側は既存の1。どちらも保護設定を変更していない。
 - PR #526の追加回帰修正: 審査stage境界の原稿API認可、同一応募の並行POST、primary adminの誤アーカイブ、Discord通信失敗ログのメール/例外漏えい、期限済み通知50件による後続タスク飢餓を隔離テストで再現して修正。新規記事報告hash/contact削除だけは`ADMIN_PERSONAL_DATA_RETENTION_ENABLED=true`のopt-inにした。未設定でも既存のsession、rate limit、採否確定済み応募の整理は継続する。直接production deployのpackage commandを削除し、dry-run commandに置換。
-- PR #526対象branchの最新ローカル検証: `npm run verify:deploy-config`成功、`npm run check`は340 files / 0 errors / 0 warnings / 10既存hints、`npm run lint`成功、`npm test`は69 files / 533 tests pass、`npm run format:check`・`git diff --check`成功。E2Eは`E2E_PORT=49732 npm run test:e2e`で377 pass / 14 skip。skipは実サービス接続をするopt-in live smokeで、OAuth/外部通知を検証していない。ADMIN buildとbuild-infoはPR branchの最終commit後に再実行し、生成SHAを照合する。
+- PR #526 branchの追加コード検証（commit `0416266a87fd31c63ccc9120f6dcdf095db5d991`）: `npm run verify:deploy-config`成功、`npm run check`は340 files / 0 errors / 0 warnings / 10既存hints、`npm run lint`成功、`npm test`は69 files / 538 tests pass、`npm run format:check`・`git diff --check`成功。ADMIN buildと`npm run verify:build-info`も成功し、build-info SHAは同commitと一致。E2Eは`E2E_PORT=49732 npm run test:e2e`で378 pass / 14 skip。skipはopt-in production smokeで、OAuth/外部通知を検証していない。
 - 公開PR #140の既存branchで募集ページの問い合わせ案内、記事報告の保持説明とE2Eを修正。公開mainは記事報告hash/contactを現在のCronで自動削除していないこと、保持期間は未決定であること、設定されたsalt Secretがなければ報告を受付停止することを説明する。旧E2Eの7/30/180日自動削除前提を実際のmainの挙動に合わせた。公開build完了後のfull E2Eは79 pass。初回E2Eは編集前の`dist`を配信していたため旧文言を読んで失敗し、ソース更新後にbuildし直してから全件passした。production設定・実送信・記事公開は行っていない。
 - ADMINの旧Build接続案3件と旧Google OAuth移行手順、2026-08-27障害記録に履歴注記を追加した。現在の復旧・認証・配信基準を現行policy/Issue #509へ一本化し、過去SHA・token名・`ADMIN_AUTH_MODE`・古いmigration手順を現行操作として誤実行しないようにした。
 - 追加の読み取り監査でOPS-19〜26を登録。390px応募管理のメニューaccessible name、会員削除時のDiscord `skipped`、公開概念APIのmain直接書込み、backup item失敗時のcheckpoint、記事backupの保持上限、Discord終端再試行案内、GitHub App部分設定診断、応募処理例外ログを追跡した。OPS-19/20/21/25/26はPR #526用worktreeで修正と回帰testを追加。OPS-22〜24は本番影響または運営方針が未確認のため、診断/手順・決定待ちとして記録。
-- 隔離確認: 会員lifecycle・project access・developer diagnostics・操作境界のunit 25件pass、390px応募管理 axe E2E 1件pass。ADMIN buildは実施し、menu sourceを含むが、後続worker修正後の最終build/全CI相当検証はこの追補の末尾で実施する。実Google OAuth完了、実メール、実Discord、本番D1/Cloudflare操作は未実施。
+- 隔離確認: 会員lifecycle・project access・developer diagnostics・操作境界のunit 25件pass、390px応募管理 axe E2E 1件pass。commit `0416266a87fd31c63ccc9120f6dcdf095db5d991`で全ローカル検証とADMIN buildを再実施した。実Google OAuth完了、実メール、実Discord、本番D1/Cloudflare操作は未実施。
 - PR #526 code commit `534dc3e23ab744e3598adfad9bd5c99985300674` のGitHub CI [38245759130](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38245759130) とmacOS native run [38245759139](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38245759139)、公開PR #140 commit `7e8ab8d63c84f4f2dc1a0d887f02f21447d40275` のCI [38245760102](https://github.com/Atlasez/Atlasez01/actions/runs/38245760102) はすべて成功。PRは両方OPEN。公開PR #140は既存required approving review count 1により`REVIEW_REQUIRED`。ADMINは0を維持。どちらも保護設定を変えていない。
-- PR #526/#140とも既存のOPEN PRだけを更新対象とする。No merge・Deployを行わない。今回のCIは上記code/docs follow-up commitで成功しているが、ここに追加した履歴注記とCI記録を含む次の監査文書commitには独立のCIが必要。
+- 既存のOPEN PR #526/#140だけを更新対象とする。PR #526はmergeしておらず、本番deployも行っていない。
+
+### 2026-10-12 最新head・CI再確認
+
+- 最新ADMIN `main`を`git ls-remote`で再確認: `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`。公開サイト`main`: `17abea4ed6eeb97719dee60f57bc6b26d5d2d53a`。既存公開PR #140はhead `7e8ab8d63c84f4f2dc1a0d887f02f21447d40275`、OPEN。ADMIN PR #526はhead `0416266a87fd31c63ccc9120f6dcdf095db5d991`、baseは上記ADMIN main、OPEN。
+- PR #526 code headのGitHub CI [38249724433](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38249724433)は6分6秒でsuccess。verify-deploy-config、check、lint、format、unit、build、build-info SHA、内部リンク、E2E/axe、Lighthouseの全stepが成功。macOS native regression [38249724330](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38249724330)もsuccess。
+- 最新の読み取り専用live確認: `https://admin.atlasez.org/build-info.json`はHTTP 200でmain SHA `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`、`builtAt`は`2026-10-10T18:21:54.113Z`。固定Workerのdeployment listでは最新100% Version `d4387787-e85e-4de4-8973-5795bd634149`、Source `Unknown (deployment)`。Issue #509はOPENで、最新更新は2026-10-10のtoken識別訂正コメントのまま。Workers Builds復旧成功の新証拠はないためNO-GOを維持する。
+- この追補のコード・文書変更はPR branchの内容であり、本番へ反映していない。実OAuth、実メール/Discord、ログイン後の実権限、Cloudflare Cronの実行履歴、バックアップ保存先と実測RPO/RTO、実機スクリーンリーダー/200%表示は引き続き未検証または外部受入待ち。
 
 ### 外部依存と次の担当操作
 
