@@ -1,6 +1,6 @@
 # x.ai independent UI prototype
 
-This is a standalone visual prototype based on observation of public pages at [x.ai](https://x.ai/). Its source, build, navigation, and interactions are isolated under `prototypes/xai/`. The ADMIN Worker only exposes the read-only static output at `/xai-prototype/`; the prototype has no ADMIN navigation, authentication, API, D1, or Durable Object integration. It includes a visible non-affiliation notice and `noindex` metadata.
+This is a standalone visual prototype based on observation of public pages at [x.ai](https://x.ai/). Its source, build, navigation, and interactions are isolated under `prototypes/xai/`. The ADMIN Worker serves its read-only static output at `/xai-prototype/` only after the existing developer-mode authorization succeeds; both the document and nested assets are protected server-side. The prototype has no ADMIN API, D1, or Durable Object integration. It includes a visible non-affiliation notice and `noindex` metadata.
 
 The prototype has its own Astro static site and direct routes for Home, Company, Careers, News and its 84 story pages, Colossus, API, Pricing, Grok, Build, Bot, Imagine, and Voice. Product actions that would require an account or backend open official public product/docs pages; local demos are labelled as visual-only and do not call xAI APIs.
 
@@ -15,7 +15,7 @@ npm run dev
 
 Astro serves at `http://localhost:4321` by default. You can open every route directly, for example `/company/`, `/api/`, `/pricing/`, and `/colossus/`.
 
-The ADMIN production build uses the root project's Astro installation, builds this site with the `/xai-prototype/` base path, and copies its static output to `dist/xai-prototype/`. Its production URL is `https://admin.atlasez.org/xai-prototype/` after the reviewed `main` change is deployed through Workers Builds.
+The ADMIN production build uses the root project's Astro installation, builds this site with the `/xai-prototype/` base path, and copies its static output to `dist/xai-prototype/`. Its URL is `https://admin.atlasez.org/xai-prototype/` after the reviewed `main` change is deployed through Workers Builds; access is limited to accounts accepted by the ADMIN developer-mode authorization.
 
 ## Build and check
 
