@@ -576,3 +576,13 @@ Cron診断は「正常」「1分・5分・毎時の定期処理を設定して�
 - **PR CI:** docs head `063c385430d84e07e033b8310a1b6f0b7bf5a072`でverify [38320271022](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38320271022)（E2E/axe、Lighthouse含む）とnative [38320270911](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38320270911)がともにSUCCESS。source/test commit `e344c0e...`の変更を含む。PR OPEN・未merge。次の記録追補headはこの検証後に作成し、現在の確認状況はPR本文の最新headで確認する。
 - **分類・受入:** P2。個別一括選択のタッチ精度を損ねるが、keyboardや個別の行導線は残り、応募・データ閲覧の制御は損なわないため限定運用停止ではない。担当はADMIN frontend maintainer。PR #526の新head CIを確認し、main/live反映後は同じprimary-admin画面で全個別checkboxが24×24px以上であること、横overflowがないことを再確認する。今の修正は本番未反映。
 - **確認範囲の補足:** 同じCSS viewport 375×812で`/admin/member-tasks/`も開き、document幅375px・scrollWidth 375pxを確認した。画面操作・タスク更新はしていない。ARIA-hiddenかつ画面外へclipされたfallback `<select>`は見た目上のコントロールとして数えない。実スクリーンリーダー・他roleは未確認。
+
+### 2026-10-13 Chrome mobile portal audit: OPS-40
+
+- **現在確認:** 認証済みprimary-adminのChromeで本番`https://admin.atlasez.org/admin/portal/`を375×812 CSS pxで表示。ズーム倍率は未測定。document幅375pxで横overflowはなかった。ヘッダーを読み取り、メニューを開いて寸法を測った。ログアウトやデータ操作はしていない。表示中のアカウント情報を含む画面キャプチャは保存していない。
+- **不具合台帳: OPS-40 / P2。** ロゴリンク約35×35px、メニュー約30×37px、アクションセンター約31×34px、コマンド約40×40px、通知約41×41px、プロフィール約34×34px、ログアウト約63×32px。開いたメニュー内の一部リンクも高さ約42pxだった。12回のTab移動では各フォーカス表示を確認した。タッチ操作では狭い対象や隣接するヘッダー操作を誤りやすい一方、デスクトップやキーボード操作は残るためP2とする。一般利用者のデータ閲覧・権限制御や主要機能の停止は確認していない。
+- **根本原因:** `src/components/AdminNav.astro`の620px以下のスタイルで、ラベルを隠す小型ヘッダー操作に十分な操作領域がなく、メニューリンクの`min-height: 2.6rem`も約41.6pxだった。
+- **修正:** mobile headerのロゴ、プロジェクト、メニュー、アクションセンター、コマンド、通知、プロフィール、ログアウトと、開いたメニューのリンク・管理summaryに44px以上の高さ/幅を確保。実測を使うmocked E2Eを追加し、ヘッダー8種と可視メニュー操作対象すべての44×44px以上および横overflowなしを検査する。
+- **隔離検証:** 指定ADMIN build後、`npx playwright test tests/e2e/admin-accessibility.spec.ts --grep '375px幅の運営ヘッダー'`は1 passed。テストは専用mock APIを使い、ログイン・本番データ・送信を使わない。full E2Eと全CI相当checkはPR head更新後に実施予定。source/test commit `cb32eda49341e93c1b0f2124fe1a23fcd7e405f4`は通常PR #526へ追加予定。PR CI未実行のため、GitHub CI済みとは扱わない。
+- **受入条件/範囲:** frontend maintainerがPR CI成功を確認し、main/live反映が別途承認・完了した後、同じprimary-adminの375×812画面で対象が44×44px以上・横overflowなしを確認する。今回の実Chrome観察は修正前のprimary-adminポータルだけ。200% zoom、実スクリーンリーダー、応募者/会員/project manager/編集担当/休止・退会者のrole別Chrome受入は未検証であり、専用sandboxと合成アカウント未準備のため別途実施が必要。
+- **影響境界:** 変更はフロントエンドのCSSとmocked E2Eだけで、Worker、D1 schema/data、migration、本番設定、route、cache、メール、Discordへの影響なし。PRは未mergeで本番未反映。Required approving reviewsは0のまま変更しない。
