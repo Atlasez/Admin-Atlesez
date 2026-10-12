@@ -30,13 +30,13 @@ jobs:
       BUILD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - name: Checkout main commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -98,7 +98,7 @@ jobs:
         run: npx wrangler deploy --dry-run --config wrangler.admin.jsonc --keep-vars
 
       - name: Upload verified ADMIN assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: admin-dist-${{ github.event.workflow_run.head_sha || github.sha }}
           path: dist/
