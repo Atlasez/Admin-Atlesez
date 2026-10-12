@@ -1728,6 +1728,18 @@ async function getDeveloperScope(
       };
 }
 
+/** XAI/portalの試作URLは運営managerロールと分離し、主管理者だけに限定する。 */
+async function getPrototypeDeveloperScope(
+  request: Request,
+  env: Env,
+): Promise<AdminScope | Response> {
+  const identity = await getAuthenticatedEmail(request, env);
+  if (isResponse(identity)) return identity;
+  if (identity.toLowerCase() !== primaryAdminEmail(env))
+    return json({ error: "この試作ページは開発者のみ利用できます。" }, 403);
+  return getGlobalAdminScope(request, env);
+}
+
 const isSameOrigin = (request: Request) => {
   const origin = request.headers.get("origin");
   return !origin || origin === new URL(request.url).origin;
@@ -3037,11 +3049,10 @@ async function developerDiagnostics(
   const configured = {
     collaboration: Boolean(env.EDITORIAL_COLLABORATION),
     github: Boolean(
-      env.GITHUB_REPOSITORY?.trim() &&
-        ((env.GITHUB_APP_ID?.trim() &&
-          env.GITHUB_APP_INSTALLATION_ID?.trim() &&
-          env.GITHUB_APP_PRIVATE_KEY?.trim()) ||
-          env.GITHUB_PUBLISH_TOKEN?.trim()),
+      (env.GITHUB_APP_ID?.trim() &&
+        env.GITHUB_APP_INSTALLATION_ID?.trim() &&
+        env.GITHUB_APP_PRIVATE_KEY?.trim()) ||
+        env.GITHUB_PUBLISH_TOKEN?.trim(),
     ),
     discord: Boolean(env.DISCORD_BOT_TOKEN?.trim() && env.DISCORD_GUILD_ID?.trim()),
     email: Boolean(env.RESEND_API_KEY?.trim() && env.EMAIL_FROM?.trim()),
@@ -3061,6 +3072,7 @@ async function developerDiagnostics(
   checks.push({ id: "response", label: "API応答", status: "ok", detail: `${Math.round(performance.now() - startedAt)}ms` });
   return json({
     scope: { email: scope.email },
+    prototypeAccess: scope.email.toLowerCase() === primaryAdminEmail(env),
     generatedAt: new Date().toISOString(),
     build: buildInfo,
     checks,
@@ -23658,7 +23670,7 @@ async function handleAdminRequest(
         status: 405,
         headers: { Allow: "GET, HEAD" },
       });
-    const scope = await getDeveloperScope(request, env);
+    const scope = await getPrototypeDeveloperScope(request, env);
     if (isResponse(scope)) return scope;
     return fetchAdminAsset(request, env);
   }
@@ -24373,10 +24385,11 @@ async function handleAdminRequest(
                 url.searchParams.get("project") ?? "",
               )
             : await getGlobalAdminScope(request, env)
-          : url.pathname === "/admin/developer" ||
-              url.pathname === "/admin/developer/" ||
-              url.pathname === "/admin/portal-prototype" ||
+          : url.pathname === "/admin/portal-prototype" ||
               url.pathname === "/admin/portal-prototype/"
+            ? await getPrototypeDeveloperScope(request, env)
+            : url.pathname === "/admin/developer" ||
+                url.pathname === "/admin/developer/"
             ? await getDeveloperScope(request, env)
             : await getGlobalAdminScope(request, env);
       if (isResponse(managerScope)) return managerScope;
