@@ -526,6 +526,6 @@ Cron診断は「正常」「1分・5分・毎時の定期処理を設定して�
 ### 2026-10-13 OPS-35修正後のPR・検証状態
 
 - `OPS-35`のHTML修正、manager画面のE2E、Chrome追補をcommit `c7f955d30c4b579c4345590bbe24f406b1fdd422`に含め、PR #526へ通常pushした。PRはOPEN、base main `89d943f7d8c88c1ec813810c56444ae1cfe7ab82`、未merge。
-- 最新pushに対するGitHub verify [38311813646](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38311813646)とnative regressions [38311813655](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38311813655)は確認時点で実行中。旧headの成功runを今回のheadのCI成功として扱わない。
+- `c7f955d...` push直後に実行中だったverify [38311813646](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38311813646)とnative regressions [38311813655](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38311813655)は、その後PR head `6a435e801b859e693e14ce7388f5f2e138f32369`に対して実行されたverify [38311964565](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38311964565)とnative regressions [38311964417](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38311964417)がともにSUCCESSであることを確認した。
 - code/testの最終commitと同じ内容で`verify:deploy-config` pass、Astro check 341 files / 0 errors / 0 warnings / 10既存hints、lint pass、unit 69 files / 559 tests pass、format pass、ADMIN build pass、`verify:build-info`は正確に`c7f955d...`、full E2E 384 pass / 14 opt-in production smoke skip、OPS-35 targeted E2E 1 pass、`git diff --check` pass。buildの既存500 kB超chunk warningは継続。
-- 文書のみを追加する後続commitはこれらローカル検証済みソースを変更しない。PR上で後続headのCI successを改めて待つ。マージ・deploy・本番データ/設定変更は行わない。
+- 成功を確認した`6a435e801b859e693e14ce7388f5f2e138f32369`以降の変更は監査文書のCI状態訂正のみで、コード/testソースに変更はない。PR #526はOPEN。required approving reviewsは0のまま。マージ・deploy・本番データ/設定変更は行わない。
