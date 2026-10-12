@@ -17107,8 +17107,45 @@ type EditorialTaxonomyPublicationRow = Pick<
 };
 
 const yamlScalar = (value: string) => JSON.stringify(value);
+const yamlDisplayWidth = (value: string) =>
+  Array.from(value).reduce(
+    (width, char) => width + (char.codePointAt(0)! > 0xff ? 2 : 1),
+    0,
+  );
+const yamlLocalizedPair = (indent: string, key: string, value: string) => {
+  const pair = `{ ja: ${yamlScalar(value)}, en: ${yamlScalar(value)} }`;
+  const line = `${indent}${key}: ${pair}`;
+  return yamlDisplayWidth(line) <= 80
+    ? line
+    : [
+        `${indent}${key}:`,
+        `${indent}  {`,
+        `${indent}    ja: ${yamlScalar(value)},`,
+        `${indent}    en: ${yamlScalar(value)},`,
+        `${indent}  }`,
+      ].join("\n");
+};
+const yamlEntryConceptIds = (indent: string, ids: string[]) => {
+  const line = `${indent}entryConceptIds: [${ids.map(yamlScalar).join(", ")}]`;
+  return line.length <= 80
+    ? line
+    : `${indent}entryConceptIds:\n${indent}  [${ids.map(yamlScalar).join(", ")}]`;
+};
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const replaceEditorialTaxonomyCategoryField = (
+  categoryBlock: string,
+  field: string,
+  replacement: string,
+) => {
+  const pattern = new RegExp(
+    `(^      ${field}:[\\s\\S]*?)(?=^      [^ ]|^    - id:|^  [^ ]|(?![\\s\\S]))`,
+    "m",
+  );
+  const match = pattern.exec(categoryBlock);
+  if (!match) return null;
+  return `${categoryBlock.slice(0, match.index)}${replacement}${match[1].endsWith("\n") ? "\n" : ""}${categoryBlock.slice(match.index + match[1].length)}`;
+};
 
 const editorialTaxonomyCategoryYaml = (
   row: EditorialTaxonomyPublicationRow,
@@ -17116,9 +17153,9 @@ const editorialTaxonomyCategoryYaml = (
   [
     `    - id: ${row.slug}`,
     `      slug: ${row.slug}`,
-    `      name: { ja: ${yamlScalar(row.name)}, en: ${yamlScalar(row.name)} }`,
+    yamlLocalizedPair("      ", "name", row.name),
     `      order: ${Math.max(0, Number(row.sort_order) || 0)}`,
-    `      entryConceptIds: [${(row.entry_concept_ids ?? []).map(yamlScalar).join(", ")}]`,
+    yamlEntryConceptIds("      ", row.entry_concept_ids ?? []),
     ...(row.outline_entries?.length
       ? [
           "      outline:",
@@ -17143,12 +17180,12 @@ const editorialTaxonomySubjectYaml = (
   [
     `- id: ${row.slug}`,
     `  slug: ${row.slug}`,
-    `  name: { ja: ${yamlScalar(row.name)}, en: ${yamlScalar(row.name)} }`,
+    yamlLocalizedPair("  ", "name", row.name),
     "  status: published",
     `  order: ${Math.max(0, Number(row.sort_order) || 0)}`,
     "  group: applied",
     "  genre: information",
-    `  description: { ja: ${yamlScalar(row.description || row.name)}, en: ${yamlScalar(row.description || row.name)} }`,
+    yamlLocalizedPair("  ", "description", row.description || row.name),
     ...(categories.length
       ? [
           "  categories:",
@@ -17262,18 +17299,23 @@ export const mergeEditorialTaxonomyYaml = (
     const categoryMatch = categoryPattern.exec(blockText);
     if (!categoryMatch) continue;
     let categoryBlock = categoryMatch[1];
-    const nameLine = `      name: { ja: ${yamlScalar(row.name)}, en: ${yamlScalar(row.name)} }`;
-    categoryBlock = /^      name:.*$/m.test(categoryBlock)
-      ? categoryBlock.replace(/^      name:.*$/m, nameLine)
-      : categoryBlock;
+    const nameLine = yamlLocalizedPair("      ", "name", row.name);
+    categoryBlock =
+      replaceEditorialTaxonomyCategoryField(categoryBlock, "name", nameLine) ??
+      categoryBlock;
     const orderLine = `      order: ${Math.max(0, Number(row.sort_order) || 0)}`;
     categoryBlock = /^      order:\s*\d+\s*$/m.test(categoryBlock)
       ? categoryBlock.replace(/^      order:\s*\d+\s*$/m, orderLine)
       : categoryBlock;
     if (row.entry_concept_ids) {
-      const entryLine = `      entryConceptIds: [${row.entry_concept_ids.map(yamlScalar).join(", ")}]`;
-      categoryBlock = /^      entryConceptIds:.*$/m.test(categoryBlock)
-        ? categoryBlock.replace(/^      entryConceptIds:.*$/m, entryLine)
+      const entryLine = yamlEntryConceptIds("      ", row.entry_concept_ids);
+      const replacedEntryConceptIds = replaceEditorialTaxonomyCategoryField(
+        categoryBlock,
+        "entryConceptIds",
+        entryLine,
+      );
+      categoryBlock = replacedEntryConceptIds
+        ? replacedEntryConceptIds
         : `${categoryBlock.trimEnd()}\n${entryLine}\n`;
     }
     if (row.outline_entries?.length) {
