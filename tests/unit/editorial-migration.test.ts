@@ -664,6 +664,71 @@ describe("既存公開記事の運営原稿移行契約", () => {
     expect(insert?.values).toContain(canonical.id);
   });
 
+  it("別分野の担当者には既存の更新案本文を返さない", async () => {
+    const proposal = {
+      id: "55555555-5555-4555-8555-555555555555",
+      document_kind: "update-proposal",
+      subject: "mathematics",
+      title: "非公開の更新案",
+      body: "機密扱いの下書き本文",
+      writing_memo: "編集者だけのメモ",
+      status: "draft",
+    };
+    const calls: string[] = [];
+    const env = {
+      ADMIN_AUTH_MODE: "cloudflare-access",
+      ADMIN_PRIMARY_EMAIL: "global-admin@atlasez.test",
+      ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) },
+      REPORTS: {
+        prepare(query: string) {
+          calls.push(query);
+          return {
+            bind() {
+              return this;
+            },
+            async first<T>() {
+              return query.includes("FROM editorial_documents")
+                ? (proposal as T)
+                : null;
+            },
+            async all<T>() {
+              if (
+                query.includes("SELECT subject FROM report_admin_permissions")
+              )
+                return { results: [{ subject: "physics" }] as T[] };
+              return { results: [] as T[] };
+            },
+            async run() {
+              return {};
+            },
+          };
+        },
+      },
+    };
+    const request = new Request(
+      `https://admin.atlasez.org/api/admin/editor/documents/${proposal.id}/update-proposal`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://admin.atlasez.org",
+          "cf-access-authenticated-user-email": "physics-editor@atlasez.test",
+        },
+        body: "{}",
+      },
+    );
+
+    const response = await worker.fetch(request, env as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(403);
+    expect(body).not.toContain("機密扱いの下書き本文");
+    expect(body).not.toContain("編集者だけのメモ");
+    expect(
+      calls.some((query) => query.includes("INSERT INTO editorial_documents")),
+    ).toBe(false);
+  });
+
   it("公開用Markdownでも既存記事のarticleIdを維持する", () => {
     const markdown = editorialMarkdown({
       id: "22222222-2222-4222-8222-222222222222",

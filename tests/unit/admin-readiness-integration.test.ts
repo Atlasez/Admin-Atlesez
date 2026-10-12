@@ -694,6 +694,91 @@ it("ポータルの個人期限をUTCに正規化し表示タイムゾーンの�
   expect(otherZone.taskSummary).toMatchObject({ dueToday: 0, dueSoon: 3 });
 });
 
+it("現在の発生回に紐づくタスク通知の終端失敗だけを運営一覧へ返す", async () => {
+  const { db, request } = environment();
+  const now = "2026-10-12T01:00:00.000Z";
+  const recipient = "global@atlasez.test";
+  const taskId = "66666666-6666-4666-8666-666666666666";
+  const otherTaskId = "77777777-7777-4777-8777-777777777777";
+  const reminderId = "88888888-8888-4888-8888-888888888888";
+  const currentOccurrence = "2026-10-12T00:00:00.000Z";
+  db.prepare(
+    `INSERT INTO editorial_tasks
+       (id,project_id,subject,assignee_email,title,status,created_by,created_at,updated_at,reminder_email)
+     VALUES (?,'atlas','mathematics',?,?,'open',?,?,?,?)`,
+  ).run(taskId, recipient, "通知確認タスク", recipient, now, now, recipient);
+  db.prepare(
+    `INSERT INTO editorial_tasks
+       (id,project_id,subject,assignee_email,title,status,created_by,created_at,updated_at)
+     VALUES (?,'atlas','mathematics',?,?,'open',?,?,?)`,
+  ).run(otherTaskId, recipient, "通常タスク", recipient, now, now);
+  db.prepare(
+    `INSERT INTO editorial_task_reminders
+       (id,task_id,remind_at,remind_at_utc,timezone,label,created_at)
+     VALUES (?,?,?,?,?,?,?)`,
+  ).run(
+    reminderId,
+    taskId,
+    "2026-10-12T09:00",
+    currentOccurrence,
+    "Asia/Tokyo",
+    "指定日時",
+    now,
+  );
+  const insertAttempt = db.prepare(
+    `INSERT INTO editorial_task_reminder_delivery_attempts
+       (delivery_key,reminder_id,recipient_email,occurrence_at,occurrence_timezone,payload_json,
+        provider_idempotency_key,status,attempt_count,next_attempt_at,retry_deadline_at,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,'failed',5,?,?,?,?)`,
+  );
+  insertAttempt.run(
+    "failed-current",
+    reminderId,
+    recipient,
+    currentOccurrence,
+    "Asia/Tokyo",
+    JSON.stringify({ to: [recipient], text: "private reminder body" }),
+    "failed-current-key",
+    now,
+    now,
+    now,
+    now,
+  );
+  insertAttempt.run(
+    "failed-old-occurrence",
+    reminderId,
+    recipient,
+    "2026-10-11T00:00:00.000Z",
+    "Asia/Tokyo",
+    JSON.stringify({ to: [recipient], text: "stale private body" }),
+    "failed-old-key",
+    now,
+    now,
+    now,
+    now,
+  );
+
+  const response = await request(
+    "/api/admin/operations?project=atlas",
+    recipient,
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  const payload = (await response.json()) as {
+    tasks: Array<Record<string, unknown>>;
+  };
+  expect(payload.tasks.find((task) => task.id === taskId)).toMatchObject({
+    reminder_delivery_failed_count: 1,
+    reminder_delivery_latest_failed_at: now,
+  });
+  expect(payload.tasks.find((task) => task.id === otherTaskId)).toMatchObject({
+    reminder_delivery_failed_count: 0,
+    reminder_delivery_latest_failed_at: null,
+  });
+  expect(JSON.stringify(payload)).not.toContain("private reminder body");
+  expect(JSON.stringify(payload)).not.toContain("stale private body");
+  expect(JSON.stringify(payload)).not.toContain("provider_idempotency_key");
+});
+
 it("過去の予定が70件あっても表示月の重複予定を両カレンダーAPIで全ページ取得する", async () => {
   const { db, request } = environment();
   const insert = db.prepare(

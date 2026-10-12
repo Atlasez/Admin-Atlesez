@@ -13532,6 +13532,28 @@ async function operationsOverview(
       reminder,
     ]);
   }
+  const reminderFailureRows = taskRows.length
+    ? await env.REPORTS.prepare(
+        `SELECT r.task_id, COUNT(*) AS failed_count, MAX(a.updated_at) AS latest_failed_at
+         FROM editorial_task_reminder_delivery_attempts a
+         JOIN editorial_task_reminders r
+           ON r.id=a.reminder_id AND r.remind_at_utc=a.occurrence_at
+         JOIN editorial_tasks t ON t.id=r.task_id
+         WHERE r.task_id IN (${taskRows.map(() => "?").join(",")})
+           AND a.status='failed'
+           AND lower(a.recipient_email)=lower(trim(t.reminder_email))
+         GROUP BY r.task_id`,
+      )
+        .bind(...taskRows.map((task) => task.id))
+        .all<{
+          task_id: string;
+          failed_count: number;
+          latest_failed_at: string;
+        }>()
+    : { results: [] as { task_id: string; failed_count: number; latest_failed_at: string }[] };
+  const reminderFailuresByTask = new Map(
+    (reminderFailureRows.results ?? []).map((row) => [row.task_id, row]),
+  );
   const participantRows = availability.results ?? [];
   const participantsByEvent = new Map<string, typeof participantRows>();
   for (const item of participantRows) {
@@ -13582,6 +13604,10 @@ async function operationsOverview(
       reminder_email_hidden: reminderEmailHidden,
       can_update: canUpdateTask,
       reminders: remindersByTask.get(String(task.id)) ?? [],
+      reminder_delivery_failed_count:
+        reminderFailuresByTask.get(String(task.id))?.failed_count ?? 0,
+      reminder_delivery_latest_failed_at:
+        reminderFailuresByTask.get(String(task.id))?.latest_failed_at ?? null,
     };
     if (canSeeAllProjectOperations) return visibleTask;
 
@@ -16089,12 +16115,12 @@ async function createEditorialUpdateProposal(
     .bind(documentId)
     .first<EditorialDocument>();
   if (!canonical) return json({ error: "原稿が見つかりません。" }, 404);
+  if (!canEditSubject(scope, canonical.subject))
+    return json({ error: "この分野の更新案を作成する権限がありません。" }, 403);
   if (canonical.document_kind === "update-proposal")
     return json({ ok: true, id: canonical.id, existing: true, document: canonical });
   if (!canonical.published_at)
     return json({ error: "公開済みの記事だけ更新案を作成できます。" }, 400);
-  if (!canEditSubject(scope, canonical.subject))
-    return json({ error: "この分野の更新案を作成する権限がありません。" }, 403);
   const activeProposal = await env.REPORTS.prepare(
     `SELECT id FROM editorial_documents
        WHERE base_document_id=? AND document_kind='update-proposal' AND archived_at IS NULL
@@ -18188,7 +18214,15 @@ async function writeWorkerSyncCursor(
 /** GitHubの履歴に加え、公開済みMarkdownをD1へ世代バックアップする。 */
 async function syncPublishedArticleBackups(env: Env) {
   const token = (await githubToken(env))?.token;
-  if (!token) return { synced: 0, skipped: true };
+  if (!token) {
+    console.error(
+      JSON.stringify({
+        event: "published_article_backup_failed",
+        category: "github_auth_missing",
+      }),
+    );
+    throw new Error("記事バックアップのGitHub認証が設定されていません。");
+  }
   const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
   const headers = {
     accept: "application/vnd.github+json",
@@ -18252,6 +18286,14 @@ async function syncPublishedArticleBackups(env: Env) {
     env,
     "published-article-backups",
     hasMore ? page.at(-1)?.path ?? null : null,
+  );
+  console.info(
+    JSON.stringify({
+      event: "published_article_backup_completed",
+      synced,
+      processed: page.length,
+      hasMore,
+    }),
   );
   return { synced, skipped: false, processed: page.length, hasMore };
 }

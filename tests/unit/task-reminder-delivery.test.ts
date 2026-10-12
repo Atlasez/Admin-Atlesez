@@ -56,6 +56,21 @@ class FakeStatement {
   }
   async run() {
     this.db.queries.push(this.query);
+    this.db.runCalls.push({ query: this.query, values: [...this.values] });
+    if (
+      this.query.includes(
+        "SET status=?,next_attempt_at=?,claim_token=NULL,claimed_at=NULL,error_category=?",
+      )
+    ) {
+      const attempt = this.db.attemptRows.find(
+        (row) => row.delivery_key === this.values[4],
+      );
+      if (attempt) {
+        attempt.status = String(this.values[0]);
+        attempt.attempt_count += 1;
+        attempt.next_attempt_at = String(this.values[1]);
+      }
+    }
     if (
       this.query.startsWith(
         "UPDATE editorial_task_reminder_delivery_attempts AS a",
@@ -117,6 +132,7 @@ class FakeStatement {
 
 class FakeDb {
   queries: string[] = [];
+  runCalls: Array<{ query: string; values: unknown[] }> = [];
   legacyRows: Array<{ id: string; remind_at: string; timezone: string }> = [];
   normalizedValues: unknown[][] = [];
   claimChanges = 1;
@@ -374,6 +390,54 @@ describe("task reminder delivery", () => {
     expect(db.queries.some((query) => query.includes("status='sent'"))).toBe(
       false,
     );
+  });
+
+  it("keeps a terminal 4xx visible as failed and never auto-sends that occurrence again", async () => {
+    const db = new FakeDb();
+    let calls = 0;
+    const fetcher = async () => {
+      calls += 1;
+      return new Response("rejected", { status: 400 });
+    };
+    const first = await dispatchDueTaskReminders(env(db), { now, fetcher });
+    expect(first).toEqual({ sent: 0, failed: 1 });
+    expect(db.attemptRows[0]).toMatchObject({
+      status: "failed",
+      attempt_count: 1,
+      next_attempt_at: "2026-01-15T23:00:00.000Z",
+    });
+    expect(db.runCalls.at(-1)?.values.slice(0, 5)).toEqual([
+      "failed",
+      "2026-01-15T23:00:00.000Z",
+      "provider_400",
+      now.toISOString(),
+      "v1:delivery",
+    ]);
+
+    const second = await dispatchDueTaskReminders(env(db), { now, fetcher });
+    expect(second).toEqual({ sent: 0, failed: 0 });
+    expect(calls).toBe(1);
+  });
+
+  it("marks retryable responses failed when the attempt limit is reached", async () => {
+    const db = new FakeDb();
+    db.attemptRows[0].status = "retry";
+    db.attemptRows[0].attempt_count = 4;
+    db.attemptRows[0].next_attempt_at = now.toISOString();
+    const result = await dispatchDueTaskReminders(env(db), {
+      now,
+      fetcher: async () => new Response("still unavailable", { status: 503 }),
+    });
+    expect(result).toEqual({ sent: 0, failed: 1 });
+    expect(db.attemptRows[0]).toMatchObject({
+      status: "failed",
+      attempt_count: 5,
+    });
+    expect(db.runCalls.at(-1)?.values.slice(0, 3)).toEqual([
+      "failed",
+      "2026-01-15T23:00:00.000Z",
+      "provider_503",
+    ]);
   });
 
   it("does not send when no reminder is due", async () => {

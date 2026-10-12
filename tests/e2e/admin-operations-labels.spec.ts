@@ -250,6 +250,45 @@ test("権限限定タスクは安全な担当者表示を使い、別人の通�
   ).toBeDisabled();
 });
 
+test("終端失敗したタスクリマインダーを設定欄の外にも知らせる", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/operations**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        scope: { email: "alice@example.com", isManager: false },
+        project: { id: "atlas", slug: "atlas", name: "Atlasez" },
+        tasks: [
+          {
+            id: "failed-reminder-task",
+            title: "期限確認タスク",
+            status: "open",
+            subject: "mathematics",
+            assigned_to_me: true,
+            created_by_me: true,
+            reminders: [],
+            reminder_delivery_failed_count: 1,
+            reminder_delivery_latest_failed_at: "2026-10-12T01:00:00.000Z",
+          },
+        ],
+        events: [],
+        progress: [],
+        members: [],
+        availabilityBlocks: [],
+      }),
+    });
+  });
+
+  await page.goto("admin/operations/?project=atlas");
+  const task = page.locator(".task-item", { hasText: "期限確認タスク" });
+  const warning = task.getByRole("status");
+  await expect(warning).toContainText("メール通知が1件");
+  await expect(warning).toContainText("自動再試行されません");
+  await expect(warning).toBeVisible();
+});
+
 test("進捗報告一覧はカーソルで追加読み込みできる", async ({ page }) => {
   let requests = 0;
   await page.route("**/api/admin/progress**", async (route) => {
