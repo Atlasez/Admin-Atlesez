@@ -108,3 +108,27 @@ test("1280px幅ではナビを折りたたみ、末尾リンクを操作でき�
   await expect(menuToggle).toHaveAttribute("aria-expanded", "false");
   await expect(nav).toBeHidden();
 });
+
+test("390px幅でも管理メニューを名前で識別でき、axe違反がない", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await mockAdminApis(page);
+  await page.goto("admin/applications/?project=atlas");
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.getByRole("button", { name: "メニュー" })).toBeVisible();
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(
+    results.violations.map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      nodes: violation.nodes.map((node) => ({
+        target: node.target,
+        summary: node.failureSummary,
+      })),
+    })),
+  ).toEqual([]);
+});

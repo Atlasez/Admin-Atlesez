@@ -42,6 +42,7 @@ const createEnvironment = () => {
     CREATE TABLE admin_genre_role_assignments (catalog_id TEXT NOT NULL, email TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(catalog_id,email));
     CREATE TABLE admin_genre_role_catalog (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL);
     CREATE TABLE atlasez_project_memberships (project_id TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, joined_at TEXT NOT NULL, PRIMARY KEY(project_id,email));
+    CREATE TABLE atlasez_project_manager_grants (project_id TEXT NOT NULL, email TEXT NOT NULL, PRIMARY KEY(project_id,email));
     CREATE TABLE atlasez_member_discord_role_assignments (email TEXT NOT NULL, discord_role_id TEXT NOT NULL, is_active INTEGER NOT NULL, assigned_at TEXT NOT NULL, assigned_by TEXT NOT NULL, PRIMARY KEY(email,discord_role_id));
     CREATE TABLE atlasez_member_discord_accounts (email TEXT PRIMARY KEY, discord_user_id TEXT NOT NULL);
     CREATE TABLE editorial_member_profiles (email TEXT PRIMARY KEY, display_name TEXT, bio TEXT, avatar_url TEXT, university TEXT, year TEXT, interests TEXT, affiliation_type TEXT, country TEXT, timezone TEXT, updated_at TEXT);
@@ -108,6 +109,18 @@ const request = (
     },
     body: JSON.stringify({ action, email }),
   });
+
+const removalRequest = (email: string) =>
+  new Request(
+    `https://admin.example/api/admin/member-management?email=${encodeURIComponent(email)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        origin: "https://admin.example",
+      },
+    },
+  );
 
 it("archives and restores only operational scopes while retaining member data and audit history", async () => {
   const { db, environment } = createEnvironment();
@@ -421,6 +434,72 @@ it("does not expose member details to a non-global operator", async () => {
     environment as never,
   );
   expect(response.status).toBe(403);
+});
+
+it("keeps Atlas and Discord permissions intact when removal cannot sync a linked Discord account", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    "INSERT INTO atlasez_member_discord_accounts (email,discord_user_id) VALUES (?,?)",
+  ).run("member@example.org", "discord-user-id");
+
+  const response = await worker.fetch(
+    removalRequest("member@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ ok: false });
+  expect(
+    db
+      .prepare("SELECT subject FROM report_admin_permissions WHERE email=?")
+      .all("member@example.org"),
+  ).toEqual([{ subject: "mathematics" }]);
+  expect(
+    db
+      .prepare(
+        "SELECT project_id FROM atlasez_project_memberships WHERE email=?",
+      )
+      .all("member@example.org"),
+  ).toEqual([{ project_id: "atlas" }]);
+  expect(
+    db
+      .prepare(
+        "SELECT is_active FROM atlasez_member_discord_role_assignments WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ is_active: 1 });
+});
+
+it("allows Atlas removal when no Discord account is linked", async () => {
+  const { db, environment } = createEnvironment();
+
+  const response = await worker.fetch(
+    removalRequest("member@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(200);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM report_admin_permissions WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_project_memberships WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_discord_role_assignments WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ count: 0 });
 });
 
 it("records workflow-role history only when a role assignment actually changes", async () => {

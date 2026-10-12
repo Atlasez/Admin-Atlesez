@@ -87,6 +87,21 @@
 | OPS-17 / P2候補 | scheduled publicationでclaim記録後・run作成前にWorkerが強制終了すると`scheduled_publish_claimed_at`が残り、原稿が次のdue selectorから外れ続ける可能性。予約公開が無期限に滞留し得る。 | mainは通常例外時にclaimを解除するが、プロセス中断時のclaim回収はない。run作成後のactive runには別leaseがあるが、run作成前のclaimを回復しない。画面はclaim経過時間を表示せず、UIに予約解除操作もない。クラッシュfixtureによる回復試験は未実施。 | **未再現・要追加検証**。運用で予約公開を使う前に、長時間claimを検出する手順/UIか安全なlease回収を用意し、古いclaim・新しいclaim・active runあり・同時Cron・予約変更との競合を隔離D1で検証する。 |
 | OPS-18 / P1決定待ち | pause/退会時にDiscord側の既存ロールを解除するか未定義。D1上で権限が失効してもDiscord権限が残る場合、外部チャンネルアクセスとADMIN内scopeが食い違い得る。 | pause/withdrawalによるD1 membership/権限stateとDiscord上のroleは別の副作用。どのroleをどの退会範囲で解除するか運営判断がなく、実Discord操作は未実施。 | **運営決定待ち**。運営代表/Discord管理者がpause時の解除/維持、Atlas退会時の対象projectのみ/全解除、全体停止時の扱い、本人案内、再開時の再付与を記録する。決定前にroleを変更しない。 |
 
+### 2026-10-12追加監査: 再現・予防・未決事項
+
+以下は上の台帳を補う、PR #526用worktreeでの追跡結果。`main`とliveの状態を変更した記録ではない。ソースの存在、隔離での再現、本番への反映を別々に扱う。
+
+| ID     | 優先度・証拠区分                       | 確認事項と利用者影響                                                                                                                                                                                                                                                         | 対応・次の合格条件                                                                                                                                                                              |
+| ------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OPS-19 | P1 / 390pxで再現                       | 画面幅390pxの応募管理でaxe `button-name` critical。620px以下でメニュー文字をCSS非表示にする一方、ボタンにaccessible nameがなかった。プロフィール編集でも同じDOM構造。                                                                                                        | PR #526用worktreeで`aria-label`を追加し、390px axe回帰testを追加。ADMIN build後にCI E2Eを確認。実スクリーンリーダー受入は未実施。                                                               |
+| OPS-20 | P1 / 隔離APIで再現                     | Discord連携済みの会員をAtlasから削除する際、Bot/Guild未設定等でDiscord同期が`skipped`でもローカル権限・membership・Discord assignmentを削除できた。外部ロールが残っても再試行情報を失う。                                                                                    | PR #526用worktreeでarchiveと同じlinked-account guardを追加。隔離テストでlinked時409/権限保全、未linked時の削除成功を確認。実Discord反映は未確認。                                               |
+| OPS-21 | P1予防 / main書込み能力は未検証        | `POST /api/admin/editor/concepts`にGitHub Contents APIの`branch: main`への直接PUT経路があり、記事編集画面の説明・現行公開PRフローと不一致。現在のフロントエンドにこのAPIの呼出しは見つからない。tokenがbranch protectionを迂回できるか、実書込みに成功するかは試していない。 | PR #526用worktreeで旧APIを409にし、通常の公開PRを案内する回帰testを追加。記事編集画面の既存概念登録・公開PR経路は維持。GitHubへの実通信なし。                                                   |
+| OPS-22 | P2 / main source確認、欠落発生は未検証 | 記事source backupの1件GETが非2xxまたはcontent欠落でも項目別エラーを記録せず`continue`し、ページcheckpointを進める。後続の全巡回まで再取得・発見が遅れる可能性がある。                                                                                                        | backupを必須復旧点として扱う前に、失敗記録・checkpoint再開・運営者からの見え方を隔離テストする。PR #527のscan変更とは重複確認後に扱う。                                                         |
+| OPS-23 | P2 / 方針決定待ち                      | `article_source_backups`は(repository,path,git_sha)単位の版を蓄積し、世代上限・削除処理・容量アラートが確認できない。同じD1内のコピーで、D1全体backupの代替ではない。                                                                                                        | DB運用担当とprivacy責任者がコピーの復旧目的、保持期間、容量監視、削除担当、記事削除時の取扱いを決める。方針決定後にだけ隔離cleanupを設計する。                                                  |
+| OPS-24 | P2 / main source確認                   | Discord provisioningは最大6回。初回失敗と成功で応募者向け状態メールをqueueするが、2回目以降の失敗・終端失敗の自動メールはない。画面には失敗・試行数・手動再試行がある。                                                                                                      | 応募担当とDiscord担当が終端失敗queueの確認頻度、本人への最終案内、再試行担当・期限を決め、実メールなしの机上演習と専用sandbox受入を行う。                                                       |
+| OPS-25 | P2 / 部分設定fixtureで確認             | 開発者診断はGitHub repositoryとApp IDだけでも`github:設定済み`になり得たが、App認証にはApp ID・Installation ID・private keyが必要。                                                                                                                                          | PR #526用worktreeで完全なApp三項目またはlegacy PATがある場合だけ設定済みとし、App IDのみのfixtureを未設定とするtestを追加。外部接続成功の表示には使わない。                                     |
+| OPS-26 | P2 / ログ内容の追加監査                | Discord provisioning・queue、応募受付、面談通知、初回follow-upのcatchに応募IDや例外オブジェクトを渡すログが残っていた。provider例外本文へ個人情報や秘密値が含まれるかは未確認。                                                                                              | PR #526用worktreeで応募関連catchを固定分類のみのログへ変更し、Discord retry隔離testで応募ID・宛先・例外文字列を含めないことを確認する。残る`console.error/warn`を同じ基準で引き続き棚卸しする。 |
+
 ## 実装状況と検証
 
 この監査branchでは、最新mainから以下を変更中。mainへのmerge、Cloudflare設定、production Deploy、D1書込・migration/export/restore、実メール/Discord、実応募、実記事公開は未実施。
@@ -122,6 +137,7 @@ Cloudflareに設定があることはCronが成功している証拠ではない
 3. 受付通知queueのpending/retry/sending/failed、最古滞留、試行数を確認する。運営画面の「診断正常」だけでメール到達と判定しない。
 4. 必須情報不足、重複応募、プロフィールだけ保存された応募、本人からの訂正/削除依頼を区別して本人へ確認する。本人確認方法と担当は運営決定待ち。
 5. 判定または次の連絡が完了するまで未対応queueに残し、担当者・次回確認日・現在待っている相手・完了条件を記録する。
+6. 受入済み応募の「参加環境」状態と試行数を確認する。Discord同期が終端`failed`なら、Discord担当へ割り当て、本人への最終案内と次回確認期限を記録する。自動メールは初回失敗・成功時だけのため、再試行中や6回到達をメール到達済みと扱わない。
 
 ### 選考・面談・受入
 
@@ -279,6 +295,8 @@ ADMINの現在Version・live `build-info.json`・認証済みChromeの過去記�
 - PR #526対象branchの最新ローカル検証: `npm run verify:deploy-config`成功、`npm run check`は340 files / 0 errors / 0 warnings / 10既存hints、`npm run lint`成功、`npm test`は69 files / 533 tests pass、`npm run format:check`・`git diff --check`成功。E2Eは`E2E_PORT=49732 npm run test:e2e`で377 pass / 14 skip。skipは実サービス接続をするopt-in live smokeで、OAuth/外部通知を検証していない。ADMIN buildとbuild-infoはPR branchの最終commit後に再実行し、生成SHAを照合する。
 - 公開PR #140の既存branchで募集ページの問い合わせ案内、記事報告の保持説明とE2Eを修正。公開mainは記事報告hash/contactを現在のCronで自動削除していないこと、保持期間は未決定であること、設定されたsalt Secretがなければ報告を受付停止することを説明する。旧E2Eの7/30/180日自動削除前提を実際のmainの挙動に合わせた。公開build完了後のfull E2Eは79 pass。初回E2Eは編集前の`dist`を配信していたため旧文言を読んで失敗し、ソース更新後にbuildし直してから全件passした。production設定・実送信・記事公開は行っていない。
 - ADMINの旧Build接続案3件と旧Google OAuth移行手順、2026-08-27障害記録に履歴注記を追加した。現在の復旧・認証・配信基準を現行policy/Issue #509へ一本化し、過去SHA・token名・`ADMIN_AUTH_MODE`・古いmigration手順を現行操作として誤実行しないようにした。
+- 追加の読み取り監査でOPS-19〜26を登録。390px応募管理のメニューaccessible name、会員削除時のDiscord `skipped`、公開概念APIのmain直接書込み、backup item失敗時のcheckpoint、記事backupの保持上限、Discord終端再試行案内、GitHub App部分設定診断、応募処理例外ログを追跡した。OPS-19/20/21/25/26はPR #526用worktreeで修正と回帰testを追加。OPS-22〜24は本番影響または運営方針が未確認のため、診断/手順・決定待ちとして記録。
+- 隔離確認: 会員lifecycle・project access・developer diagnostics・操作境界のunit 25件pass、390px応募管理 axe E2E 1件pass。ADMIN buildは実施し、menu sourceを含むが、後続worker修正後の最終build/全CI相当検証はこの追補の末尾で実施する。実Google OAuth完了、実メール、実Discord、本番D1/Cloudflare操作は未実施。
 - PR #526 code commit `534dc3e23ab744e3598adfad9bd5c99985300674` のGitHub CI [38245759130](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38245759130) とmacOS native run [38245759139](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38245759139)、公開PR #140 commit `7e8ab8d63c84f4f2dc1a0d887f02f21447d40275` のCI [38245760102](https://github.com/Atlasez/Atlasez01/actions/runs/38245760102) はすべて成功。PRは両方OPEN。公開PR #140は既存required approving review count 1により`REVIEW_REQUIRED`。ADMINは0を維持。どちらも保護設定を変えていない。
 - PR #526/#140とも既存のOPEN PRだけを更新対象とする。No merge・Deployを行わない。今回のCIは上記code/docs follow-up commitで成功しているが、ここに追加した履歴注記とCI記録を含む次の監査文書commitには独立のCIが必要。
 

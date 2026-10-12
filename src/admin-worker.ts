@@ -294,17 +294,6 @@ type PublicArticleCatalogEntry = {
   registrationMethod: string;
   identityStatus: string;
 };
-type EditorialConceptPayload = {
-  id?: unknown;
-  subject?: unknown;
-  category?: unknown;
-  nameJa?: unknown;
-  nameEn?: unknown;
-  prerequisites?: unknown;
-  recommendedNext?: unknown;
-  related?: unknown;
-  alternatives?: unknown;
-};
 type EditorialCommentPayload = {
   body?: unknown;
   selectionStart?: unknown;
@@ -3047,7 +3036,13 @@ async function developerDiagnostics(
 
   const configured = {
     collaboration: Boolean(env.EDITORIAL_COLLABORATION),
-    github: Boolean(env.GITHUB_REPOSITORY?.trim() && (env.GITHUB_APP_ID?.trim() || env.GITHUB_PUBLISH_TOKEN?.trim())),
+    github: Boolean(
+      env.GITHUB_REPOSITORY?.trim() &&
+        ((env.GITHUB_APP_ID?.trim() &&
+          env.GITHUB_APP_INSTALLATION_ID?.trim() &&
+          env.GITHUB_APP_PRIVATE_KEY?.trim()) ||
+          env.GITHUB_PUBLISH_TOKEN?.trim()),
+    ),
     discord: Boolean(env.DISCORD_BOT_TOKEN?.trim() && env.DISCORD_GUILD_ID?.trim()),
     email: Boolean(env.RESEND_API_KEY?.trim() && env.EMAIL_FROM?.trim()),
     publicOrigin: Boolean(env.PUBLIC_SITE_ORIGIN?.trim()),
@@ -3898,6 +3893,12 @@ async function removeAtlasMember(
     })),
   );
   if (provisioning.status === "failed") return discordSyncFailure(provisioning);
+  if (provisioning.status === "skipped") {
+    const linkedAccount = await env.REPORTS.prepare(
+      "SELECT 1 AS found FROM atlasez_member_discord_accounts WHERE lower(email)=lower(?) LIMIT 1",
+    ).bind(email).first<{ found: number }>();
+    if (linkedAccount) return discordSyncFailure(provisioning);
+  }
 
   await env.REPORTS.batch([
     env.REPORTS.prepare(
@@ -9649,8 +9650,8 @@ async function provisionAcceptedApplication(
       affiliationType: application.affiliation_type,
       interests,
     });
-  } catch (error) {
-    console.error("application Discord provisioning failed", { applicationId, error });
+  } catch {
+    console.error("application Discord provisioning failed");
     result = {
       status: "failed",
       applied: 0,
@@ -9695,8 +9696,8 @@ async function provisionAcceptedApplication(
         result.status,
         result.warnings.join(" "),
       );
-    } catch (error) {
-      console.error("application Discord status email queue failed", { applicationId, error });
+    } catch {
+      console.error("application Discord status email queue failed");
     }
   }
   return { ...result, attempt, nextAttemptAt };
@@ -12702,11 +12703,8 @@ async function updateApplication(
     );
     acceptanceEmailQueued = true;
     ctx?.waitUntil(dispatchApplicationEmails(env));
-  } catch (emailError) {
-    console.error("application acceptance email queue failed", {
-      applicationId: id,
-      error: emailError,
-    });
+  } catch {
+    console.error("application acceptance email queue failed");
   }
   return json({
     ok: true,
@@ -13169,8 +13167,8 @@ async function notifyApplicationInterview(
       },
       now,
     );
-  } catch (error) {
-    console.error("application interview email queue failed", { applicationId: id, error });
+  } catch {
+    console.error("application interview email queue failed");
     return json({ error: "面談通知を準備できませんでした。" }, 500);
   }
   await env.REPORTS.prepare(
@@ -14989,12 +14987,9 @@ async function submitMemberApplication(
   try {
     await createApplicationResponseTask(env, followup);
     await queueApplicationEmails(env, followup);
-  } catch (error) {
+  } catch {
     // 応募本文の保存を巻き戻さず、運営側の自動処理だけを再試行対象にする。
-    console.error("application follow-up setup failed", {
-      applicationId,
-      error,
-    });
+    console.error("application follow-up setup failed");
   }
   if (ctx) ctx.waitUntil(dispatchApplicationEmails(env));
   // 応募は個人情報を含むため、Discordへは一切転送しない。運営内運営が管理画面でのみ閲覧する。
@@ -18140,193 +18135,6 @@ const upsertEditorialArticleCatalog = async (
 };
 
 const CONCEPT_ID = /^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$/;
-const CONCEPT_ID_LINE = /^\s*-\s+id:\s*["']?([^"'\s]+)["']?\s*$/gm;
-
-const conceptRelationIds = (value: unknown): string[] | null => {
-  if (value === undefined || value === null || value === "") return [];
-  if (!Array.isArray(value) || value.length > 30) return null;
-  const ids = value.map((item) => text(item, 180).trim());
-  if (ids.some((id) => !CONCEPT_ID.test(id))) return null;
-  return [...new Set(ids)];
-};
-
-export const editorialConceptMarkdown = (concept: {
-  id: string;
-  subject: string;
-  category: string;
-  nameJa: string;
-  nameEn?: string;
-  prerequisites?: string[];
-  recommendedNext?: string[];
-  related?: string[];
-  alternatives?: string[];
-}) => {
-  const quote = (value: string) => JSON.stringify(value);
-  const list = (values: string[] | undefined) =>
-    values?.length ? `[${values.map(quote).join(", ")}]` : "[]";
-  return [
-    `- id: ${quote(concept.id)}`,
-    `  subject: ${quote(concept.subject)}`,
-    `  category: ${quote(concept.category)}`,
-    "  name:",
-    `    ja: ${quote(concept.nameJa)}`,
-    ...(concept.nameEn ? [`    en: ${quote(concept.nameEn)}`] : []),
-    `  prerequisites: ${list(concept.prerequisites)}`,
-    `  recommendedNext: ${list(concept.recommendedNext)}`,
-    `  related: ${list(concept.related)}`,
-    `  alternatives: ${list(concept.alternatives)}`,
-  ].join("\n");
-};
-
-const editorialConceptInput = (payload: EditorialConceptPayload) => {
-  const id = text(payload.id, 180).trim();
-  const subject = text(payload.subject, 80).trim();
-  const category = text(payload.category, 80).trim();
-  const nameJa = text(payload.nameJa, 180).trim();
-  const nameEn = text(payload.nameEn, 180).trim();
-  const prerequisites = conceptRelationIds(payload.prerequisites);
-  const recommendedNext = conceptRelationIds(payload.recommendedNext);
-  const related = conceptRelationIds(payload.related);
-  const alternatives = conceptRelationIds(payload.alternatives);
-  if (
-    !CONCEPT_ID.test(id) ||
-    !SUBJECT_SLUG.test(subject) ||
-    !SUBJECT_SLUG.test(category) ||
-    !nameJa ||
-    !prerequisites ||
-    !recommendedNext ||
-    !related ||
-    !alternatives
-  )
-    return null;
-  return {
-    id,
-    subject,
-    category,
-    nameJa,
-    ...(nameEn ? { nameEn } : {}),
-    prerequisites,
-    recommendedNext,
-    related,
-    alternatives,
-  };
-};
-
-const existingConceptIds = (source: string) =>
-  new Set(
-    [...source.matchAll(CONCEPT_ID_LINE)]
-      .map((match) => match[1])
-      .filter((id): id is string => Boolean(id)),
-  );
-
-async function createEditorialConcept(
-  request: Request,
-  env: Env,
-): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
-  if (isResponse(scope)) return scope;
-  if (!isSameOrigin(request))
-    return json({ error: "この送信元からは受け付けられません。" }, 403);
-  if (!request.headers.get("content-type")?.includes("application/json"))
-    return json({ error: "JSON形式で送信してください。" }, 415);
-  const payload = (await request
-    .json()
-    .catch(() => null)) as EditorialConceptPayload | null;
-  const concept = payload ? editorialConceptInput(payload) : null;
-  if (!concept)
-    return json(
-      {
-        error:
-          "概念ID・分野・カテゴリ・日本語名を確認してください。関連概念は正しいIDの配列で指定してください。",
-      },
-      400,
-    );
-  const token = env.GITHUB_PUBLISH_TOKEN;
-  if (!token)
-    return json(
-      {
-        error:
-          "GitHub公開連携がまだ設定されていません。運営管理者がGITHUB_PUBLISH_TOKENをCloudflare Secretへ登録してください。",
-      },
-      503,
-    );
-  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
-  const headers = {
-    accept: "application/vnd.github+json",
-    authorization: `Bearer ${token}`,
-    "user-agent": "atlasez-editorial-concepts",
-    "x-github-api-version": "2022-11-28",
-  };
-  const path = "src/content/concepts/concepts.yaml";
-  const endpoint = `https://api.github.com/repos/${repository}/contents/${path}`;
-  const currentResponse = await fetch(endpoint, { headers });
-  if (!currentResponse.ok)
-    return json({ error: "GitHub上の概念一覧を取得できませんでした。" }, 502);
-  const current = (await currentResponse.json()) as {
-    sha?: string;
-    content?: string;
-  };
-  const source = current.content ? githubText(current.content) : "";
-  const ids = existingConceptIds(source);
-  if (ids.has(concept.id))
-    return json(
-      { error: `概念ID「${concept.id}」はすでに登録されています。` },
-      409,
-    );
-  const relationIds = [
-    ...(concept.prerequisites ?? []),
-    ...(concept.recommendedNext ?? []),
-    ...(concept.related ?? []),
-    ...(concept.alternatives ?? []),
-  ];
-  const missingRelation = relationIds.find((id) => !ids.has(id));
-  if (missingRelation)
-    return json(
-      {
-        error: `関連概念「${missingRelation}」が concepts.yaml にありません。`,
-      },
-      409,
-    );
-  const block = editorialConceptMarkdown(concept);
-  const nextSource = `${source.replace(/\s*$/, "")}\n\n# ---------- 手動登録: ${concept.nameJa} ----------\n${block}\n`;
-  const writeResponse = await fetch(endpoint, {
-    method: "PUT",
-    headers: { ...headers, "content-type": "application/json" },
-    body: JSON.stringify({
-      message: `Add concept: ${concept.id}`,
-      content: githubBase64(nextSource),
-      branch: "main",
-      ...(current.sha ? { sha: current.sha } : {}),
-    }),
-  });
-  if (!writeResponse.ok)
-    return json(
-      {
-        error:
-          "概念の登録に失敗しました。別の変更が先に反映された可能性があります。概念一覧を再読み込みして再試行してください。",
-      },
-      writeResponse.status === 409 ? 409 : 502,
-    );
-  const result = (await writeResponse.json()) as {
-    commit?: { html_url?: string };
-  };
-  return json(
-    {
-      ok: true,
-      concept: {
-        id: concept.id,
-        subject: concept.subject,
-        category: concept.category,
-        nameJa: concept.nameJa,
-        nameEn: concept.nameEn ?? "",
-      },
-      commitUrl: result.commit?.html_url ?? null,
-      createdBy: scope.email,
-    },
-    201,
-  );
-}
-
 async function storeArticleBackup(
   env: Env,
   repository: string,
@@ -24189,7 +23997,13 @@ async function handleAdminRequest(
     url.pathname === "/api/admin/editor/concepts" &&
     request.method === "POST"
   )
-    return createEditorialConcept(request, env);
+    return json(
+      {
+        error:
+          "このAPIから概念カタログへ直接書き込むことはできません。記事編集画面で概念を指定し、通常の公開PRから登録してください。",
+      },
+      409,
+    );
   if (url.pathname === "/api/admin/editor/catalog" && request.method === "GET")
     return getEditorialArticleCatalog(request, env);
   if (

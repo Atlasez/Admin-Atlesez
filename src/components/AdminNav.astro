@@ -169,7 +169,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     <a class="admin-project-switcher-title" href={homePath} data-project-current-link data-admin-i18n data-admin-ja={brandLabel} data-admin-en={site === "portal" ? "Atlasez member site" : site === "secretariat" ? "Atlasez Secretariat" : site === "semi-platform" ? "Seminar platform" : site === "student-council" ? "Japan Student Council Association" : site === "thinking-cafe" ? "Thinking Cafe" : "Atlas learning site operations"}>{brandLabel}</a>
     </div>
   </div>
-  <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
+  <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-label="メニュー" aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
   <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
       <a class="admin-action-center-link" data-requires-admin href="/admin/action-center/" data-admin-page="action-center" data-admin-action-center-tab aria-current={current === "action-center" ? "page" : undefined} aria-label="要対応一覧（アクションセンター）" title="要対応一覧を開く"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>要対応</span></a>
       <a href="/admin/member-tasks/" data-admin-site="portal" data-admin-page="member-tasks" hidden={site !== "portal"} aria-current={current === "member-tasks" ? "page" : undefined}>タスク管理</a>
