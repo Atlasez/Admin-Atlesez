@@ -101,10 +101,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     </section>
 
     <footer class="portal-app-download" aria-label="macOSアプリ">
-      <div>
-        <strong data-admin-i18n data-admin-ja="Atlasez運営アプリ" data-admin-en="Atlasez Admin app">Atlasez運営アプリ</strong>
-        <p data-admin-i18n data-admin-ja="テスト機能です。Mac用アプリをダウンロードできます。アプリ内から最新版へ更新できます。" data-admin-en="Test feature. Download the Mac app. You can update it from inside the app.">テスト機能です。Mac用アプリをダウンロードできます。アプリ内から最新版へ更新できます。</p>
-      </div>
+      <strong>
+        <span data-admin-i18n data-admin-ja="Atlasez運営アプリ" data-admin-en="Atlasez Admin app">Atlasez運営アプリ</span>
+        <span class="portal-app-test-label" data-admin-i18n data-admin-ja="テスト機能" data-admin-en="Test feature">テスト機能</span>
+      </strong>
       <a href="https://github.com/Atlasez/Admin-Atlesez/releases/latest/download/Atlasez-Admin.dmg" rel="noreferrer">
         <span data-admin-i18n data-admin-ja="macOS版をダウンロード" data-admin-en="Download for macOS">macOS版をダウンロード</span>
         <span aria-hidden="true">↓</span>
@@ -126,8 +126,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .my-intake ul { margin: .3rem 0 0; padding-left: 1.2rem; }
   .my-intake a { color: var(--accent-primary); font-weight: 700; }
   .portal-app-download { align-items: center; border-top: 1px solid var(--border-default); color: var(--text-primary); display: flex; gap: 1rem; justify-content: space-between; margin-top: 2rem; padding-top: 1rem; }
-  .portal-app-download strong { font-size: .82rem; }
-  .portal-app-download p { color: var(--text-secondary); font-size: .72rem; line-height: 1.5; margin: .2rem 0 0; }
+  .portal-app-download strong { align-items: baseline; display: inline-flex; flex-wrap: wrap; font-size: .82rem; gap: .4rem; }
+  .portal-app-test-label { color: var(--danger); }
   .portal-app-download a { align-items: center; border: 1px solid var(--border-default); color: var(--text-primary); display: inline-flex; flex: 0 0 auto; font-size: .75rem; font-weight: 700; gap: .65rem; padding: .55rem .7rem; text-decoration: none; }
   .portal-app-download a:hover, .portal-app-download a:focus-visible { border-color: var(--accent-primary); color: var(--accent-primary); }
   .portal > header { border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2.1rem 0 1.3rem; }

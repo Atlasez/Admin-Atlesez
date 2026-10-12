@@ -202,9 +202,30 @@ test("ポータルのAtlasez運営アプリにテスト機能であることを�
 }) => {
   await mockAdminShell(page);
   await page.goto("admin/portal/");
-  await expect(page.locator(".portal-app-download")).toContainText(
-    "テスト機能です。",
+  const download = page.locator(".portal-app-download");
+  const label = download.locator(".portal-app-test-label");
+  await expect(download).toContainText("Atlasez運営アプリ");
+  await expect(label).toHaveText("テスト機能");
+  await expect(download).not.toContainText("テスト機能です。");
+  await expect(download).not.toContainText(
+    "Mac用アプリをダウンロードできます。",
   );
+  await expect(
+    download.getByRole("link", { name: "macOS版をダウンロード" }),
+  ).toHaveAttribute(
+    "href",
+    "https://github.com/Atlasez/Admin-Atlesez/releases/latest/download/Atlasez-Admin.dmg",
+  );
+  const usesDangerOnDark = await label.evaluate((element) => {
+    document.documentElement.dataset.prefBg = "dark";
+    const probe = document.createElement("span");
+    probe.style.color = "var(--danger)";
+    element.append(probe);
+    const expected = getComputedStyle(probe).color;
+    probe.remove();
+    return getComputedStyle(element).color === expected;
+  });
+  expect(usesDangerOnDark).toBe(true);
 });
 
 test("XAI風の独立ポータル案で既存の項目と操作を表示する", async ({ page }) => {
