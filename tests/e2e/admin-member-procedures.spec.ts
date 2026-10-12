@@ -245,3 +245,37 @@ test("担当責任者の審査は対象プロジェクト・更新時刻・引�
   });
   await expect(page.locator("[data-history]")).toContainText("反映済み");
 });
+
+test("375px幅の諸手続き画面は対象プロジェクト欄を画面内に収める", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await mockCommon(page);
+  const activeProject = { ...project, state: "active" };
+  await page.route("**/api/admin/member-procedures?**", (route) =>
+    route.fulfill({
+      json: {
+        projects: [activeProject],
+        project: activeProject,
+        canReview: false,
+        requests: [],
+      },
+    }),
+  );
+
+  await page.goto("admin/procedures/?project=thinking-cafe");
+  const picker = page.locator(".project-picker");
+  const pickerBounds = await picker.boundingBox();
+  const selectBounds = await picker.locator("select").boundingBox();
+  expect(pickerBounds).not.toBeNull();
+  expect(selectBounds).not.toBeNull();
+  expect(pickerBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(pickerBounds!.x + pickerBounds!.width).toBeLessThanOrEqual(375);
+  expect(selectBounds!.width).toBeGreaterThanOrEqual(250);
+  expect(selectBounds!.x + selectBounds!.width).toBeLessThanOrEqual(375);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(375);
+  await expect(page.locator('[data-card="pause"]')).toBeVisible();
+  await expect(page.locator('[data-card="withdrawal"]')).toBeVisible();
+});
