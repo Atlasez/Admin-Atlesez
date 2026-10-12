@@ -174,7 +174,7 @@ describe("ADMIN Workers Builds-only production policy", () => {
     ])
       expect(identity).toContain(invariant);
     expect(
-      steps.find((step) => step.uses === "actions/upload-artifact@v4")?.with,
+      steps.find((step) => step.uses === "actions/upload-artifact@v6")?.with,
     ).toMatchObject({
       path: "dist/",
       "if-no-files-found": "error",
