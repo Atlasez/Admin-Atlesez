@@ -89,6 +89,7 @@
 | OPS-36 / P2 | calendarをキーボードで使うと、曜日一括選択後に日付セルが一日ずつTab順に並び、予定追加欄へ進むまでに多数の移動が必要。日付にフォーカスして矢印キーを押しても隣の日へ移らない。 | 2026-10-13のprimary-admin Chromeで再現。日曜の曜日一括選択から日付31個を順に通り、催し名欄まで38回Tab。10/31にフォーカスしてArrowUpを押しても同じ日付に残った。現mainには日付tabindex制御とcalendar keydown handlerがない。保存・送信なし。 | **修正・隔離E2E済み / PR #526 branch、main/live未反映**。表示月内の日付を1つのTab stopにし、矢印キーとHome/Endで移動。操作説明と回帰E2Eを追加。対象E2Eとローカル全検証はpass。source head `3e8ad1f2...`のGitHub verify [38313633441](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38313633441)・native regressions [38313633462](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38313633462)もSUCCESS。main/liveとスクリーンリーダーは未受入。 |
 | OPS-37 / P2 | Primary-adminが`/admin/calendar/`で日付をEnter選択後、可否フォームは開くがフォーカスがページ全体へ落ち、連続したキーボード選択を続けにくい。 | `renderCalendar()`がcalendar DOMを全面置換し、選択前のdate/weekday focusを復元しなかった。 | **修正・ローカル/CI検証済み、main/live未反映**。日付/曜日focusを再描画後に戻し、キーボード範囲・曜日選択E2E追加。source/test head `9f565fc8...`のverify [38315932565](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38315932565)・native [38315932547](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38315932547)成功。Chrome後受入未実施。 |
 | OPS-38 / P2 | 375px Chromeで日付選択ボタンが約25×25px、月移動が約35×37px。小さく、意図しない隣日選択につながりやすい。横overflowはなし。 | date buttonが`1.55rem`固定で、後段mobile cell paddingがcontent幅を約36pxに制限。 | **修正・targeted E2E・GitHub CI済み**。日付ボタン38px、月移動40pxに拡大し、375×812 E2Eで最小サイズと横overflowを確認。PR #526 head `94cdfa66...`のverify [38318107695](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38318107695)・native regressions [38318107707](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38318107707)はSUCCESS。main/live未確認。 |
+| OPS-39 / P2 | primary-admin Chromeのアクションセンターを375×812で表示したところ、8行の個別選択checkboxは高さ約44pxでも幅が約14pxしかなく、タッチでの行選択に細かな精度を要する。画面横overflowなし。 | `.item-select`が一覧一括選択と同じ`.9rem`に固定され、行側に大きなlabel操作領域がなかった。checkboxには行タイトルのaccessible nameが付いていた。 | **修正・targeted E2E済み、PR #526 CI待ち**。個別行checkboxを24×24px以上にし、375×812で全選択checkbox寸法と横overflowを検査。コード変更はmain/live未反映。 |
 
 ### 2026-10-12追加監査: 再現・予防・未決事項
 
@@ -565,3 +566,11 @@ Cron診断は「正常」「1分・5分・毎時の定期処理を設定して�
 - **公開サイトの依存:** 公開PR [#140](https://github.com/Atlasez/Atlasez01/pull/140)と[#141](https://github.com/Atlasez/Atlasez01/pull/141)はOPEN。公開サイトmainの保存済み確認SHAは`17abea4ed6eeb97719dee60f57bc6b26d5d2d53a`。公開募集/プライバシー文言の変更は未反映として扱う。
 - **D1/ガード:** 固定Accountを明示した読み取り専用migration listでは`0132_application_email_first_attempt.sql`のみ未適用。migration ledger以外のDB整合性や復旧可能性を証明せず、書込み・migration・export・restoreは実施していない。required approving reviewsは0であり変更なし。実応募・招待・メール・Discord・記事公開・本番設定変更もなし。
 - **次の受入:** ADMIN運用責任者/maintainerが隔離Worker/D1、OAuth専用合成アカウント、役割別fixtureを準備し、応募から承認/見送り、初回タスク、休止/退会/再開、権限失効を保存・通知まで確認する。合格条件は、権限境界・状態遷移・再試行/重複防止をroleごとの証拠で確認し、PIIを監査成果物へ残さないこと。準備前はrole別の実画面受入を未検証のまま維持する。
+
+### 2026-10-13 Chrome mobile action-center audit: OPS-39
+
+- **現在確認:** 認証済みprimary-admin Chromeで本番`https://admin.atlasez.org/admin/action-center/`を375×812 CSS pxで表示し、8行の個別選択checkbox各inputの寸法が約14.4×44px、document幅375pxで横overflowなしと計測した。checkboxには行タイトル由来のaccessible nameがあった。実データのタイトル・本文・選択状態は転記せず、選択・一括操作・保存は行っていない。確認後も本番画面を変更していない。
+- **根本原因:** `src/pages/admin/action-center.astro`の`.select-visible input, .item-select`共通ルールが両方を`.9rem`（約14.4px）に固定していた。個別checkboxは行タイトルのリンクとは別要素で、タップできる幅もcheckbox本体の幅に限られる。
+- **修正・隔離検証:** `.select-visible input`の小さい表示選択UIは維持し、`.item-select`だけ24×24pxへ拡大。mock APIを使う375×812 E2Eが各個別checkboxの幅/高さ24px以上と横overflowなしを検査し、選択・保存をしない。targeted 1件pass、`admin-action-center.spec.ts` 9件pass。初回実行は旧`dist`を配信して14.4pxで失敗し、ADMIN再build後にpassした。これを製品失敗として数えず、旧buildの試験条件として扱う。
+- **分類・受入:** P2。個別一括選択のタッチ精度を損ねるが、keyboardや個別の行導線は残り、応募・データ閲覧の制御は損なわないため限定運用停止ではない。担当はADMIN frontend maintainer。PR #526の新head CIを確認し、main/live反映後は同じprimary-admin画面で全個別checkboxが24×24px以上であること、横overflowがないことを再確認する。今の修正は本番未反映。
+- **確認範囲の補足:** 同じCSS viewport 375×812で`/admin/member-tasks/`も開き、document幅375px・scrollWidth 375pxを確認した。画面操作・タスク更新はしていない。ARIA-hiddenかつ画面外へclipされたfallback `<select>`は見た目上のコントロールとして数えない。実スクリーンリーダー・他roleは未確認。

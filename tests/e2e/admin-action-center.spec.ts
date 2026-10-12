@@ -443,6 +443,25 @@ test("選択したタスクを一括完了し、直後に元へ戻せる", async
   ).toHaveLength(2);
 });
 
+test("375px幅の個別選択チェックボックスに24px以上の操作領域がある", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await mockShell(page, true);
+  await page.goto("admin/action-center/");
+
+  const checkboxes = page.locator("[data-action-items] [data-action-select]");
+  await expect(checkboxes).toHaveCount(2);
+  for (const checkbox of await checkboxes.all()) {
+    const bounds = await checkbox.boundingBox();
+    expect(bounds?.width ?? 0).toBeGreaterThanOrEqual(24);
+    expect(bounds?.height ?? 0).toBeGreaterThanOrEqual(24);
+  }
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(375);
+});
+
 test.describe("要対応一覧の期限タイムゾーン", () => {
   test.use({ timezoneId: "America/New_York" });
 
