@@ -4,7 +4,7 @@
 
 - 対象URL: `https://admin.atlasez.org`
 - ADMIN GitHub main: `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`（2026-10-13にGitHubのmainを読み取り確認）
-- 関連記録: [Issue #509](https://github.com/Atlasez/Admin-Atlesez/issues/509)、[PR #526](https://github.com/Atlasez/Admin-Atlesez/pull/526)、今回の修正PR [#528](https://github.com/Atlasez/Admin-Atlesez/pull/528)（OPEN、main `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370` 起点）。今回の未読件数不一致は既存Issue/PRの記録済み不具合と重複しないことを検索した。
+- 関連記録: [Issue #509](https://github.com/Atlasez/Admin-Atlesez/issues/509)、[PR #526](https://github.com/Atlasez/Admin-Atlesez/pull/526)、今回の修正PR [#528](https://github.com/Atlasez/Admin-Atlesez/pull/528)、全体監査記録（[PR #526の監査ファイル](https://github.com/Atlasez/Admin-Atlesez/blob/08997b469b3da9116a0882c43a244087c1c83686/docs/ADMIN_OPERATIONAL_READINESS_2026-10-12.md)）。今回の未読件数不一致は既存Issue/PRの記録済み不具合と重複しないことを検索した。
 - Chromeでログイン済みの既存セッションを使用した。ポータルには「運営として参加中」4件と表示された。アカウントの本人確認、個別の権限一覧、専用検証アカウントかどうかは確認していないため、具体的なロール名は断定しない。
 - 画面は通常のChromeウィンドウで確認した。スクリーンショット表示サイズは1353×814画像pxだったが、CSS viewport幅・ブラウザーズーム率は計測していない。ライブADMINの375 CSS px、200%ズーム、実スクリーンリーダーは未検証。
 - 個人名、通知タイトル・本文、タスク名、IDは監査成果物へ保存していない。ヘッダーにアカウント表示が含まれるため、スクリーンショットは保存していない。件数と画面状態だけを記録した。
@@ -56,8 +56,14 @@
 
 ## 修正PRとローカル検証
 
-- 修正PR: [PR #528](https://github.com/Atlasez/Admin-Atlesez/pull/528)。監査時点でOPEN。baseはmain `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`、確認対象の最新PR headは`ca8a34415236d2d3e7891fdc9adf1c2839ca7ba9`。
+- 修正PR: [PR #528](https://github.com/Atlasez/Admin-Atlesez/pull/528)。監査時点でOPEN。baseはmain `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`、確認対象headは`b8b157434bc8e38150cc49dc25fc6b7feea07acd`。
 - ローカル検証: `verify:deploy-config`、`check`、`lint`、`test`（65 files / 506 tests）、`format:check`、ADMIN build、`verify:build-info`、`test:e2e`（386 cases: 372 passed / 14 skipped）、`git diff --check`が成功。
-- GitHub CI: [Actions run #38292134451](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38292134451)はコード変更を含むhead `a57bc9b8c32810e9c2a80b90f5daf1c79ce51d1a`で成功。[Actions run #38292887939](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38292887939)は監査時点のhead `ca8a34415236d2d3e7891fdc9adf1c2839ca7ba9`で2026-10-13 03:50 JST時点に成功。
+- GitHub CI: [Actions run #38292134451](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38292134451)はコード変更を含むhead `a57bc9b8c32810e9c2a80b90f5daf1c79ce51d1a`で成功。[Actions run #38292887939](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38292887939)は監査文書更新head `ca8a34415236d2d3e7891fdc9adf1c2839ca7ba9`で成功。[Actions run #38293710690](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38293710690)は確認対象head `b8b157434bc8e38150cc49dc25fc6b7feea07acd`で成功。
 - 影響: ADMINのポータル通知件数表示と通知ベルのアクセシビリティ名、関連E2Eテストと本監査文書。D1 schema/data、Worker設定、Secretsへの変更なし。ロールバックはPRの当該変更をrevertする。
-- ビルド情報: 初回PRコミット`b3ae7d0d5c10ae3b1d0b22a06f78cbf0f092a954`と確認対象の最新コミット`ca8a34415236d2d3e7891fdc9adf1c2839ca7ba9`を対象にADMIN buildと`verify:build-info`が成功。確認対象SHAのbuild-info検証は2026-10-13に再実行済み。
+- ビルド情報: 初回PRコミット`b3ae7d0d5c10ae3b1d0b22a06f78cbf0f092a954`と確認対象head`b8b157434bc8e38150cc49dc25fc6b7feea07acd`を対象にADMIN buildと`verify:build-info`が成功。確認対象SHAのbuild-info検証は2026-10-13に再実行済み。
+
+## 既存の全体監査・公開サイト側PRとの関係
+
+- ADMINの広範な実運用監査・運用手順・Go/No-Go条件は、PR #526の[監査ファイル](https://github.com/Atlasez/Admin-Atlesez/blob/08997b469b3da9116a0882c43a244087c1c83686/docs/ADMIN_OPERATIONAL_READINESS_2026-10-12.md)に記録されている。PR #526はOPENであり、同PRに含む権限境界、メールqueue、運用診断・手順等の修正はmain/live未反映。OPS-28等の既存記録を本件の新規Chrome不具合として再計上しない。
+- GitHub上で読み取り確認した公開mainは`17abea4ed6eeb97719dee60f57bc6b26d5d2d53a`。公開PR [#140](https://github.com/Atlasez/Atlasez01/pull/140)（募集・privacy・依存更新）と[#141](https://github.com/Atlasez/Atlasez01/pull/141)（モバイルナビ・問い合わせページ文言）はいずれもOPENで、変更の本番反映は確認されていない。最新の状態・受入条件は各PR本文と全体監査記録を参照する。
+- Workers Builds復旧Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509)はOPEN。最終更新は2026-10-10であり、この確認ではCloudflareの権限調査、token変更、設定変更を行っていない。復旧後のSHA/Worker/Chrome照合が未達のため、本監査の修正を本番修正済みとは扱わない。
