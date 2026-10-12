@@ -58,6 +58,6 @@
 
 - 修正PR: [PR #528](https://github.com/Atlasez/Admin-Atlesez/pull/528)。監査時点でOPEN。baseはmain `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`、headは`b3ae7d0d5c10ae3b1d0b22a06f78cbf0f092a954`。
 - ローカル検証: `verify:deploy-config`、`check`、`lint`、`test`（65 files / 506 tests）、`format:check`、ADMIN build、`verify:build-info`、`test:e2e`（386 cases: 372 passed / 14 skipped）、`git diff --check`が成功。
-- GitHub CI: PRの`verify`は確認時点で実行中。CIの成功はまだ確認できていない。
+- GitHub CI: [Actions run #38292134451](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38292134451)の`verify`が2026-10-13 03:43 JST時点で成功。対象PR headは`a57bc9b8c32810e9c2a80b90f5daf1c79ce51d1a`。
 - 影響: ADMINのポータル通知件数表示と通知ベルのアクセシビリティ名、関連E2Eテストと本監査文書。D1 schema/data、Worker設定、Secretsへの変更なし。ロールバックはPRの当該変更をrevertする。
-- ビルド情報: 初回PRコミット`b3ae7d0d5c10ae3b1d0b22a06f78cbf0f092a954`を対象にADMIN buildと`verify:build-info`が成功。監査文書更新コミット後にも再実行して最終SHAを確認する。
+- ビルド情報: 初回PRコミット`b3ae7d0d5c10ae3b1d0b22a06f78cbf0f092a954`と監査文書更新後の最終コミット`a57bc9b8c32810e9c2a80b90f5daf1c79ce51d1a`を対象にADMIN buildと`verify:build-info`が成功。最終SHAのbuild-info検証は2026-10-13に再実行済み。
