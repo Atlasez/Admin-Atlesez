@@ -515,7 +515,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   type PortalTodo = { id?: string; project_id: string; project_name?: string; subject?: string | null; task_kind?: string; title: string; details?: string | null; status: string; due_at?: string | null; due_timezone?: string | null };
   type PortalCalendarEvent = { id: string; kind: 'organization' | 'personal'; title: string; details?: string | null; startsAt: string; endsAt?: string | null; timezone: string; projectName: string };
   type PortalNotification = { kind?: string; read?: boolean };
-  type PortalData = { projects?: PortalProject[]; availableProjects?: PortalProject[]; todos?: PortalTodo[]; taskSummary?: { openCount?: number; dueToday?: number; dueSoon?: number }; calendar?: { rangeStart?: string; rangeEnd?: string; events?: PortalCalendarEvent[] }; notifications?: PortalNotification[]; notificationsTruncated?: boolean; notificationsUnavailable?: boolean; unreadNotificationsCount?: number; pendingApprovals?: number; error?: string };
+  type PortalData = { projects?: PortalProject[]; availableProjects?: PortalProject[]; todos?: PortalTodo[]; taskSummary?: { openCount?: number; dueToday?: number; dueSoon?: number }; calendar?: { rangeStart?: string; rangeEnd?: string; events?: PortalCalendarEvent[] }; notifications?: PortalNotification[]; notificationsTruncated?: boolean; notificationsUnavailable?: boolean; unreadNotificationsCount?: number | null; pendingApprovals?: number; error?: string };
   const initializePortal = () => {
     const root = document.querySelector<HTMLElement>('[data-portal]');
     if (!root || root.dataset.initialized === 'true') return;
@@ -693,8 +693,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       setSummary('today', dueToday, dueToday ? `${dueToday}件の期限を確認` : '期限のあるタスクはありません', dueToday ? 'attention' : 'success');
       setSummary('due-soon', dueSoon, dueSoon ? '7日以内に期限' : '7日以内の期限はありません', dueSoon ? 'attention' : 'success');
       const notifications = data.notifications ?? [];
-      const serverUnread = Number(data.unreadNotificationsCount);
-      const hasServerUnread = Number.isFinite(serverUnread);
+      const serverUnread = data.unreadNotificationsCount;
+      const hasServerUnread = typeof serverUnread === 'number' && Number.isFinite(serverUnread);
       const unread = hasServerUnread ? Math.max(0, Math.trunc(serverUnread)) : notifications.filter((item) => !item.read).length;
       const notificationsUnavailable = data.notificationsUnavailable === true;
       const notificationsTruncated = data.notificationsTruncated === true;
@@ -707,7 +707,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       } else if (hasServerUnread) {
         setSummary('unread', unread, unread ? '通知を確認' : '未読はありません', unread ? 'attention' : 'success');
       } else if (notificationsTruncated) {
-        setSummary('unread', unread ? `${unread}+` : '0', unread ? '最新20件中の未読（続きあり）' : '最新20件を確認', unread ? 'attention' : undefined);
+        setSummary('unread', unread ? `${unread}+` : '0', unread ? '表示中の通知に未読あり（続きがあります）' : '表示中の通知を確認', unread ? 'attention' : undefined);
       } else {
         setSummary('unread', unread, unread ? '通知を確認' : '未読はありません', unread ? 'attention' : 'success');
       }

@@ -396,6 +396,11 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const menuToggle = document.querySelector<HTMLButtonElement>('[data-admin-menu-toggle]');
       const primaryNav = document.querySelector<HTMLElement>('#admin-primary-nav');
       let notifications: Array<{ id: string; title: string; detail: string; href: string; kind?: string; updatedAt?: string; read?: boolean }> = [];
+      let notificationCountAnnouncement = '未読件数を確認しています';
+      const updateNotificationButtonLabel = (open = Boolean(notificationPanel && !notificationPanel.hidden)) => {
+        const action = open ? '通知を閉じる' : '通知を開く';
+        notificationButton?.setAttribute('aria-label', `${action}（${notificationCountAnnouncement}）`);
+      };
       const escape = (value: string) => value.replace(/[&<>"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[character] ?? character);
       const formatNotificationTime = (value?: string) => value ? new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '';
       const profileCacheKey = 'atlasez-admin-profile-cache';
@@ -471,6 +476,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           notifications = data.notifications;
           const unreadCount = Math.max(0, Math.trunc(Number(data.unreadNotificationsCount ?? notifications.filter((item) => !item.read).length)));
           if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : `${unreadCount}${data.notificationsTruncated && unreadCount ? "+" : ""}`; notificationCount.hidden = unreadCount === 0; }
+          notificationCountAnnouncement = unreadCount
+            ? `未読${unreadCount}${data.notificationsTruncated ? "件以上" : "件"}`
+            : data.notificationsTruncated
+              ? '表示中に未読はありません（続きあり）'
+              : '未読なし';
+          updateNotificationButtonLabel();
           if (markAllRead) markAllRead.hidden = unreadCount === 0 && data.notificationsTruncated !== true;
           if (markAllRead) markAllRead.disabled = data.legacyReminderNormalizationPending === true;
           if (legacyReminderStatus) {
@@ -483,6 +494,8 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         } catch {
           notifications = [];
           if (notificationCount) notificationCount.hidden = true;
+          notificationCountAnnouncement = '件数を取得できません';
+          updateNotificationButtonLabel();
           if (markAllRead) markAllRead.hidden = true;
           notificationList.innerHTML = '<span class="admin-notification-empty" role="status">通知を取得できませんでした。時間をおいて再度お試しください。</span>';
         }
@@ -492,7 +505,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         const wasOpen = !notificationPanel.hidden;
         notificationPanel.hidden = !open;
         notificationButton.setAttribute('aria-expanded', String(open));
-        notificationButton.setAttribute('aria-label', open ? '通知を閉じる' : '通知を開く');
+        updateNotificationButtonLabel(open);
         if (!open && wasOpen && restoreFocus) notificationButton.focus();
       };
       notificationButton?.addEventListener('click', () => { setNotificationPanelOpen(Boolean(notificationPanel?.hidden)); });
