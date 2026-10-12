@@ -58,6 +58,11 @@ function environment() {
     .filter((name) => name.endsWith(".sql"))
     .sort())
     db.exec(readFileSync(new URL(file, migrationDirectory), "utf8"));
+  // Integration fixtures exercise notification behavior with their own data;
+  // keep the global inbox boundary open unless a test sets a specific cutoff.
+  db.prepare(
+    "UPDATE admin_notification_global_cutoff SET cleared_before=? WHERE singleton=1",
+  ).run("1970-01-01T00:00:00.000Z");
   db.exec("PRAGMA foreign_keys=ON");
   const env = {
     ADMIN_AUTH_MODE: "google-oauth",

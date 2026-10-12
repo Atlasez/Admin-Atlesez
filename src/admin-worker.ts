@@ -5,7 +5,7 @@ import { handleTaskWorkspace, type TaskWorkspaceAccess, type WorkspaceTask } fro
 import type { D1Database, D1PreparedStatement } from "./lib/admin-database";
 import { planAtlasManagerRevocation, permissionDerivedAtlasManagerStatements, handleManagerGrants, resolveAtlasManagerDisposition, planDiscordAtlasManagerRevocation } from "./lib/admin-manager-provenance";
 import { readOperationsInsights } from "./lib/admin-operations-insights";
-import { handleNotificationFeatures, loadNotificationPreferences, notificationSourceMetadata, notificationFeatureFilter, importantKinds } from "./lib/admin-notification-features";
+import { handleNotificationFeatures, loadGlobalNotificationCutoff, loadNotificationPreferences, notificationSourceMetadata, notificationFeatureFilter, importantKinds } from "./lib/admin-notification-features";
 import { handleTaskTemplates, dispatchTaskTemplates } from "./lib/admin-task-templates";
 import {
   EDITORIAL_ASSET_ID_PATTERN,
@@ -22734,6 +22734,15 @@ async function adminNotifications(
 ): Promise<Response> {
   const scope = preloadedScope ?? (await getMemberOperationScope(request, env));
   if (isResponse(scope)) return scope;
+  const globalCutoff = await loadGlobalNotificationCutoff(env.REPORTS);
+  if (!globalCutoff.available || !globalCutoff.clearedBefore)
+    return json(
+      {
+        error:
+          "通知の全体クリア設定が適用されていません。migration 0131の適用を確認してください。",
+      },
+      503,
+    );
   const profile = await env.REPORTS.prepare(
     "SELECT display_name FROM editorial_member_profiles WHERE email = ?",
   )
@@ -22842,6 +22851,10 @@ async function adminNotifications(
       ? "s.remind_at_utc IS NOT NULL AND s.remind_at_utc <= ? AND "
       : "";
     const dueBindings = "dueReminder" in metadata ? [new Date().toISOString()] : [];
+    const cutoffTime = "cutoffTime" in metadata && typeof metadata.cutoffTime === "string"
+      ? metadata.cutoffTime
+      : metadata.time;
+    const cutoffClause = `julianday(s.${cutoffTime}) > julianday(?) AND `;
     const readExpr = `EXISTS (SELECT 1 FROM admin_notification_reads nr WHERE nr.email = ? AND nr.notification_id = ${metadata.id})`;
     const unreadClause = unreadOnly || includeUnreadIds ? `NOT ${readExpr} AND ` : "";
     const cursorClause = cursor
@@ -22852,8 +22865,8 @@ async function adminNotifications(
       : [];
     const [page, legacyReminderPending, legacyReminderFailed] = await Promise.all([
       env.REPORTS.prepare(
-        `SELECT s.*, ${metadata.id} AS __notification_id, ${readExpr} AS __notification_read FROM ${source} WHERE ${featureFilter.sql}${dueClause}${unreadClause}1=1 ${cursorClause}ORDER BY s.${metadata.time} DESC, ${metadata.id} DESC LIMIT ?`,
-      ).bind(scope.email, ...bindings, ...featureFilter.values, ...dueBindings, ...(unreadOnly || includeUnreadIds ? [scope.email] : []), ...cursorBindings, notificationFetchLimit)
+        `SELECT s.*, ${metadata.id} AS __notification_id, ${readExpr} AS __notification_read FROM ${source} WHERE ${featureFilter.sql}${dueClause}${cutoffClause}${unreadClause}1=1 ${cursorClause}ORDER BY s.${metadata.time} DESC, ${metadata.id} DESC LIMIT ?`,
+      ).bind(scope.email, ...bindings, ...featureFilter.values, ...dueBindings, globalCutoff.clearedBefore, ...(unreadOnly || includeUnreadIds ? [scope.email] : []), ...cursorBindings, notificationFetchLimit)
         .all<T & { __notification_id: string; __notification_read: number }>(),
       "dueReminder" in metadata
         ? env.REPORTS.prepare(
