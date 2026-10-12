@@ -2218,6 +2218,132 @@ describe("admin worker editor APIs", () => {
     );
   });
 
+  it.each([
+    {
+      actorRole: "project-leader",
+      stage: "subject-coordinator",
+      expectedStatus: 403,
+    },
+    {
+      actorRole: "project-leader",
+      stage: "project-leader",
+      expectedStatus: 200,
+    },
+    {
+      actorRole: "subject-coordinator",
+      stage: "project-leader",
+      expectedStatus: 403,
+    },
+    {
+      actorRole: "subject-coordinator",
+      stage: "subject-coordinator",
+      expectedStatus: 200,
+    },
+  ])(
+    "limits direct editorial document access to the assigned review stage ($actorRole / $stage)",
+    async ({ actorRole, stage, expectedStatus }) => {
+      const documentId = "22222222-2222-4222-8222-222222222222";
+      class StageScopedStatement extends EmptyStatement {
+        async all<T>() {
+          if (
+            this.query.includes("SELECT subject FROM report_admin_permissions")
+          )
+            return { results: [] as T[] };
+          if (
+            this.query.includes(
+              "SELECT role, subject FROM editorial_workflow_roles",
+            )
+          )
+            return {
+              results: [
+                {
+                  role: actorRole,
+                  subject:
+                    actorRole === "subject-coordinator" ? "mathematics" : "",
+                },
+              ] as T[],
+            };
+          return { results: [] as T[] };
+        }
+
+        async first<T>() {
+          if (this.query.includes("FROM atlasez_project_member_lifecycle"))
+            return null as T | null;
+          if (this.query.includes("FROM editorial_documents WHERE id = ?"))
+            return {
+              id: documentId,
+              creator_kind: "person",
+              document_kind: "canonical",
+              base_document_id: null,
+              base_document_updated_at: null,
+              source_article_id: null,
+              subject: "mathematics",
+              category: "algebra",
+              locale: "ja",
+              slug: "private-draft",
+              title: "非公開原稿",
+              summary: "審査中の原稿",
+              concept_id: "",
+              concept_name: null,
+              concept_name_en: null,
+              concept_is_new: 0,
+              body: "非公開本文",
+              writing_memo: "運営メモ",
+              latex_engine: "katex",
+              status: "in-review",
+              created_by: "author@example.test",
+              updated_by: "author@example.test",
+              created_at: "2026-10-12T00:00:00.000Z",
+              updated_at: "2026-10-12T00:00:00.000Z",
+              reviewed_at: null,
+              published_at: null,
+              archived_at: null,
+              archived_by: null,
+              archive_expires_at: null,
+              scheduled_publish_at: null,
+              scheduled_publish_claimed_at: null,
+              publication_review_stage: stage,
+              publication_review_round: 1,
+              publication_pr_number: null,
+              publication_pr_url: null,
+              publication_branch: null,
+              publication_action: null,
+              publication_requested_at: null,
+              locked_ranges: "[]",
+              article_references: "[]",
+            } as T;
+          return null as T | null;
+        }
+      }
+      const env = {
+        ...emptyEnv,
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: {
+          ...emptyEnv.REPORTS,
+          prepare: (query: string) => new StageScopedStatement(query),
+        },
+      };
+      const response = await worker.fetch(
+        new Request(
+          `https://admin.example/api/admin/editor/documents/${documentId}`,
+          {
+            headers: {
+              "Cf-Access-Authenticated-User-Email": "reviewer@example.test",
+            },
+          },
+        ),
+        env as never,
+      );
+
+      expect(response.status).toBe(expectedStatus);
+      if (expectedStatus === 200)
+        await expect(response.json()).resolves.toMatchObject({
+          document: { id: documentId, body: "非公開本文" },
+        });
+      else await expect(response.json()).resolves.not.toHaveProperty("body");
+    },
+  );
+
   it("returns all article scope for the designated primary operator", async () => {
     const documentQueries: string[] = [];
     class GlobalStatement extends EmptyStatement {
@@ -3045,9 +3171,15 @@ describe("admin worker editor APIs", () => {
 
       async first<T>() {
         if (
-          this.sql.includes("SELECT subject, status FROM editorial_documents")
+          this.sql.includes(
+            "SELECT subject, status, publication_review_stage FROM editorial_documents",
+          )
         )
-          return { subject: "mathematics", status: "draft" } as T;
+          return {
+            subject: "mathematics",
+            status: "draft",
+            publication_review_stage: null,
+          } as T;
         return null as T | null;
       }
 
@@ -3119,9 +3251,15 @@ describe("admin worker editor APIs", () => {
 
       async first<T>() {
         if (
-          this.sql.includes("SELECT subject, status FROM editorial_documents")
+          this.sql.includes(
+            "SELECT subject, status, publication_review_stage FROM editorial_documents",
+          )
         )
-          return { subject: "mathematics", status: "draft" } as T;
+          return {
+            subject: "mathematics",
+            status: "draft",
+            publication_review_stage: null,
+          } as T;
         return null as T | null;
       }
     }

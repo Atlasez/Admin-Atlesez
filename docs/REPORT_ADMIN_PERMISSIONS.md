@@ -1,48 +1,19 @@
 # 記事報告の担当分野管理
 
-記事の問題報告は、記事ページが持つ `subject`（例: `mathematics`）と `category`（例: `group-theory`）を保存します。運営画面では Cloudflare Access が認証したメールアドレスと、D1 の `report_admin_permissions` を照合して、担当分野の報告だけを表示・更新できます。
+記事の問題報告は、記事ページが持つ `subject`（例: `mathematics`）と `category`（例: `group-theory`）を保存します。固定ADMIN本番はGoogle OAuthで認証し、確認済みメールアドレスとD1の`report_admin_permissions`を照合します。報告の閲覧・更新は権限管理画面から割り当てた担当分野に限定され、全分野管理者は全分野を扱えます。
 
 ## 設定の流れ
 
-1. Cloudflare Zero Trust の Access アプリケーションで、運営者のメールアドレスを `admin/reports` にアクセスできるポリシーへ追加します。
-2. Cloudflare Dashboard の D1 コンソールで、`0004_article_report_subject_permissions.sql` を一度実行します。
-3. 同じ D1 コンソールで担当分野を登録します。`subject` は記事データの slug を使います。
+1. 既に権限を持つ全分野管理者が、正しいGoogleアカウントで[権限管理](https://admin.atlasez.org/admin/permissions/?project=atlas)へログインする。
+2. 対象者の登録済みアカウントを確認する。メールアドレスを推測・別人用アドレスで追加しない。
+3. 「運営権限の付与」で記事の`subject` slugと一致する担当分野を選び、必要最小限の範囲を付与する。`*`は全分野権限なので通常の分野担当へ付与しない。
+4. 保存結果と一覧を再読込して照合する。画面/APIの権限変更履歴に変更者・範囲が記録されたことを確認する。
+5. 解除も同じ画面から行い、対象者の一覧から担当分野が消えたことと、権限失効後に直接APIが403になることを確認する。
 
-```sql
--- 数学担当を追加する例
-INSERT OR IGNORE INTO report_admin_permissions (email, subject)
-VALUES ('math-editor@example.com', 'mathematics');
-
--- 物理と天文を兼任する例
-INSERT OR IGNORE INTO report_admin_permissions (email, subject)
-VALUES
-  ('science-editor@example.com', 'physics'),
-  ('science-editor@example.com', 'astronomy');
-
--- 全分野を閲覧・更新できる管理者を追加する例
-INSERT OR IGNORE INTO report_admin_permissions (email, subject)
-VALUES ('chief-editor@example.com', '*');
-```
-
-担当から外す場合は次を実行します。
-
-```sql
-DELETE FROM report_admin_permissions
-WHERE email = 'math-editor@example.com' AND subject = 'mathematics';
-```
-
-現在の設定は次で確認できます。
-
-```sql
-SELECT email, subject
-FROM report_admin_permissions
-ORDER BY email, subject;
-```
-
-主管理者はD1の `report_admin_permissions` に `subject='*'` を持つアカウントとして管理します。過去に受信済みで分野が空欄の報告は、全分野管理者だけが確認できます。
+担当分野の割当は`/admin/permissions/`で行う。Cloudflare Access設定、D1コンソールでのmigration/INSERT/DELETE、手作業のSQL編集を日々の運用手順として使わない。DB migrationが必要な場合は別のレビュー済みDB変更手順に従う。過去に受信済みで分野が空欄の報告は全分野管理者だけが確認できる。
 
 ## 仕組みと注意点
 
-- Cloudflare Access が「誰が管理画面へ入れるか」を決め、Worker が「入れた人のうち、どの分野の報告を読んで更新できるか」を決めます。両方の設定が必要です。
-- Worker は Cloudflare Access の `Cf-Access-Authenticated-User-Email` ヘッダーのみを権限判定に使います。ブラウザーから任意のメールアドレスを送って権限を偽装することはできません。
+- Google OAuthが本人を認証し、WorkerはOAuthセッションのメールアドレスから`report_admin_permissions`を参照します。クライアントが任意のメールアドレスを送って権限を偽装できないよう、API側でもscopeを検証します。
 - 分野の追加・名称変更時は、記事データの `subject` slug と同じ値を権限テーブルにも追加してください。
+- この文書に個人メール・秘密値・実報告の本文を記録しません。権限設定の変更に迷う場合は、実行前に運営責任者へ確認してください。

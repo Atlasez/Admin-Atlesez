@@ -6,6 +6,7 @@ const dayMs = 24 * 60 * 60 * 1_000;
 export async function purgeExpiredPersonalData(
   db: D1Database,
   now = new Date(),
+  options: { clearArticleReportData?: boolean } = {},
 ) {
   const expiredSessions = new Date(now.getTime() - dayMs).toISOString();
   const expiredApplications = new Date(
@@ -19,7 +20,7 @@ export async function purgeExpiredPersonalData(
   ).toISOString();
   const expiredRateLimits = Math.floor((now.getTime() - dayMs) / 600_000);
 
-  const results = await Promise.all([
+  const statements = [
     db
       .prepare("DELETE FROM admin_auth_sessions WHERE expires_at < ?")
       .bind(expiredSessions)
@@ -34,25 +35,30 @@ export async function purgeExpiredPersonalData(
       )
       .bind(expiredApplications)
       .run(),
-    db
-      .prepare(
-        "UPDATE article_reports SET reporter_hash='' WHERE reporter_hash<>'' AND created_at < ?",
-      )
-      .bind(expiredReporterHashes)
-      .run(),
-    db
-      .prepare(
-        "UPDATE article_reports SET content_hash='' WHERE content_hash<>'' AND created_at < ?",
-      )
-      .bind(expiredReportDedupHashes)
-      .run(),
-    db
-      .prepare(
-        "UPDATE article_reports SET contact=NULL WHERE status='resolved' AND contact IS NOT NULL AND updated_at < ?",
-      )
-      .bind(expiredApplications)
-      .run(),
-  ]);
+  ];
+  if (options.clearArticleReportData) {
+    statements.push(
+      db
+        .prepare(
+          "UPDATE article_reports SET reporter_hash='' WHERE reporter_hash<>'' AND created_at < ?",
+        )
+        .bind(expiredReporterHashes)
+        .run(),
+      db
+        .prepare(
+          "UPDATE article_reports SET content_hash='' WHERE content_hash<>'' AND created_at < ?",
+        )
+        .bind(expiredReportDedupHashes)
+        .run(),
+      db
+        .prepare(
+          "UPDATE article_reports SET contact=NULL WHERE status='resolved' AND contact IS NOT NULL AND updated_at < ?",
+        )
+        .bind(expiredApplications)
+        .run(),
+    );
+  }
+  const results = await Promise.all(statements);
 
   return {
     sessionsDeleted: Number(results[0]?.meta?.changes ?? 0),

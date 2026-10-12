@@ -557,9 +557,13 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     nextProjectButton.addEventListener("click", () => { void saveBasicProfileAndContinue(); });
     let turnstileToken = "";
     fetch("/api/public/application-config").then((response) => response.json()).then((config: { turnstileSiteKey?: string }) => { if (!config.turnstileSiteKey) return; const script = document.createElement("script"); script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"; script.async = true; script.onload = () => { const turnstile = (window as unknown as { turnstile?: { render: (target: HTMLElement, options: Record<string, unknown>) => void } }).turnstile; turnstile?.render(slot, { sitekey: config.turnstileSiteKey, callback: (token: string) => { turnstileToken = token; }, "expired-callback": () => { turnstileToken = ""; } }); }; document.head.append(script); }).catch(() => undefined);
+    let isSubmitting = false;
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!directProjectScreen) { await saveBasicProfileAndContinue(); return; }
+      if (isSubmitting) return;
+      isSubmitting = true;
+      submitButton.disabled = true;
       const submittedLanguage = language.value as "ja" | "en";
       result.value = submittedLanguage === "en" ? "Submitting…" : "送信中…";
       const fd = new FormData(form);
@@ -596,6 +600,8 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         location.assign("/applicant/");
       } catch (error) {
         result.value = error instanceof Error ? error.message : "送信できませんでした。";
+        isSubmitting = false;
+        submitButton.disabled = false;
       }
     });
   }

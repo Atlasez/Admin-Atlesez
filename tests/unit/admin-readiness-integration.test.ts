@@ -1254,6 +1254,61 @@ it("仮の新規利用者の基本情報保存・応募・二重応募防止・�
   expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
+it("同一利用者の同時応募は1件だけ保存し、副作用も一組だけ作る", async () => {
+  const { db, request } = environment();
+  const email = "concurrent-applicant@atlasez.test";
+  const profile = {
+    familyName: "同時",
+    givenName: "応募",
+    familyNameKana: "どうじ",
+    givenNameKana: "おうぼ",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+  expect(
+    (await request("/api/application-profile", email, profile)).status,
+  ).toBe(200);
+  const application = {
+    projectSlug: "thinking-cafe",
+    interests: "対話",
+    message: "並行送信の隔離検証",
+    referralSource: "検証用入力",
+    interviewAvailability: "平日18時 Asia/Tokyo",
+    projectAnswers: { theme: "運用検証" },
+  };
+
+  const responses = await Promise.all([
+    request("/api/apply", email, application),
+    request("/api/apply", email, application),
+  ]);
+
+  expect(responses.map((response) => response.status).sort()).toEqual([
+    201, 409,
+  ]);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE lower(email)=lower(?) AND project_slug='thinking-cafe' AND status IN ('new','reviewing')",
+      )
+      .get(email),
+  ).toMatchObject({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries WHERE kind='applicant_confirmation'",
+      )
+      .get(),
+  ).toMatchObject({ count: 1 });
+  expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+});
+
 it("参加済みメンバーは追加応募や二つ目の未入力プロフィールで会員アクセスを失わない", async () => {
   const { db, request } = environment();
   const managerProfile = await request(

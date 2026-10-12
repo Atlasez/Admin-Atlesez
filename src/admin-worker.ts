@@ -113,6 +113,7 @@ interface Env {
   APPLICATION_OPERATIONS_EMAILS?: string;
   /** Cloudflare Turnstile。応募フォーム公開時は必須にする。 */
   TURNSTILE_SECRET_KEY?: string;
+  ADMIN_PERSONAL_DATA_RETENTION_ENABLED?: string;
   PUBLIC_TURNSTILE_SITE_KEY?: string;
   /** Atlasez.com の公開Workerから応募を受け取るための共有Secret。 */
   PUBLIC_APPLICATION_INGEST_TOKEN?: string;
@@ -4056,6 +4057,14 @@ async function changeAtlasMemberLifecycle(
     return json({ error: "メンバーと操作内容を確認してください。" }, 400);
   if (action === "archive" && email === scope.email)
     return json({ error: "自分自身をアーカイブすることはできません。" }, 400);
+  if (action === "archive" && email === primaryAdminEmail(env))
+    return json(
+      {
+        error:
+          "設定された主管理者アカウントはアーカイブできません。主管理者を変更してから再試行してください。",
+      },
+      409,
+    );
 
   const lifecycle = await env.REPORTS.prepare(
     `SELECT status, snapshot_json, created_by, created_at
@@ -5561,15 +5570,23 @@ const editorialDocumentSelect = `SELECT id, creator_kind, document_kind, base_do
 const canEditSubject = (scope: AdminScope, subject: string) =>
   scope.allSubjects || scope.subjects.includes(subject);
 
+type EditorialDocumentReviewAccess = Pick<
+  EditorialDocument,
+  "subject" | "status" | "publication_review_stage"
+>;
+
 const canReviewDocument = (
   scope: AdminScope,
-  subject: string,
-  status: EditorialDocumentStatus,
+  document: EditorialDocumentReviewAccess,
 ) =>
-  canEditSubject(scope, subject) ||
-  canCoordinateSubject(scope, subject) ||
-  (scope.isProjectLeader && status === "in-review") ||
-  (scope.isManager && status === "in-review");
+  canEditSubject(scope, document.subject) ||
+  (document.status === "in-review" &&
+    document.publication_review_stage === "subject-coordinator" &&
+    canCoordinateSubject(scope, document.subject)) ||
+  (document.status === "in-review" &&
+    document.publication_review_stage === "project-leader" &&
+    scope.isProjectLeader) ||
+  (scope.isManager && document.status === "in-review");
 
 const canCoordinateSubject = (scope: AdminScope, subject: string) =>
   Boolean(
@@ -5737,14 +5754,21 @@ const editorialAssetDocument = async (
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const document = await env.REPORTS.prepare(
-    "SELECT id, subject, status, created_by FROM editorial_documents WHERE id = ?",
+    "SELECT id, subject, status, publication_review_stage, created_by FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
     .first<
-      Pick<EditorialDocument, "id" | "subject" | "status" | "created_by">
+      Pick<
+        EditorialDocument,
+        | "id"
+        | "subject"
+        | "status"
+        | "publication_review_stage"
+        | "created_by"
+      >
       >();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
-  if (!canReviewDocument(scope, document.subject, document.status))
+  if (!canReviewDocument(scope, document))
     return json({ error: "この原稿の素材を扱う権限がありません。" }, 403);
   return { scope, document };
 };
@@ -5887,7 +5911,8 @@ async function deleteEditorialAsset(
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const asset = await env.REPORTS.prepare(
-    `SELECT a.id, a.document_id, a.filename, a.latex_name, d.subject, d.status, d.created_by, d.body
+    `SELECT a.id, a.document_id, a.filename, d.subject, d.status,
+            d.publication_review_stage, d.created_by, d.body
      FROM editorial_assets a
      JOIN editorial_documents d ON d.id = a.document_id
      WHERE a.id = ?`,
@@ -5897,11 +5922,12 @@ async function deleteEditorialAsset(
       Pick<EditorialAsset, "id" | "document_id" | "filename" | "latex_name"> & {
         subject: string;
         status: EditorialDocumentStatus;
+        publication_review_stage: EditorialPublicationReviewStage | null;
         created_by: string;
         body: string;
       }
     >();
-  if (!asset || !canReviewDocument(scope, asset.subject, asset.status))
+  if (!asset || !canReviewDocument(scope, asset))
     return json({ error: "この素材を扱う権限がありません。" }, 403);
   if (!scope.isManager && asset.created_by !== scope.email)
     return json({ error: "素材を削除できるのは原稿の作成者本人です。" }, 403);
@@ -5939,16 +5965,20 @@ async function serveEditorialAsset(
   if (isResponse(scope)) return scope;
   const asset = await env.REPORTS.prepare(
     `SELECT a.id, a.document_id, a.filename, a.media_type, a.bytes, a.data,
-            d.subject, d.status
+            d.subject, d.status, d.publication_review_stage
      FROM editorial_assets a
      JOIN editorial_documents d ON d.id = a.document_id
      WHERE a.id = ?`,
   )
     .bind(assetId)
     .first<
-      EditorialAsset & { subject: string; status: EditorialDocumentStatus }
+      EditorialAsset & {
+        subject: string;
+        status: EditorialDocumentStatus;
+        publication_review_stage: EditorialPublicationReviewStage | null;
+      }
     >();
-  if (!asset || !canReviewDocument(scope, asset.subject, asset.status))
+  if (!asset || !canReviewDocument(scope, asset))
     return new Response("Not found", { status: 404 });
   // D1 は環境によって BLOB を Uint8Array または ArrayBuffer として返す。
   // D1 の返却型を Response が確実に扱える ArrayBuffer に正規化する。
@@ -9365,10 +9395,12 @@ export async function syncDiscordRolesToAdmin(
           `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}`,
           { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
         );
-      } catch (error) {
+      } catch {
         result.skipped += 1;
         result.warnings.push(`${email}: Discordのメンバー情報を取得できませんでした。`);
-        console.error("discord to admin member lookup failed", { email, error });
+        console.error("discord to admin member lookup failed", {
+          category: "network_error",
+        });
         continue;
       }
       if (!memberResponse.ok) {
@@ -14891,10 +14923,14 @@ async function submitMemberApplication(
       )
       .run();
   }
-  await env.REPORTS.prepare(
+  const applicationInsert = await env.REPORTS.prepare(
     `INSERT INTO atlasez_member_applications
      (id,name,email,affiliation_email,family_name,given_name,middle_name,nickname,family_name_kana,given_name_kana,form_language,interests,message,status,created_at,updated_at,project_slug,project_answers,affiliation_type,institution,grade,country,timezone,desired_subjects,article_ideas,discord_user_id,availability_note,birth_date,residence_city,current_organizations,referral_source,motivation_reasons,desired_roles,interview_availability,applicant_questions)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?,?,?,?,?,'',?,?,?,?,?,?,?,?,?)`,
+     SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?, 'new',?,?,?,?,?,?,?,?,?,?,?,'',?,?,?,?,?,?,?,?,?
+     WHERE NOT EXISTS (
+       SELECT 1 FROM atlasez_member_applications
+       WHERE lower(email)=lower(?) AND project_slug=? AND status IN ('new','reviewing')
+     )`,
   )
     .bind(
       applicationId,
@@ -14930,8 +14966,18 @@ async function submitMemberApplication(
       desiredRoles,
       interviewAvailability,
       applicantQuestions,
+      email,
+      projectSlug,
     )
     .run();
+  if (applicationInsert.meta?.changes !== 1)
+    return json(
+      {
+        error:
+          "このメールアドレスの応募はすでに確認中です。結果の連絡をお待ちください。",
+      },
+      409,
+    );
   const followup = {
     id: applicationId,
     name,
@@ -15472,7 +15518,7 @@ async function getEditorialDocument(
     .bind(documentId)
     .first<EditorialDocument>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
-  if (!canReviewDocument(scope, document.subject, document.status))
+  if (!canReviewDocument(scope, document))
     return json({ error: "この分野の原稿を閲覧する権限がありません。" }, 403);
   // 現行版と更新案の関係は一覧APIのページングに依存させない。個別記事を
   // 開いた時点で関連する両方のIDを返し、一覧に出ていない版も確実に開ける
@@ -16407,16 +16453,17 @@ async function listEditorialRevisions(
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const document = await env.REPORTS.prepare(
-    "SELECT subject, status, document_kind, base_document_id FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, publication_review_stage, document_kind, base_document_id FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
     .first<{
       subject: string;
       status: EditorialDocumentStatus;
+      publication_review_stage: EditorialPublicationReviewStage | null;
       document_kind: EditorialDocument["document_kind"];
       base_document_id: string | null;
     }>();
-  if (!document || !canReviewDocument(scope, document.subject, document.status))
+  if (!document || !canReviewDocument(scope, document))
     return json({ error: "この原稿を閲覧する権限がありません。" }, 403);
   const result = await env.REPORTS.prepare(
     `SELECT r.id, r.title, r.summary, r.body, r.status, r.saved_by, r.saved_at,
@@ -16631,12 +16678,13 @@ async function updateEditorialReviewAssignment(
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
   const document = await env.REPORTS.prepare(
-    "SELECT subject, status, title, created_by FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, publication_review_stage, title, created_by FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
     .first<{
       subject: string;
       status: EditorialDocumentStatus;
+      publication_review_stage: EditorialPublicationReviewStage | null;
       title: string;
       created_by: string;
     }>();
@@ -16646,7 +16694,7 @@ async function updateEditorialReviewAssignment(
       { error: "フィードバック中の原稿だけ担当者を設定できます。" },
       400,
     );
-  if (!canReviewDocument(scope, document.subject, document.status))
+  if (!canReviewDocument(scope, document))
     return json({ error: "この分野のフィードバック権限がありません。" }, 403);
   const reviewerEmails = [
     ...(Array.isArray(payload.reviewerEmails)
@@ -16803,12 +16851,12 @@ async function createEditorialComment(
   if (!body && !(tags ?? []).length && !selections.length)
     return json({ error: "コメント本文またはタグを入力してください。" }, 400);
   const document = await env.REPORTS.prepare(
-    "SELECT subject, status FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, publication_review_stage FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
-    .first<{ subject: string; status: EditorialDocumentStatus }>();
+    .first<EditorialDocumentReviewAccess>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
-  if (!canReviewDocument(scope, document.subject, document.status))
+  if (!canReviewDocument(scope, document))
     return json({ error: "この分野にコメントする権限がありません。" }, 403);
   const parentCommentId =
     typeof payload.parentCommentId === "string" &&
@@ -16875,7 +16923,7 @@ async function updateEditorialCommentStatus(
   )
     return json({ error: "操作を確認してください。" }, 400);
   const comment = await env.REPORTS.prepare(
-    `SELECT c.id, c.created_by, d.subject, d.status FROM editorial_comments c
+    `SELECT c.id, c.created_by, d.subject, d.status, d.publication_review_stage FROM editorial_comments c
      JOIN editorial_documents d ON d.id = c.document_id WHERE c.id = ? AND c.document_id = ?`,
   )
     .bind(commentId, documentId)
@@ -16884,9 +16932,10 @@ async function updateEditorialCommentStatus(
       created_by: string;
       subject: string;
       status: EditorialDocumentStatus;
+      publication_review_stage: EditorialPublicationReviewStage | null;
     }>();
   if (!comment) return json({ error: "コメントが見つかりません。" }, 404);
-  if (!canReviewDocument(scope, comment.subject, comment.status))
+  if (!canReviewDocument(scope, comment))
     return json({ error: "このコメントを操作する権限がありません。" }, 403);
   if (action === "like") {
     const existing = await env.REPORTS.prepare(
@@ -17051,7 +17100,7 @@ async function editEditorialComment(
   if (!body && !(tags ?? []).length && !selections.length)
     return json({ error: "コメント本文またはタグを入力してください。" }, 400);
   const comment = await env.REPORTS.prepare(
-    `SELECT c.id, c.created_by, d.subject, d.status FROM editorial_comments c
+    `SELECT c.id, c.created_by, d.subject, d.status, d.publication_review_stage FROM editorial_comments c
      JOIN editorial_documents d ON d.id = c.document_id WHERE c.id = ? AND c.document_id = ?`,
   )
     .bind(commentId, documentId)
@@ -17060,10 +17109,11 @@ async function editEditorialComment(
       created_by: string;
       subject: string;
       status: EditorialDocumentStatus;
+      publication_review_stage: EditorialPublicationReviewStage | null;
     }>();
   if (!comment) return json({ error: "コメントが見つかりません。" }, 404);
   if (
-    !canReviewDocument(scope, comment.subject, comment.status) ||
+    !canReviewDocument(scope, comment) ||
     (!scope.isManager && comment.created_by !== scope.email)
   )
     return json(
@@ -17099,7 +17149,7 @@ async function deleteEditorialComment(
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
   const comment = await env.REPORTS.prepare(
-    `SELECT c.id, c.created_by, d.subject, d.status FROM editorial_comments c
+    `SELECT c.id, c.created_by, d.subject, d.status, d.publication_review_stage FROM editorial_comments c
      JOIN editorial_documents d ON d.id = c.document_id WHERE c.id = ? AND c.document_id = ?`,
   )
     .bind(commentId, documentId)
@@ -17108,10 +17158,11 @@ async function deleteEditorialComment(
       created_by: string;
       subject: string;
       status: EditorialDocumentStatus;
+      publication_review_stage: EditorialPublicationReviewStage | null;
     }>();
   if (!comment) return json({ error: "コメントが見つかりません。" }, 404);
   if (
-    !canReviewDocument(scope, comment.subject, comment.status) ||
+    !canReviewDocument(scope, comment) ||
     (!scope.isManager && comment.created_by !== scope.email)
   )
     return json(
@@ -21050,7 +21101,7 @@ async function getPublicationReviewState(
   )
     .bind(documentId)
     .first<EditorialDocument>();
-  if (!document || !canReviewDocument(scope, document.subject, document.status))
+  if (!document || !canReviewDocument(scope, document))
     return json({ error: "この原稿を閲覧する権限がありません。" }, 403);
   const [coordinators, leaders, feedbackTasks] = await Promise.all([
     publicationReviewRoleEmails(env, "subject-coordinator", document.subject),
@@ -24510,9 +24561,10 @@ async function archiveStaleAuditLogs(env: Env) {
 export async function runPersonalDataRetention(
   db: D1Database,
   now = new Date(),
+  options: { clearArticleReportData?: boolean } = {},
 ) {
   try {
-    const counts = await purgeExpiredPersonalData(db, now);
+    const counts = await purgeExpiredPersonalData(db, now, options);
     console.info("personal_data_retention_completed", counts);
     return counts;
   } catch (error) {
@@ -24592,7 +24644,11 @@ export default {
     ctx.waitUntil(
       Promise.all([
         progressEditorialPublicationRuns(env),
-        runPersonalDataRetention(env.REPORTS),
+        runPersonalDataRetention(env.REPORTS, new Date(), {
+          clearArticleReportData:
+            env.ADMIN_PERSONAL_DATA_RETENTION_ENABLED?.trim().toLowerCase() ===
+            "true",
+        }),
         applyDueMemberProcedures(env.REPORTS),
         dispatchDueTaskReminders(env),
         dispatchTaskTemplates(env.REPORTS,primaryAdminEmail(env)),

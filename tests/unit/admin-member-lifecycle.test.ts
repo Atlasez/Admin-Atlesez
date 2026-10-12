@@ -261,6 +261,35 @@ it("requires a global administrator and prevents archiving the acting account", 
   ).toMatchObject({ count: 0 });
 });
 
+it("prevents another global administrator from archiving the configured primary administrator", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    "INSERT INTO report_admin_permissions(email,subject) VALUES (?,?)",
+  ).run("other-admin@example.org", "*");
+
+  const response = await worker.fetch(
+    request("archive", "ukyoukay0@gmail.com", "other-admin@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(409);
+  await expect(response.json()).resolves.toMatchObject({
+    error: expect.stringContaining(
+      "設定された主管理者アカウントはアーカイブできません",
+    ),
+  });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM admin_member_lifecycle").get(),
+  ).toMatchObject({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT subject FROM report_admin_permissions WHERE email='ukyoukay0@gmail.com'",
+      )
+      .get(),
+  ).toMatchObject({ subject: "*" });
+});
+
 it("rejects malformed restore snapshots without changing archived state", async () => {
   const { db, environment } = createEnvironment();
   const archived = await worker.fetch(

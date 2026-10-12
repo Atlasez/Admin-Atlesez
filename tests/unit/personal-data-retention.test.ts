@@ -4,7 +4,7 @@ import type {
   D1Database,
   D1PreparedStatement,
 } from "../../src/lib/admin-database";
-import { runPersonalDataRetention } from "../../src/admin-worker";
+import worker, { runPersonalDataRetention } from "../../src/admin-worker";
 
 class Statement implements D1PreparedStatement {
   private values: SQLInputValue[] = [];
@@ -43,6 +43,79 @@ class Statement implements D1PreparedStatement {
 const databases: DatabaseSync[] = [];
 afterEach(() => {
   for (const db of databases.splice(0)) db.close();
+});
+
+it("keeps proposed article-report cleanup opt-in while routine expiry continues", async () => {
+  const createDatabase = () => {
+    const executed: string[] = [];
+    const database = {
+      prepare: (query: string) => ({
+        bind: (..._values: unknown[]) => ({
+          all: async <T>() => ({ results: [] as T[] }),
+          first: async <T>() => null as T | null,
+          run: async () => {
+            executed.push(query);
+            return { meta: { changes: 0 } };
+          },
+        }),
+        all: async <T>() => ({ results: [] as T[] }),
+        first: async <T>() => null as T | null,
+        run: async () => {
+          executed.push(query);
+          return { meta: { changes: 0 } };
+        },
+      }),
+      batch: async (statements: Array<{ run(): Promise<unknown> }>) => {
+        await Promise.all(statements.map((statement) => statement.run()));
+        return [];
+      },
+    };
+    return { database, executed };
+  };
+  const scheduled = async (
+    database: ReturnType<typeof createDatabase>["database"],
+    retentionEnabled?: string,
+  ) => {
+    const pending: Promise<unknown>[] = [];
+    await worker.scheduled(
+      { cron: "15 3 * * *" },
+      {
+        REPORTS: database,
+        EMAIL_FROM: "Atlasez <noreply@example.test>",
+        RESEND_API_KEY: "test-key",
+        ADMIN_PERSONAL_DATA_RETENTION_ENABLED: retentionEnabled,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+      { waitUntil: (promise) => pending.push(promise) },
+    );
+    await Promise.all(pending);
+  };
+
+  const disabled = createDatabase();
+  await scheduled(disabled.database);
+  expect(
+    disabled.executed.some((query) =>
+      /DELETE FROM admin_auth_sessions|DELETE FROM atlasez_application_rate_limits|DELETE FROM atlasez_member_applications/.test(
+        query,
+      ),
+    ),
+  ).toBe(true);
+  expect(
+    disabled.executed.some((query) => query.includes("article_reports")),
+  ).toBe(false);
+
+  const enabled = createDatabase();
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    await scheduled(enabled.database, "true");
+    expect(
+      enabled.executed.some((query) =>
+        query.includes("DELETE FROM atlasez_member_applications"),
+      ),
+    ).toBe(true);
+  } finally {
+    info.mockRestore();
+  }
 });
 
 it("clears expired article-report fingerprints and resolved contacts without deleting reports", async () => {
@@ -135,7 +208,9 @@ it("clears expired article-report fingerprints and resolved contacts without del
   );
 
   const info = vi.spyOn(console, "info").mockImplementation(() => {});
-  await expect(runPersonalDataRetention(database, now)).resolves.toMatchObject({
+  await expect(
+    runPersonalDataRetention(database, now, { clearArticleReportData: true }),
+  ).resolves.toMatchObject({
     reporterHashesCleared: 2,
     reportContentHashesCleared: 2,
     resolvedReportContactsCleared: 1,

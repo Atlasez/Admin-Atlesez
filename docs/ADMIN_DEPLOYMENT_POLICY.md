@@ -42,6 +42,8 @@ Cloudflare Workers Buildsでrepositoryを`Atlasez/Admin-Atlesez`、Production br
 6. 通常Build/DeployではD1 migrationを実行しない。バックアップ・レビュー・適用・復旧方法を伴う別手順として、新Workerを配信する前に必要なmigrationの適用を記録する。今回の0127・0128・0129・0130が未適用なら初回Buildを開始しない。
 7. Custom Domain `admin.atlasez.org`だけを本番確認先とし、`workers_dev`と`preview_urls`を無効にする。
 
+このBuildのDeploy commandは`atlasez-admin`だけを配信する。外部binding先の`atlasez-editorial-collaboration`は別Workerであり、`npm run dry-run:admin:collaboration`は構文/Build確認専用で本番配信を行わない。DO Workerの変更を本番へ出す場合は、GitHub `main`を正本とするWorkers Buildsの対象・コマンド・Version検証・復旧方法を先にPRでレビューする。現在のBuild設定だけでDO Workerも更新されたと推測せず、直接Wrangler deployを使わない。
+
 切替手順は[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照する。この方針・検証専用Workflowのレビュー済みmain反映を先に行い、旧Workflow定義で待機・実行中のActions deployを別途停止してrun ID・状態を記録する。Workflowのmergeだけでは既存runは取消されない。新しい定義にdeploy jobがないこと、旧runが残っていないこと、migration前提を確認してからWorkers Buildsを接続する。ActionsとWorkers Buildsの二経路を同時に有効にしない。
 
 この文書やWorkflowの変更だけでは、Cloudflareの接続・設定保存・本番反映は完了しない。Workers Buildsが未接続・内部エラー・CI失敗・SHA不一致なら配信を止め、PR/Issueに理由を記録する。Actionsへの配信復帰を推測で行わない。
