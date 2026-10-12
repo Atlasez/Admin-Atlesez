@@ -433,3 +433,10 @@ ADMINの現在Version・live `build-info.json`・認証済みChromeの過去記�
 ### 運営判断の一覧
 
 担当・代理・返信目安、限定運用上限、個人情報/監査ログ/backup保持、queue監視とalert、障害停止・復旧権限、休止時のDiscord role方針、Chrome受入環境の決定候補と影響は[運営決定票](ADMIN_OPERATIONAL_DECISIONS.md)に整理した。未決定の候補を実運用方針として扱わず、決定者role・証拠・開始への影響を記録する。
+
+### 2026-10-13 最新再照合とローカル検証記録
+
+- ADMIN mainは **e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370**、PR #526 baseも同SHA。OPS-31/32の実装修正commitは **e7b8de79ca3f01aab175b575024876a35f1f0192**。PR #529はhead **382578b1de7277cae4929491e5c71acde2df7704**、OPENでCI成功。ユーザー決定「XAI/ポータル試作は開発者だけ」をサーバー側認可と回帰testへ反映済みだが、本番未反映。
+- Issue #509はOPEN、最終更新は2026-10-10のtoken識別訂正。新しい復旧証拠は確認できないため、token scope調査・権限拡大・別配信経路は行っていない。公開PR #140はhead **df07daa1c3372a371fbec59ae2cd42e97de12618**、#141は **bb5e79bf60911050e17d09341f5b007799386953**、両方OPEN/CI成功。本番公開サイトmainは **17abea4ed6eeb97719dee60f57bc6b26d5d2d53a** のまま。PR内容は公開・配信済みと扱わない。
+- PR #526実装修正commit **e7b8de79ca3f01aab175b575024876a35f1f0192** のローカル検証: verify:deploy-config成功、check 340 files / error 0 / warning 0 / existing hints 10、lint成功、unit 69 files / 554 tests成功、format:check成功、full E2E 380 passed / 14 production-live-smoke skipped、指定ADMIN build成功、verify:build-infoが同SHA一致、git diff --check成功。buildには既存の500 kB超chunk警告がある。GitHub verify CI [38304965245](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38304965245)がE2E/a11y・Lighthouseを含め成功、macOS native [38304965319](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38304965319)も成功（2026-10-13 JST再確認）。
+- 変更は隔離branch/PRの範囲。Workers、本番D1、migration、設定、route、cache、実メール/Discord、実応募/招待、記事公開は操作していない。migration 0131を本番に適用していない。Cloudflare本番配信、main merge、role別の専用Chrome受入も未実施である。
