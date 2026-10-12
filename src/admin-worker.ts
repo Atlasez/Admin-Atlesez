@@ -18030,7 +18030,7 @@ const githubArticleMarkdown = async (
     content?: string;
     encoding?: string;
   };
-  if (!payload.content || payload.encoding !== "base64")
+  if (typeof payload.content !== "string" || payload.encoding !== "base64")
     throw new Error(`GitHubの記事本文を読み取れませんでした: ${entry.path}`);
   return githubText(payload.content);
 };
@@ -18230,22 +18230,20 @@ async function syncPublishedArticleBackups(env: Env) {
       .bind(repository, path, sha)
       .first<{ id: string }>();
     if (existing) continue;
-    const contentResponse = await fetch(
-      `https://api.github.com/repos/${repository}/contents/${path}`,
-      { headers },
-    );
-    if (!contentResponse.ok) continue;
-    const content = (await contentResponse.json()) as {
-      content?: string;
-      sha?: string;
-    };
-    if (!content.content) continue;
+    let body: string;
+    try {
+      body = await githubArticleMarkdown(repository, headers, { path, sha });
+    } catch {
+      throw new Error(
+        "GitHubの記事バックアップ取得に失敗しました。checkpointは進めていません。",
+      );
+    }
     await storeArticleBackup(
       env,
       repository,
       path,
-      content.sha ?? sha,
-      githubText(content.content),
+      sha,
+      body,
       "scheduled",
     );
     synced += 1;
