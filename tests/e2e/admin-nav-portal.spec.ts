@@ -3,6 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 type MockOptions = {
   notificationStatus?: number;
   unreadNotificationsCount?: number;
+  portalUnreadNotificationsCount?: number | null;
+  portalNotificationsTruncated?: boolean;
   pendingApprovals?: number;
   taskSummary?: { openCount?: number; dueToday?: number; dueSoon?: number };
   todos?: Array<{
@@ -140,8 +142,13 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
               read: false,
             },
           ],
-          notificationsTruncated: (options.unreadNotificationsCount ?? 0) > 20,
-          unreadNotificationsCount: options.unreadNotificationsCount ?? 0,
+          notificationsTruncated:
+            options.portalNotificationsTruncated ??
+            (options.unreadNotificationsCount ?? 0) > 20,
+          unreadNotificationsCount:
+            "portalUnreadNotificationsCount" in options
+              ? options.portalUnreadNotificationsCount
+              : (options.unreadNotificationsCount ?? 0),
           calendar: { events: options.calendarEvents ?? [] },
         }),
       });
@@ -348,6 +355,22 @@ test("ポータルのサマリーは表示上限を超えたタスク・通知�
   );
 });
 
+test("ポータルは未読総数が不明な場合、表示中の通知から件数を補う", async ({
+  page,
+}) => {
+  await mockAdminShell(page, {
+    unreadNotificationsCount: 24,
+    portalUnreadNotificationsCount: null,
+    portalNotificationsTruncated: true,
+  });
+  await page.goto("admin/portal/");
+
+  await expect(page.locator('[data-summary-value="unread"]')).toHaveText("1+");
+  await expect(page.locator('[data-summary-detail="unread"]')).toHaveText(
+    "表示中の通知に未読あり（続きがあります）",
+  );
+});
+
 test("通知panelは未読件数の上限超過を示し、通知一覧へ移動できる", async ({
   page,
 }) => {
@@ -357,6 +380,20 @@ test("通知panelは未読件数の上限超過を示し、通知一覧へ移動
   const toggle = page.locator("[data-admin-notifications]");
   await expect(toggle.locator("[data-admin-notification-count]")).toHaveText(
     "24+",
+  );
+  await expect(toggle).toHaveAttribute(
+    "aria-label",
+    "通知を開く（未読24件以上）",
+  );
+  await toggle.click();
+  await expect(toggle).toHaveAttribute(
+    "aria-label",
+    "通知を閉じる（未読24件以上）",
+  );
+  await toggle.click();
+  await expect(toggle).toHaveAttribute(
+    "aria-label",
+    "通知を開く（未読24件以上）",
   );
   await toggle.click();
   await page
