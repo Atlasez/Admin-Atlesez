@@ -254,6 +254,29 @@ test("カレンダーの日付は矢印キーで移動しTab stopを一つに保
   await expect(eventTitle).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(eventTitle).toBeFocused();
+
+  const selectionSummary = page.locator("[data-calendar-selection-summary]");
+  const blockEditor = page.locator("[data-block-editor]");
+  await firstDate.focus();
+  await firstDate.press("Enter");
+  await page.clock.runFor(20);
+  await expect(firstDate).toBeFocused();
+  await expect(selectionSummary).toContainText("2026-10-01");
+  await expect(blockEditor).not.toHaveAttribute("open", "");
+
+  await firstDate.press("ArrowRight");
+  await secondDate.press("Enter");
+  await page.clock.runFor(20);
+  await expect(secondDate).toBeFocused();
+  await expect(blockEditor).toHaveAttribute("open", "");
+  await expect(selectionSummary).toContainText("2026-10-01〜2026-10-02");
+
+  const mondayBulkSelect = page.locator('[data-calendar-weekday="1"]');
+  await mondayBulkSelect.focus();
+  await mondayBulkSelect.press("Enter");
+  await page.clock.runFor(20);
+  await expect(mondayBulkSelect).toBeFocused();
+  await expect(selectionSummary).toContainText("毎週月曜日");
 });
 
 test("予定の取得に失敗してもカレンダーを表示する", async ({ page }) => {

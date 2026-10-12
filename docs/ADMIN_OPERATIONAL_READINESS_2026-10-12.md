@@ -538,3 +538,11 @@ Cron診断は「正常」「1分・5分・毎時の定期処理を設定して�
 - **修正:** PR #526 branchで表示月の日付セルを単一Tab stopにし、フォーカス中にLeft/Rightで前後日、Up/Downで前後週、Home/Endで週の先頭/末尾へ移動できるようにした。表示月境界ではフォーカスをその月内に保ち、前月/翌月ボタンを使う。案内文も追加した。
 - **隔離検証:** ADMIN再build後、対象test `npx playwright test tests/e2e/admin-calendar.spec.ts -g 'カレンダーの日付は矢印キーで移動しTab stopを一つに保つ'` 1 passed、calendar E2E全体11 passed、full E2E 385 passed / 14 opt-in production smoke skipped。`verify:deploy-config`、Astro check 341 files / 0 errors / 0 warnings / 10 hints、lint、unit 69 files / 559 tests、format、ADMIN buildもpass。既存500 kB超chunk warningと既存Astro hintsは継続。画面Readerや他roleは未検証。
 - **状態:** commit `3e8ad1f2dda1154b0bf01b71c899ac28c40a4189`をPR #526へpushし、ADMIN build-info SHA一致、verify [38313633441](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38313633441)、native regressions [38313633462](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38313633462)の成功を確認。PR OPEN・未merge。required approving reviewsは0。保存・送信・実応募・本番データ変更・デプロイなし。
+
+### 2026-10-13 Chrome keyboard selection recheck: OPS-37
+
+- **現在確認:** 認証済みprimary-adminのChromeで`https://admin.atlasez.org/admin/calendar/?project=atlas`を開き、10月1日の日付ボタンへ移動してEnterを押した。可否選択フォームが開いたが、カレンダー再描画後のアクセシビリティフォーカスがボタンからページ全体（AXWebArea）へ移動した。保存・送信操作はしていない。再読込して未保存状態を破棄し、初期表示に戻した。画面幅・ズームは測定していない。画面画像は保存していない。
+- **不具合台帳: OPS-37 / P2。** 役割はprimary-admin、URLは上記カレンダー、再現手順は「日付ボタンにキーボードフォーカス→Enter」。期待結果は選択を反映しても日付ボタンにフォーカスが残り、矢印キーで日付移動を続けられること。実際はボタンのDOM置換でフォーカスが失われる。可否入力のキーボード操作に多数のTab移動またはマウス操作が必要になり、操作ミス・時間増につながる。カレンダー管理はマウスで継続可能なためP2とする。
+- **根本原因と修正:** `renderCalendar()`が`calendar.innerHTML`を全面置換し、focused date/weekdayを保持しなかった。選択前のカレンダー内フォーカス対象を特定し、再描画後に対応する日付または曜日ボタンへ復元するよう修正した。
+- **回帰確認:** mocked manager E2Eに、Enterで日付選択→フォーカス維持→矢印移動→Enterで範囲を選択→フォーカス維持、曜日一括選択後のフォーカス維持を追加した。どのケースも「期間を追加」「設定を追加」は押さず、保存しない。targeted E2E 1件、calendar E2E、full E2E 385 passed / 14 opt-in production smoke skipped、unit 69 files / 559 tests、`verify:deploy-config`、Astro check 341 files / 0 errors / 0 warnings / 10 existing hints、lint、format:check、ADMIN buildがローカルでpass。既存500 kB超chunk warningは継続。PR #526の新head CIはpush後に確認する。
+- **範囲:** 実Chromeで確認したのはprimary-adminの本番カレンダーにおける未保存のキーボード操作のみ。応募者、一般会員、project manager、編集担当、休止/退会者のChrome受入、画面幅、ズーム、スクリーンリーダーは未検証。修正はPR branch上で、本番未反映。

@@ -1672,10 +1672,20 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       }
       calendarSelectionSummary.value = `${calendarSelectionDates[0]}〜${calendarSelectionDates[calendarSelectionDates.length - 1]}を選択中。可否を選んで「期間を追加」を押してください。`;
     };
-    const renderCalendar = () => {
+    const renderCalendar = (focusTarget?: { date?: string; weekday?: string }) => {
       // Task/progress pages keep the shared calendar markup for a consistent
       // layout, but do not load or use the calendar runtime.
       if (!calendarPage && !memberPage) return;
+      const focusedControl = document.activeElement instanceof HTMLElement && calendar.contains(document.activeElement)
+        ? document.activeElement
+        : null;
+      const focusedDate = focusTarget?.date ?? focusedControl
+        ?.closest<HTMLButtonElement>('[data-calendar-select]')
+        ?.closest<HTMLElement>('[data-calendar-date]')
+        ?.dataset.calendarDate;
+      const focusedWeekday = focusTarget?.weekday ?? focusedControl
+        ?.closest<HTMLButtonElement>('[data-calendar-weekday]')
+        ?.dataset.calendarWeekday;
       const first = new Date(month.getFullYear(), month.getMonth(), 1), last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
       const selectedRegions = [...holidayCountry.selectedOptions].map((option) => option.value);
       const holidays = holidaysForRegions(selectedRegions, month.getFullYear());
@@ -1734,6 +1744,15 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         button.setAttribute('aria-pressed', String(selected));
       });
       renderCalendarSelectionSummary();
+      const restoreFocus = () => {
+        if (document.activeElement && document.activeElement !== document.body && document.activeElement.isConnected) return;
+        if (focusedDate) {
+          calendar.querySelector<HTMLButtonElement>(`[data-calendar-date="${focusedDate}"] [data-calendar-select]`)?.focus();
+        } else if (focusedWeekday !== undefined) {
+          calendar.querySelector<HTMLButtonElement>(`[data-calendar-weekday="${focusedWeekday}"]`)?.focus();
+        }
+      };
+      if (focusedDate || focusedWeekday !== undefined) requestAnimationFrame(restoreFocus);
     };
     const render = () => {
       renderTimezoneOffset();
@@ -2046,7 +2065,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     });
     get<HTMLButtonElement>('[data-calendar-prev]').addEventListener('click', () => { clearCalendarSelection(); month = new Date(month.getFullYear(), month.getMonth() - 1, 1); reloadCalendar(); });
     get<HTMLButtonElement>('[data-calendar-next]').addEventListener('click', () => { clearCalendarSelection(); month = new Date(month.getFullYear(), month.getMonth() + 1, 1); reloadCalendar(); });
-    const selectCalendarRange = (start: string, end: string) => {
+    const selectCalendarRange = (start: string, end: string, focusedDate: string) => {
       const ordered = [start, end].sort();
       const after = new Date(`${ordered[1]}T00:00:00Z`); after.setUTCDate(after.getUTCDate() + 1);
       calendarSelectionMode = 'range';
@@ -2057,7 +2076,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       get<HTMLInputElement>('[data-block-start]').value = `${ordered[0]}T00:00`;
       get<HTMLInputElement>('[data-block-end]').value = `${after.toISOString().slice(0, 10)}T00:00`;
       blockAllDay.checked = true;
-      renderCalendar();
+      renderCalendar({ date: focusedDate });
     };
     const selectCalendarWeekday = (weekday: number) => {
       const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -2077,7 +2096,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       get<HTMLInputElement>('[data-block-end]').value = `${after.toISOString().slice(0, 10)}T00:00`;
       blockAllDay.checked = true;
       blockEditor.open = true;
-      renderCalendar();
+      renderCalendar({ weekday: String(weekday) });
     };
     calendar.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
@@ -2098,7 +2117,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         calendarSelectionEnd = date;
         blockEditor.open = true;
       }
-      selectCalendarRange(calendarSelectionStart, calendarSelectionEnd);
+      selectCalendarRange(calendarSelectionStart, calendarSelectionEnd, date);
     });
     blockAllDay.addEventListener('change', () => { if (!blockAllDay.checked) get<HTMLInputElement>('[data-block-start]').focus(); });
     timezone.addEventListener('input', () => {
