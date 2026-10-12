@@ -46,7 +46,7 @@ describe("ADMIN D1 migration history", () => {
           ('pending','pending',0,'2026-10-01T00:00:00.000Z'),
           ('retry','retry',2,'2026-10-02T00:00:00.000Z');
       `);
-      db.exec(migration("0131_application_email_first_attempt.sql"));
+      db.exec(migration("0132_application_email_first_attempt.sql"));
 
       expect(
         db

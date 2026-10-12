@@ -418,11 +418,11 @@ ADMINの現在Version・live `build-info.json`・認証済みChromeの過去記�
 ### 2026-10-13 応募メール再試行期限の修正（OPS-31 / P1）
 
 - **現在確認した不具合:** `src/lib/application-email-delivery.ts`はResendの24時間冪等性期間を、応募受付時に作られるキュー行の`created_at`で判定していた。受付からCron初回処理まで長く待った行は、初回provider要求が一時失敗した後、初回要求から24時間以内でも次のCronで`provider_idempotency_window_expired`へ終端化され、自動再試行されない。応募・運営タスクはメールとは別に保存されるが、応募者の受付/案内通知と運営通知が遅れる可能性があるためP1（限定運用の応募記録を失う問題ではないが、一般募集前に修正または担当者が確実に実行できる暫定手順が必要）とする。
-- **根本原因と修正:** D1 migration `0131_application_email_first_attempt.sql`で`first_attempt_at`を追加し、既存の試行済み行だけ`created_at`で保守的に補完する。dispatcherはprovider要求直前のclaim時刻を初回時刻として一度だけ保存し、その時刻から24時間以内だけ同じ冪等性キーを再利用する。attempt_count=0の古いpending行はqueue作成からの経過時間で止めず、試行済みで初回時刻が欠落した行は安全側で自動再送しない。Resendの24時間保持仕様は[公式発表](https://resend.com/changelog/idempotency-keys)を参照。
+- **根本原因と修正:** D1 migration `0132_application_email_first_attempt.sql`で`first_attempt_at`を追加し、既存の試行済み行だけ`created_at`で保守的に補完する。dispatcherはprovider要求直前のclaim時刻を初回時刻として一度だけ保存し、その時刻から24時間以内だけ同じ冪等性キーを再利用する。attempt_count=0の古いpending行はqueue作成からの経過時間で止めず、試行済みで初回時刻が欠落した行は安全側で自動再送しない。Resendの24時間保持仕様は[公式発表](https://resend.com/changelog/idempotency-keys)を参照。
 - **隔離再現・回帰:** `.test`宛先とSQLite in-memory fixtureのみで、キュー作成を初回試行の3日前に設定し、初回503、6分後の同一キーでの再試行成功、`first_attempt_at`不変を確認した。migration fixtureでは未試行pending行をNULLのまま保持し、試行済み行を`created_at`へ補完し、両行の状態/件数が保たれることを確認。production D1、Resend実送信、応募実データは使用していない。
 - **データ/Worker影響:** additive D1 schema migrationが必要である。PRレビュー、承認済みバックアップ取得と適用前確認、migration実行・結果記録が完了するまで、新dispatcherコードを本番Workerへ反映してはならない。通常Buildがmigrationを適用することはない。適用前には固定D1 migration listとバックアップの最新性を再確認し、Workers Builds復旧後の正規main Build/Version/SHA照合を行う。rollbackはレビュー済みコード変更で行い、追加列をdropしたりD1行を直接書き換えたりしない。
 - **状態:** 修正・回帰テストはADMIN PR [#526](https://github.com/Atlasez/Admin-Atlesez/pull/526) branchに追加中。main/live未反映、migration未適用、Workers Builds復旧待ち。PR headとCIの確定結果は次回追補する。
-- **合格条件:** PR #526の該当headでCIと関連検証が成功し、承認済みバックアップ後にmigration `0131`の適用結果が記録され、正確なmain SHA・Workers Builds run/checkout SHA・固定Worker Version/100%配信・live `build-info.json`が一致する。その後の隔離受入で、3日滞留queueの503後再試行が同じキーで成功し、試行済み期限切れ/時刻不明行は送信されず要確認になることを確認する。
+- **合格条件:** PR #526の該当headでCIと関連検証が成功し、承認済みバックアップ後にmigration `0132`の適用結果が記録され、正確なmain SHA・Workers Builds run/checkout SHA・固定Worker Version/100%配信・live `build-info.json`が一致する。その後の隔離受入で、3日滞留queueの503後再試行が同じキーで成功し、試行済み期限切れ/時刻不明行は送信されず要確認になることを確認する。
 
 ### 2026-10-13 Discord連携解除のfail-closed修正（OPS-32 / P1）
 
@@ -439,7 +439,7 @@ ADMINの現在Version・live `build-info.json`・認証済みChromeの過去記�
 - ADMIN mainは **e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370**、PR #526 baseも同SHA。OPS-31/32の実装修正commitは **e7b8de79ca3f01aab175b575024876a35f1f0192**。PR #529はhead **382578b1de7277cae4929491e5c71acde2df7704**、OPENでCI成功。ユーザー決定「XAI/ポータル試作は開発者だけ」をサーバー側認可と回帰testへ反映済みだが、本番未反映。
 - Issue #509はOPEN、最終更新は2026-10-10のtoken識別訂正。新しい復旧証拠は確認できないため、token scope調査・権限拡大・別配信経路は行っていない。公開PR #140はhead **df07daa1c3372a371fbec59ae2cd42e97de12618**、#141は **bb5e79bf60911050e17d09341f5b007799386953**、両方OPEN/CI成功。本番公開サイトmainは **17abea4ed6eeb97719dee60f57bc6b26d5d2d53a** のまま。PR内容は公開・配信済みと扱わない。
 - PR #526実装修正commit **e7b8de79ca3f01aab175b575024876a35f1f0192** のローカル検証: verify:deploy-config成功、check 340 files / error 0 / warning 0 / existing hints 10、lint成功、unit 69 files / 554 tests成功、format:check成功、full E2E 380 passed / 14 production-live-smoke skipped、指定ADMIN build成功、verify:build-infoが同SHA一致、git diff --check成功。buildには既存の500 kB超chunk警告がある。GitHub verify CI [38304965245](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38304965245)がE2E/a11y・Lighthouseを含め成功、macOS native [38304965319](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38304965319)も成功（2026-10-13 JST再確認）。
-- 変更は隔離branch/PRの範囲。Workers、本番D1、migration、設定、route、cache、実メール/Discord、実応募/招待、記事公開は操作していない。migration 0131を本番に適用していない。Cloudflare本番配信、main merge、role別の専用Chrome受入も未実施である。
+- 変更は隔離branch/PRの範囲。Workers、本番D1、migration、設定、route、cache、実メール/Discord、実応募/招待、記事公開は操作していない。PRのmigration 0132を本番に適用していない。Cloudflare本番配信、main merge、role別の専用Chrome受入も未実施である。
 - 監査文書のみのPR head **1e62a44afedff18b843310ceeef2736089a0d976** でGitHub verify [38305698597](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38305698597)の初回実行は、E2E 394件中379成功・14 skip、LaTeX補完テスト1件失敗（`\`を期待した時点で直前選択の`\frac{ }{ }`に続いて`\`が入った状態）で終了した。同テストを隔離ローカルで10回反復して全成功し、コード変更なしで同じGitHub runのfailed jobを再実行したところ、E2E/a11y・Lighthouseを含め成功。native [38305698748](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38305698748)も成功。現象は再現していないが根本原因は特定していないため、再発時はCodeMirror backing textareaとeditor stateの同期順を調べる。製品不具合とは断定せず、CIで一度失敗した証拠と再実行結果を併記する。
 
 ### 2026-10-13 最新状態の再照合とChrome起点の追加修正
@@ -474,5 +474,13 @@ ADMINの現在Version・live `build-info.json`・認証済みChromeの過去記�
 
 - ユーザー決定: XAI/ポータル試作の閲覧者は **主管理者のみ**。project managerその他の運営者に許可する追加allowlistは設計・実装しない。
 - Chrome監査の実操作は認証済み主管理者のDeveloper/portal prototype閲覧と、公開側の既記録確認範囲のみ。project manager、応募者、一般会員、編集担当、休止/退会者でのChrome role受入、実際の200%ズーム・スクリーンリーダー、保存を伴う新規参加フローは未実施。
-- 本追補における修正は隔離branch上。最新headでのCI、PR更新前であり、main・本番未反映。D1 migration `0131`は未適用。Chrome実画面での修正受入も未実施。
+- 本追補における修正は隔離branch上。最新headでのCI、PR更新前であり、main・本番未反映。D1 migration `0132`は未適用。Chrome実画面での修正受入も未実施。
 - 受入環境が必要な担当role: ADMIN運用責任者/maintainerが本番D1と外部送信から隔離したWorker・D1環境、Google/OAuth専用合成アカウント、各roleの権限fixture、実送信が必要な場合は承認済みmail sink/Discord sandboxを準備する。合格証拠はrole・試験環境識別子・CSS viewport・ズーム・操作/期待/実結果・個人情報を含まない画面証跡・片付け確認。
+
+### 2026-10-13 main再進行・migration順序の再確認
+
+- PR #526を最新と見ていたmain `f4756d854b7e895ab8518951e76a7400e9ff1095`へ更新した直後、PR #530がmainへmergeされ、ADMIN mainは `89d943f7d8c88c1ec813810c56444ae1cfe7ab82`へ進んだ。#530は全体通知クリア境界を導入し、migration `0131_admin_notification_global_cutoff.sql`を追加した。通常通知APIは同migration未適用時に503でfail closedするため、今後このWorkerコードを配信する前に当該migrationを別手順で適用していることが必要。
+- PR #526には別用途の `0131_application_email_first_attempt.sql` があり、名前は異なるが順番番号がmainのmigrationと重複していた。PR branchではこれを `0132_application_email_first_attempt.sql`へ繰り下げ、`docs/APPLICATION_EMAILS.md`、migration history test、受入記録を更新した。main `0131`の適用を先に反映した上で、メール再試行変更には追加の `0132` が必要。PR #526の `0132`は未適用であり、worker deployやmigration適用は行っていない。
+- 2026-10-13 06:18 JST、固定Account ID `812021e62fa20465950b61be55dfe064`を明示し `wrangler d1 migrations list atlasez-reports --remote --config wrangler.admin.jsonc` を読み取り専用で再実行した結果、未適用一覧は `0132_application_email_first_attempt.sql` のみだった。したがってこのmigration一覧ではmain `0131_admin_notification_global_cutoff.sql`は未適用に出ておらず、適用済みと扱う。これはCloudflare migration ledgerの状態だけで、行データ・schema以外の整合性やbackup/restore可能性を証明しない。今回はD1へ書込み、migration、export、restoreをしていない。
+- PR #526へ最新main merge後のコードを検証し直す必要がある。PR #526はOPEN/未merge。前回のhead `d5f24c027c87a073f8334291ae5662be29981ce3`で起動したCIは、新しいmain mergeと `0132` renumberより前の検証であり、現headの合格証拠として使わない。
+- `https://admin.atlasez.org/build-info.json` とWorker Version `cebc6ced-e6d7-4aba-a978-f6dc5b2b72f3`の最終確認は、mainが `f4756d85...`だった時点のread-only記録である。#530 merge後のmain SHA `89d943f7...`に対するlive build-info、Worker Version、Workers Builds run/checkout SHAの照合は未確認。Issue #509の復旧は成功証拠が揃うまで外部復旧待ちとし、本番変更は停止する。
