@@ -210,6 +210,8 @@ ADMIN変更はmain SHA `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`から分離し
 | 公開サイト build / content                         | `SITE_URL=https://atlasez.org BASE_PATH=/ npm run build`成功、285 pages。内容検証169 concepts / 170 articles / 38準備中、公開本文286 pages、内部link 287 files、deploy config、math audit/directive、media検査はpass。Pagefindのbookmark/history 2ページHTML警告と日本語stemming非対応メッセージあり。 |
 | 依存監査                                           | ADMIN/公開のlockfileを対象にした前回の `npm audit` はHigh/Moderate/Critical 0、Low 4（KaTeX/math系）で終了コード1。互換性のmajor更新が必要なため今回の変更では強制fixせず、別途追跡する。                                                                                                              |
 
+PR #526の最新head `111d8ff7317a7dd41c988083adfe5842ca04aca6` に対するCI run [38213900441](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38213900441) は、再実行後に全job成功（E2E/axe、Lighthouseを含む）。初回attemptではE2E「分野・カテゴリ・目次を順に追加して、目次から記事作成へ進める」が1件失敗し、カテゴリ一覧の先頭に期待した「統計学」ではなく「機械学習（基礎）」が表示された。同テストは失敗後の単独実行、さらに同一testを `--repeat-each=10 --workers=1` で10回実行してすべてpassし、CI再実行もpassした。現状では本番不具合として再現していないためコード修正は行わず、**未再現のCI順序/タイミング変動として観測記録に残す**。再発時はtraceとtaxonomy APIの保存後順序を証拠化してから原因を切り分ける。
+
 ADMINの現在Version・live `build-info.json`・認証済みChromeの過去記録は上段の証拠台帳とIssue #509を参照する。この作業branchはまだ配信していないため、コード変更後の本番動作はすべて **修正済み・本番未確認** として扱う。
 
 ## 関連文書
