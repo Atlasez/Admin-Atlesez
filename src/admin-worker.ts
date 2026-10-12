@@ -23648,7 +23648,7 @@ async function handleAdminRequest(
   if (url.pathname === "/privacy-policy" || url.pathname === "/privacy-policy/")
     return fetchAdminAsset(request, env);
   // The xAI-inspired prototype is an isolated static site. Keep it in its own
-  // URL namespace and serve only read-only requests without ADMIN auth/data.
+  // URL namespace and serve it only to the existing developer-mode scope.
   if (
     url.pathname === "/xai-prototype" ||
     url.pathname.startsWith("/xai-prototype/")
@@ -23658,7 +23658,9 @@ async function handleAdminRequest(
         status: 405,
         headers: { Allow: "GET, HEAD" },
       });
-    return env.ASSETS.fetch(request);
+    const scope = await getDeveloperScope(request, env);
+    if (isResponse(scope)) return scope;
+    return fetchAdminAsset(request, env);
   }
   if (
     url.pathname === "/api/onboarding/atlas-writing-practice" &&
@@ -24355,6 +24357,8 @@ async function handleAdminRequest(
       "/admin/ui-prototype/",
       "/admin/ui-prototype/learning-content",
       "/admin/ui-prototype/learning-content/",
+      "/admin/portal-prototype",
+      "/admin/portal-prototype/",
     ]);
     if (managerPages.has(url.pathname)) {
       const managerScope =
@@ -24369,7 +24373,10 @@ async function handleAdminRequest(
                 url.searchParams.get("project") ?? "",
               )
             : await getGlobalAdminScope(request, env)
-          : url.pathname === "/admin/developer" || url.pathname === "/admin/developer/"
+          : url.pathname === "/admin/developer" ||
+              url.pathname === "/admin/developer/" ||
+              url.pathname === "/admin/portal-prototype" ||
+              url.pathname === "/admin/portal-prototype/"
             ? await getDeveloperScope(request, env)
             : await getGlobalAdminScope(request, env);
       if (isResponse(managerScope)) return managerScope;

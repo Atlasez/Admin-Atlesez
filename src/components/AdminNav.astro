@@ -12,7 +12,7 @@ type SiteKey = "portal" | "atlas" | "semi-platform" | "student-council" | "think
 const siteForProject = (project: string | null): SiteKey => project === "secretariat" ? "secretariat" : project === "seminar-platform" ? "semi-platform" : project === "student-council-exchange" ? "student-council" : project === "thinking-cafe" ? "thinking-cafe" : project === "portal" ? "portal" : "atlas";
 const operationProject = ["secretariat", "seminar-platform", "student-council-exchange", "thinking-cafe"].includes(requestedProject ?? "") ? requestedProject! : "atlas";
 const querySite = siteForProject(requestedProject);
-const portalRoutes = new Set(["/admin/getting-started", "/admin/portal", "/admin/action-center", "/admin/notifications", "/admin/member-profile", "/admin/member-profile/edit", "/admin/member-tasks", "/admin/task-detail", "/admin/task-templates", "/admin/member-calendar"]);
+const portalRoutes = new Set(["/admin/getting-started", "/admin/portal", "/admin/portal-prototype", "/admin/action-center", "/admin/notifications", "/admin/member-profile", "/admin/member-profile/edit", "/admin/member-tasks", "/admin/task-detail", "/admin/task-templates", "/admin/member-calendar"]);
 const routeSite: SiteKey = portalRoutes.has(normalizedPath)
   ? "portal"
   : normalizedPath === "/admin/profile-requests" || normalizedPath === "/admin/secretariat"
@@ -28,7 +28,7 @@ const routeSite: SiteKey = portalRoutes.has(normalizedPath)
             : querySite;
 const routeCurrent = normalizedPath === "/admin/getting-started"
   ? "getting-started"
-  : normalizedPath === "/admin/portal"
+  : normalizedPath === "/admin/portal" || normalizedPath === "/admin/portal-prototype"
   ? "portal"
   : normalizedPath === "/admin/action-center"
     ? "action-center"
@@ -255,9 +255,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     const readRouteState = (): RouteState => {
       const path = window.location.pathname.replace(/\/$/, '') || '/';
       const project = new URLSearchParams(window.location.search).get('project');
-      const site: RouteState['site'] = ['/admin/getting-started', '/admin/portal', '/admin/member-profile', '/admin/member-profile/edit', '/admin/member-tasks', '/admin/task-detail', '/admin/task-templates', '/admin/member-calendar'].includes(path) || project === 'portal' ? 'portal' : path === '/admin/secretariat' || path === '/admin/profile-requests' || project === 'secretariat' ? 'secretariat' : path === '/admin/semi-platform' || project === 'seminar-platform' ? 'semi-platform' : path === '/admin/student-council' || project === 'student-council-exchange' ? 'student-council' : path === '/admin/thinking-cafe' || project === 'thinking-cafe' ? 'thinking-cafe' : 'atlas';
+      const site: RouteState['site'] = ['/admin/getting-started', '/admin/portal', '/admin/portal-prototype', '/admin/member-profile', '/admin/member-profile/edit', '/admin/member-tasks', '/admin/task-detail', '/admin/task-templates', '/admin/member-calendar'].includes(path) || project === 'portal' ? 'portal' : path === '/admin/secretariat' || path === '/admin/profile-requests' || project === 'secretariat' ? 'secretariat' : path === '/admin/semi-platform' || project === 'seminar-platform' ? 'semi-platform' : path === '/admin/student-council' || project === 'student-council-exchange' ? 'student-council' : path === '/admin/thinking-cafe' || project === 'thinking-cafe' ? 'thinking-cafe' : 'atlas';
       const slug = slugForSite(site);
-      const current = path === '/admin/portal' ? 'portal' : path === '/admin/atlas' ? 'atlas' : path === '/admin/secretariat' ? 'secretariat' : path === '/admin/semi-platform' ? 'semi-platform' : path === '/admin/student-council' ? 'student-council' : path === '/admin/thinking-cafe' ? 'thinking-cafe' : path === '/admin/manage' ? 'management' : path.slice('/admin/'.length) || 'atlas';
+      const current = path === '/admin/portal' || path === '/admin/portal-prototype' ? 'portal' : path === '/admin/atlas' ? 'atlas' : path === '/admin/secretariat' ? 'secretariat' : path === '/admin/semi-platform' ? 'semi-platform' : path === '/admin/student-council' ? 'student-council' : path === '/admin/thinking-cafe' ? 'thinking-cafe' : path === '/admin/manage' ? 'management' : path.slice('/admin/'.length) || 'atlas';
       return { site, slug, current, home: homeForSite(site), label: labelForSite(site) };
     };
     const syncRouteChrome = () => {

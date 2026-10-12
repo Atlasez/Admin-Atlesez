@@ -102,6 +102,14 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
       });
       return;
     }
+    if (url.pathname === "/api/admin/my-intake") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ entries: [] }),
+      });
+      return;
+    }
     if (url.pathname === "/api/admin/portal") {
       options.onPortalRequest?.(url);
       portalCalls += 1;
@@ -185,6 +193,108 @@ test("ポータルのAtlasez運営アプリにテスト機能であることを�
   await expect(page.locator(".portal-app-download")).toContainText(
     "テスト機能です。",
   );
+});
+
+test("XAI風の独立ポータル案で既存の項目と操作を表示する", async ({ page }) => {
+  await mockAdminShell(page, {
+    projects: [
+      {
+        id: "atlas",
+        slug: "atlas",
+        name: "学習サイト「アトラス」運営",
+        description: "学習サイト「アトラス」の運営プロジェクト",
+        role: "manager",
+      },
+    ],
+    todos: [
+      {
+        id: "prototype-task",
+        project_id: "atlas",
+        title: "プロトタイプの表示確認",
+        status: "open",
+        due_at: "",
+        due_timezone: "Asia/Tokyo",
+      },
+    ],
+  });
+  const selectors = [
+    ".portal",
+    ".portal h1",
+    ".portal .application-link",
+    ".portal .portal-summary-item strong",
+    ".portal .project-entry-card strong",
+    ".portal .home-section",
+  ];
+  const readTypographyAndPalette = async () =>
+    Promise.all(
+      selectors.map((selector) =>
+        page
+          .locator(selector)
+          .first()
+          .evaluate((element) => {
+            const style = getComputedStyle(element);
+            return {
+              fontFamily: style.fontFamily,
+              fontSize: style.fontSize,
+              fontWeight: style.fontWeight,
+              color: style.color,
+              backgroundColor: style.backgroundColor,
+            };
+          }),
+      ),
+    );
+
+  await page.goto("admin/portal/");
+  const sourceTypographyAndPalette = await readTypographyAndPalette();
+  await page.goto("admin/portal-prototype/");
+
+  const prototype = page.locator(".portal-xai");
+  await expect(prototype).toBeVisible();
+  await expect(page.locator("[data-admin-nav]")).toHaveAttribute(
+    "data-current-site",
+    "portal",
+  );
+  await expect(page.locator("[data-admin-breadcrumbs]")).toBeHidden();
+  await expect(
+    prototype.getByRole("heading", { name: "Atlasezメンバー用サイト" }),
+  ).toBeVisible();
+  await expect(prototype.locator(".portal-summary-item")).toHaveCount(5);
+  await expect(prototype.locator(".project-entry-card")).toContainText(
+    "学習サイト「アトラス」運営",
+  );
+  await expect(prototype.locator(".todo-card")).toContainText(
+    "プロトタイプの表示確認",
+  );
+  expect(await readTypographyAndPalette()).toEqual(sourceTypographyAndPalette);
+  await expect
+    .poll(() =>
+      prototype
+        .locator("> header > div")
+        .evaluate((element) => getComputedStyle(element, "::before").content),
+    )
+    .toBe("none");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+      })),
+    )
+    .toEqual({ scrollWidth: 390, viewportWidth: 390 });
+});
+
+test("Developer画面からXAIサイトとポータル案を開ける", async ({ page }) => {
+  await mockAdminShell(page);
+  await page.goto("admin/developer/?mode=developer");
+
+  await expect(
+    page.getByRole("link", { name: /XAI UIプロトタイプ/ }),
+  ).toHaveAttribute("href", "/xai-prototype/");
+  await expect(
+    page.getByRole("link", { name: /ポータル UIプロトタイプ/ }),
+  ).toHaveAttribute("href", "/admin/portal-prototype/");
 });
 
 test("通知panelをtoggle・外側・Escape・閉じるボタンで操作できる", async ({
