@@ -22612,7 +22612,8 @@ async function adminNotifications(
     const cutoffTime = "cutoffTime" in metadata && typeof metadata.cutoffTime === "string"
       ? metadata.cutoffTime
       : metadata.time;
-    const cutoffClause = `julianday(s.${cutoffTime}) > julianday(?) AND `;
+    // cleared_before は「その時刻より前」を隠す境界なので、同時刻の通知は残す。
+    const cutoffClause = `julianday(s.${cutoffTime}) >= julianday(?) AND `;
     const readExpr = `EXISTS (SELECT 1 FROM admin_notification_reads nr WHERE nr.email = ? AND nr.notification_id = ${metadata.id})`;
     const unreadClause = unreadOnly || includeUnreadIds ? `NOT ${readExpr} AND ` : "";
     const cursorClause = cursor
