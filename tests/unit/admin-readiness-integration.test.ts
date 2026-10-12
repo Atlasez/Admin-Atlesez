@@ -1736,3 +1736,255 @@ it("仮応募者の見送り後は応募状況を確認でき、オンボーデ�
   ).toEqual({ count: 2 });
   expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
+
+function seedInterviewFinalization(db: DatabaseSync, applicantEmail: string) {
+  const now = new Date().toISOString();
+  const applicationId = "3e9c1220-4574-4bda-b946-643f1a72bf3e";
+  const interviewId = "86a2926a-e34e-4c36-8a36-6b1705f6710e";
+  const reviewId = "874122bd-ec75-4f83-bc9f-9cbbcdf27bf8";
+
+  db.prepare(
+    `INSERT INTO atlasez_member_applications
+      (id,name,email,interests,message,status,created_at,updated_at,project_slug,desired_subjects,form_language)
+     VALUES (?,?,?,'','隔離テスト','reviewing',?,?,'atlas','mathematics','ja')`,
+  ).run(applicationId, "隔離応募者", applicantEmail, now, now);
+  db.prepare(
+    `INSERT INTO atlasez_application_interviews
+      (id,application_id,scheduled_at,timezone,mode,location,status,created_by,created_at,updated_by,updated_at)
+     VALUES (?,?,?,'Asia/Tokyo','in_person','隔離会場','scheduled','global@atlasez.test',?,'global@atlasez.test',?)`,
+  ).run(interviewId, applicationId, now, now, now);
+  db.prepare(
+    `INSERT INTO atlasez_application_interview_reviews
+      (id,application_id,interview_id,note,assigned_subjects,decision,created_by,created_at,updated_by,updated_at)
+     VALUES (?,?,?,'','mathematics','pending','global@atlasez.test',?,'global@atlasez.test',?)`,
+  ).run(reviewId, applicationId, interviewId, now, now);
+  return { applicationId, interviewId, reviewId, now };
+}
+
+it("面談採否・受入副作用・面談記録を一つのD1 batchで確定する", async () => {
+  const { db, request, env } = environment();
+  const applicantEmail = "interview-finalization@atlasez.test";
+  const { applicationId, interviewId, reviewId } = seedInterviewFinalization(
+    db,
+    applicantEmail,
+  );
+
+  const originalBatch = env.REPORTS.batch;
+  let writeBatchCount = 0;
+  env.REPORTS.batch = async (statements) => {
+    writeBatchCount += 1;
+    if (writeBatchCount === 2)
+      throw new Error("unexpected second D1 write batch");
+    return originalBatch(statements);
+  };
+
+  const response = await request(
+    `/api/admin/applications/${applicationId}/interview/complete?project=atlas`,
+    "global@atlasez.test",
+    {
+      decision: "accepted",
+      assignedSubjects: ["mathematics"],
+      note: "隔離テスト",
+    },
+  );
+
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(writeBatchCount).toBe(1);
+  expect(
+    db
+      .prepare("SELECT status FROM atlasez_member_applications WHERE id=?")
+      .get(applicationId),
+  ).toEqual({ status: "accepted" });
+  expect(
+    db
+      .prepare(
+        "SELECT project_id,role FROM atlasez_project_memberships WHERE lower(email)=lower(?)",
+      )
+      .get(applicantEmail),
+  ).toEqual({ project_id: "atlas", role: "member" });
+  expect(
+    db
+      .prepare(
+        "SELECT kind,status FROM atlasez_application_email_deliveries WHERE application_id=?",
+      )
+      .get(applicationId),
+  ).toEqual({ kind: "applicant_acceptance", status: "pending" });
+  expect(
+    db
+      .prepare(
+        "SELECT status,completed_at FROM atlasez_application_interviews WHERE id=?",
+      )
+      .get(interviewId),
+  ).toMatchObject({ status: "completed" });
+  expect(
+    db
+      .prepare(
+        "SELECT decision,finalized_at FROM atlasez_application_interview_reviews WHERE id=?",
+      )
+      .get(reviewId),
+  ).toMatchObject({ decision: "accepted" });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_interview_history WHERE application_id=?",
+      )
+      .get(applicationId),
+  ).toEqual({ count: 1 });
+});
+
+it("見送りの面談完了も応募状態・審査記録・履歴を同じD1 batchで確定する", async () => {
+  const { db, request, env } = environment();
+  const applicantEmail = "interview-rejection@atlasez.test";
+  const { applicationId, interviewId, reviewId } = seedInterviewFinalization(
+    db,
+    applicantEmail,
+  );
+  db.prepare(
+    "DELETE FROM atlasez_application_interview_reviews WHERE id=?",
+  ).run(reviewId);
+
+  const originalBatch = env.REPORTS.batch;
+  let writeBatchCount = 0;
+  env.REPORTS.batch = async (statements) => {
+    writeBatchCount += 1;
+    if (writeBatchCount === 2)
+      throw new Error("unexpected second D1 write batch");
+    return originalBatch(statements);
+  };
+
+  const response = await request(
+    `/api/admin/applications/${applicationId}/interview/complete?project=atlas`,
+    "global@atlasez.test",
+    {
+      decision: "rejected",
+      assignedSubjects: ["mathematics"],
+      note: "隔離テスト",
+    },
+  );
+
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(writeBatchCount).toBe(1);
+  expect(
+    db
+      .prepare("SELECT status FROM atlasez_member_applications WHERE id=?")
+      .get(applicationId),
+  ).toEqual({ status: "rejected" });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_project_memberships WHERE lower(email)=lower(?)",
+      )
+      .get(applicantEmail),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries WHERE application_id=?",
+      )
+      .get(applicationId),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT status,completed_at FROM atlasez_application_interviews WHERE id=?",
+      )
+      .get(interviewId),
+  ).toMatchObject({ status: "completed" });
+  expect(
+    db
+      .prepare(
+        "SELECT decision,finalized_at FROM atlasez_application_interview_reviews WHERE application_id=?",
+      )
+      .get(applicationId),
+  ).toMatchObject({ decision: "rejected" });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_interview_history WHERE application_id=?",
+      )
+      .get(applicationId),
+  ).toEqual({ count: 1 });
+});
+
+it("面談採否の同じD1 batchで途中障害が起きると受入副作用と面談記録をまとめてrollbackする", async () => {
+  const { db, request, env } = environment();
+  const applicantEmail = "interview-finalization-rollback@atlasez.test";
+  const { applicationId, interviewId, reviewId } = seedInterviewFinalization(
+    db,
+    applicantEmail,
+  );
+
+  const originalBatch = env.REPORTS.batch;
+  let writeBatchCount = 0;
+  env.REPORTS.batch = async (statements) => {
+    writeBatchCount += 1;
+    if (writeBatchCount === 1)
+      return originalBatch([
+        ...statements,
+        env.REPORTS.prepare(
+          "INSERT INTO injected_interview_batch_failure(id) VALUES ('fail')",
+        ),
+      ]);
+    return originalBatch(statements);
+  };
+
+  const response = await request(
+    `/api/admin/applications/${applicationId}/interview/complete?project=atlas`,
+    "global@atlasez.test",
+    {
+      decision: "accepted",
+      assignedSubjects: ["mathematics"],
+      note: "隔離テスト",
+    },
+  );
+
+  expect(response.status).toBe(500);
+  expect(writeBatchCount).toBe(1);
+  expect(
+    db
+      .prepare("SELECT status FROM atlasez_member_applications WHERE id=?")
+      .get(applicationId),
+  ).toEqual({ status: "reviewing" });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_project_memberships WHERE lower(email)=lower(?)",
+      )
+      .get(applicantEmail),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries WHERE application_id=?",
+      )
+      .get(applicationId),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT status,completed_at FROM atlasez_application_interviews WHERE id=?",
+      )
+      .get(interviewId),
+  ).toEqual({ status: "scheduled", completed_at: null });
+  expect(
+    db
+      .prepare(
+        "SELECT decision,finalized_at FROM atlasez_application_interview_reviews WHERE id=?",
+      )
+      .get(reviewId),
+  ).toEqual({ decision: "pending", finalized_at: null });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_interview_history WHERE application_id=?",
+      )
+      .get(applicationId),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM workflow_transition_events WHERE entity_id=?",
+      )
+      .get(applicationId),
+  ).toEqual({ count: 0 });
+});

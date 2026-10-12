@@ -36,7 +36,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         <p class="privacy-notice"><span data-i18n="privacyNotice">個人情報の取り扱いについて：ご入力いただいた個人情報は、応募内容の確認・選考、応募に関する連絡、受入後のアカウント・担当設定および本人確認のために、必要な範囲で利用します。法令に基づく場合を除き、ご本人の同意なく第三者へ提供しません。選考・運営上必要な期間保管し、利用目的を終えた後は適切に削除します。</span> <a href="https://atlasez.org/privacy-policy/" target="_blank" rel="noopener noreferrer">詳しい個人情報の取り扱い</a></p>
         <input type="hidden" name="projectSlug" data-project-slug value="atlas" />
         <p class="form-loading" data-form-loading aria-live="polite">入力画面を準備しています…</p>
-        <fieldset data-basic-fieldset hidden>
+        <fieldset data-basic-fieldset hidden disabled>
           <legend data-i18n="basic">基本情報</legend>
           <div class="name-grid">
             <label><span data-i18n="familyName">姓</span><input name="familyName" maxlength="80" required autocomplete="family-name" /></label>
@@ -56,7 +56,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
           </div>
           <label><span data-i18n="affiliationEmail">学校・所属先のメールアドレス</span><input name="affiliationEmail" type="email" maxlength="320" required autocomplete="off" placeholder="本人確認に使用する学校・勤務先のメールアドレス" /><small data-i18n="affiliationEmailHelp">本人確認のために使用します。学校や勤務先など、所属先から発行されたメールアドレスを入力してください。</small></label>
           <div class="two">
-            <div class="institution-field"><label for="institution-input"><span data-i18n="institution">所属機関</span></label><div class="institution-picker"><input id="institution-input" name="institution" data-institution-input maxlength="160" required placeholder="学校名を入力して候補から選択" autocomplete="organization" role="combobox" aria-autocomplete="list" aria-controls="institution-directory" aria-expanded="false" /><div id="institution-directory" class="institution-directory" role="listbox" hidden></div></div><small data-institution-status aria-live="polite">学校名を入力すると候補が表示されます。</small><small class="institution-source">出典：<a href="https://www.mext.go.jp/b_menu/toukei/mext_01087.html" target="_blank" rel="noreferrer">文部科学省「学校コード」</a>（公開データを定期更新）</small></div>
+            <div class="institution-field"><label for="institution-input"><span data-i18n="institution">所属機関</span></label><div class="institution-picker"><input id="institution-input" name="institution" data-institution-input maxlength="160" required placeholder="学校名を入力して候補から選択" autocomplete="organization" role="combobox" aria-autocomplete="list" aria-controls="institution-directory" aria-expanded="false" /><div id="institution-directory" class="institution-directory" role="listbox" aria-label="所属機関候補" hidden></div></div><small data-institution-status aria-live="polite">学校名を入力すると候補が表示されます。</small><small class="institution-source">出典：<a href="https://www.mext.go.jp/b_menu/toukei/mext_01087.html" target="_blank" rel="noreferrer">文部科学省「学校コード」</a>（公開データを定期更新）</small></div>
             <label><span data-i18n="grade">学習区分・学年</span><select name="grade" data-grade required><option value="">先に所属区分を選択してください</option><option>中1</option><option>中2</option><option>中3</option><option>高1</option><option>高2</option><option>高3</option><option>高専1</option><option>高専2</option><option>高専3</option><option>高専4</option><option>高専5</option><option>B1</option><option>B2</option><option>B3</option><option>B4</option><option>M1</option><option>M2</option><option>D1</option><option>D2</option><option>D3</option><option>教職員・研究者</option><option>社会人</option><option>その他</option></select></label>
           </div>
           <div class="two">
@@ -72,7 +72,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
           <div class="basic-next" data-basic-next><button type="button" data-next-project>基本情報を保存して次へ</button><output data-profile-message aria-live="polite"></output></div>
         </fieldset>
 
-        <fieldset data-project-content data-project-fieldset hidden>
+        <fieldset data-project-content data-project-fieldset hidden disabled>
           <legend data-i18n="interestsTitle">参加したい内容</legend>
           <fieldset class="subject-field" data-project-only="atlas"><legend data-i18n="subjectsLabel">関心のある分野（複数選択可・上限なし）</legend><div class="subjects">{subjects.map((subject) => <label><input type="checkbox" name="desiredSubjects" value={subject.data.slug} /><span data-subject-ja={subject.data.name.ja} data-subject-en={subject.data.name.en ?? subject.data.name.ja}>{subject.data.name.ja}</span></label>)}<label><input type="checkbox" name="desiredSubjects" value="other" /><span data-subject-ja="その他" data-subject-en="Other">その他</span></label></div></fieldset>
           <label data-project-referral><span data-i18n="referralSource">このプロジェクトをどこで知りましたか？</span><input name="referralSource" maxlength="500" required /></label>
@@ -101,7 +101,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         <datalist id="countries">{countries.map((country) => <option value={country} />)}</datalist>
         <div class="turnstile" data-turnstile aria-live="polite"></div>
         <label class="trap" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off" /></label>
-        <button type="submit" data-i18n="submit">応募を送信</button>
+        <button type="submit" data-i18n="submit" disabled>応募を送信</button>
         <output data-result aria-live="polite"></output>
       </form>
     </section>
@@ -109,7 +109,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
 </ApplicantLayout>
 
 <style>
-  .apply{box-sizing:border-box;margin:0 auto;max-width:920px;padding:2rem 1.25rem 4rem}.brand{color:var(--accent-primary);font-size:1.1rem;font-weight:800;text-decoration:none}.apply section{border-top:2px solid var(--accent-primary);margin-top:2rem;padding-top:1.5rem}.language-row{align-items:center;display:flex;justify-content:space-between;gap:1rem}.apply p{color:var(--accent-primary);font-size:.76rem;font-weight:800;letter-spacing:.08em;margin:0}.language-picker{align-items:center;display:flex;gap:.45rem;font-size:.78rem;font-weight:700}.language-picker select{padding:.35rem .5rem}.apply h1{font-size:2rem;margin:.35rem 0}.intro{color:var(--text-secondary)!important;font-size:.9rem!important;letter-spacing:0!important;line-height:1.7}.apply form{display:grid;gap:1rem;margin-top:1.5rem}.apply fieldset{border:1px solid var(--border-default);display:grid;gap:.8rem;margin:0;padding:1rem}.apply [hidden]{display:none!important}.form-loading{background:var(--background-secondary);border-left:3px solid var(--accent-primary);color:var(--text-secondary)!important;font-size:.82rem!important;font-weight:600!important;letter-spacing:0!important;margin:0!important;padding:.75rem .85rem}.apply legend{color:var(--accent-primary);font-size:.82rem;font-weight:800;padding:0 .35rem}.apply label,.institution-field{display:grid;font-size:.82rem;font-weight:800;gap:.35rem}.apply input,.apply textarea,.apply select{background:var(--background-primary);border:1px solid var(--border-default);box-sizing:border-box;color:var(--text-primary);font:inherit;min-height:2.8rem;padding:.65rem;width:100%}.apply textarea{min-height:6rem;resize:vertical}.apply small{color:var(--text-secondary);font-size:.74rem;font-weight:500;line-height:1.5}.two,.name-grid{display:grid;gap:.8rem;grid-template-columns:repeat(2,minmax(0,1fr))}.name-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.kana-grid{grid-template-columns:repeat(2,minmax(0,1fr));max-width:calc(66.666% - .25rem)}.subject-field{background:var(--background-secondary);padding:.8rem}.subjects{display:flex;flex-wrap:wrap;gap:.45rem}.subjects label{align-items:center;background:var(--background-primary);border:1px solid var(--border-default);border-radius:999px;display:flex;font-size:.76rem;gap:.3rem;padding:.3rem .55rem}.subjects input{accent-color:var(--accent-primary);min-height:1rem;padding:0;width:auto}.hint{display:block}.apply button{background:var(--accent-primary);border:0;color:#fff;cursor:pointer;font:inherit;font-weight:800;padding:.8rem}.apply output{color:var(--text-secondary);min-height:1.3rem}.trap{height:0;opacity:0;overflow:hidden;pointer-events:none}.language-picker select{min-height:2rem}.institution-picker{position:relative}.institution-directory{background:var(--background-primary);border:1px solid var(--border-default);box-shadow:0 8px 20px rgba(0,0,0,.14);display:grid;gap:0;left:0;max-height:18rem;overflow-y:auto;position:absolute;right:0;top:calc(100% + .2rem);z-index:10}.institution-directory[hidden]{display:none}.institution-directory button{background:var(--background-primary);border:0;border-bottom:1px solid var(--border-default);color:var(--text-primary);cursor:pointer;font-size:.78rem;font-weight:600;padding:.65rem .75rem;text-align:left}.institution-directory button:last-child{border-bottom:0}.institution-directory button:hover,.institution-directory button:focus-visible{background:var(--background-secondary);outline:2px solid var(--accent-primary);outline-offset:-2px}.institution-source a{color:var(--accent-primary);font-weight:700}@media(max-width:650px){.apply{padding:1.25rem .85rem 3rem}.language-row{align-items:flex-start;flex-direction:column}.two,.name-grid,.kana-grid{grid-template-columns:1fr;max-width:none}}
+  .apply{box-sizing:border-box;margin:0 auto;max-width:920px;padding:2rem 1.25rem 4rem}.brand{color:var(--accent-primary);font-size:1.1rem;font-weight:800;text-decoration:none}.apply section{border-top:2px solid var(--accent-primary);margin-top:2rem;padding-top:1.5rem}.language-row{align-items:center;display:flex;justify-content:space-between;gap:1rem}.apply p{color:var(--accent-primary);font-size:.76rem;font-weight:800;letter-spacing:.08em;margin:0}.language-picker{align-items:center;display:flex;gap:.45rem;font-size:.78rem;font-weight:700}.language-picker select{padding:.35rem .5rem}.apply h1{font-size:2rem;margin:.35rem 0}.intro{color:var(--text-secondary)!important;font-size:.9rem!important;letter-spacing:0!important;line-height:1.7}.apply form{display:grid;gap:1rem;margin-top:1.5rem}.apply fieldset{border:1px solid var(--border-default);display:grid;gap:.8rem;margin:0;padding:1rem}.apply [hidden]{display:none!important}.form-loading{background:var(--background-secondary);border-left:3px solid var(--accent-primary);color:var(--text-secondary)!important;font-size:.82rem!important;font-weight:600!important;letter-spacing:0!important;margin:0!important;padding:.75rem .85rem}.apply legend{color:var(--accent-primary);font-size:.82rem;font-weight:800;padding:0 .35rem}.apply label,.institution-field{display:grid;font-size:.82rem;font-weight:800;gap:.35rem}.apply input,.apply textarea,.apply select{background:var(--background-primary);border:1px solid var(--border-default);box-sizing:border-box;color:var(--text-primary);font:inherit;min-height:2.8rem;padding:.65rem;width:100%}.apply textarea{min-height:6rem;resize:vertical}.apply small{color:var(--text-secondary);font-size:.74rem;font-weight:500;line-height:1.5}.two,.name-grid{display:grid;gap:.8rem;grid-template-columns:repeat(2,minmax(0,1fr))}.name-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.kana-grid{grid-template-columns:repeat(2,minmax(0,1fr));max-width:calc(66.666% - .25rem)}.subject-field{background:var(--background-secondary);padding:.8rem}.subjects{display:flex;flex-wrap:wrap;gap:.45rem}.subjects label{align-items:center;background:var(--background-primary);border:1px solid var(--border-default);border-radius:999px;display:flex;font-size:.76rem;gap:.3rem;padding:.3rem .55rem}.subjects input{accent-color:var(--accent-primary);min-height:1rem;padding:0;width:auto}.hint{display:block}.apply button{background:var(--accent-primary);border:0;color:#fff;cursor:pointer;font:inherit;font-weight:800;padding:.8rem}.apply output{color:var(--text-secondary);min-height:1.3rem}.trap{height:0;opacity:0;overflow:hidden;pointer-events:none}.language-picker select{min-height:2rem}.institution-picker{position:relative}.institution-directory{background:var(--background-primary);border:1px solid var(--border-default);box-shadow:0 8px 20px rgba(0,0,0,.14);display:grid;gap:0;left:0;max-height:18rem;overflow-y:auto;position:absolute;right:0;top:calc(100% + .2rem);z-index:10}.institution-directory[hidden]{display:none}.institution-directory [role="option"]{background:var(--background-primary);border:0;border-bottom:1px solid var(--border-default);color:var(--text-primary);cursor:pointer;font-size:.78rem;font-weight:600;padding:.65rem .75rem;text-align:left}.institution-directory [role="option"]:last-child{border-bottom:0}.institution-directory [role="option"]:hover,.institution-directory [role="option"][aria-selected="true"]{background:var(--background-secondary);outline:2px solid var(--accent-primary);outline-offset:-2px}.institution-source a{color:var(--accent-primary);font-weight:700}@media(max-width:650px){.apply{padding:1.25rem .85rem 3rem}.language-row{align-items:flex-start;flex-direction:column}.two,.name-grid,.kana-grid{grid-template-columns:1fr;max-width:none}}
   .required-marker{color:#dc2626;font-size:1em;font-weight:900;margin-left:.22rem}.name-order-field,.nickname-field{background:var(--background-secondary);border:1px solid var(--border-default);padding:.65rem .75rem}.name-order-field select{max-width:25rem}.nickname-toggle{align-items:center;display:flex!important;gap:.5rem!important}.nickname-toggle input{accent-color:var(--accent-primary);min-height:1.1rem;width:auto}.nickname-field[hidden]{display:none!important}
   .form-directory{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1rem}.form-directory a{border:1px solid var(--border-default);border-radius:999px;color:var(--text-primary);font-size:.76rem;padding:.35rem .6rem;text-decoration:none}.form-directory a[aria-current="true"]{background:var(--accent-primary);border-color:var(--accent-primary);color:#fff}.member-project-note{background:var(--background-secondary);border-left:3px solid var(--accent-primary);color:var(--text-secondary)!important;font-size:.82rem!important;font-weight:500!important;letter-spacing:0!important;line-height:1.6;margin:1rem 0 0!important;padding:.65rem .75rem}.privacy-notice{background:var(--background-secondary);border-left:3px solid var(--accent-primary);color:var(--text-secondary)!important;font-size:.82rem!important;font-weight:500!important;letter-spacing:0!important;line-height:1.7;margin:0!important;padding:.75rem .85rem}.privacy-notice a{color:var(--accent-primary);font-weight:700}.basic-next{align-items:center;display:flex;flex-wrap:wrap;gap:.6rem}.basic-next button{width:auto}.basic-next output{color:var(--text-secondary);font-size:.78rem}.project-extra{display:grid;gap:.8rem}
   .apply select{height:2.8rem;max-height:2.8rem}
@@ -205,7 +205,10 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     }
     const submitButton = form.querySelector<HTMLButtonElement>("[data-i18n=submit]")!;
     const setFieldsetDisabled = (fieldset: HTMLFieldSetElement, disabled: boolean) => {
-      for (const control of fieldset.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input,select,textarea")) control.disabled = disabled || (fieldset === projectFieldset && Boolean(control.closest("[hidden]")));
+      fieldset.disabled = disabled;
+      for (const control of fieldset.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input,select,textarea")) {
+        control.disabled = disabled || (fieldset === projectFieldset && Boolean(control.closest("[hidden]")));
+      }
     };
     const nameOrder = form.querySelector<HTMLSelectElement>("[data-name-order]")!;
     let nameOrderTouched = false;
@@ -300,6 +303,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       const existingMember = ["ONBOARDING", "TUTORIAL", "MEMBER"].includes(stage);
       const markReady = () => {
         formLoading.hidden = true;
+        submitButton.disabled = submitButton.hidden;
         form.dataset.formReady = "true";
         form.setAttribute("aria-busy", "false");
       };
@@ -404,14 +408,111 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     let institutionDirectory: Institution[] = [];
     let institutionDirectoryLoaded = false;
     let selectedInstitution: Institution | null = null;
+    const institutionPicker = institutionInput.closest<HTMLElement>(".institution-picker")!;
     const normalizeInstitutionQuery = (value: string) => value.normalize("NFKC").trim().toLocaleLowerCase();
-    const closeInstitutionCandidates = () => { institutionList.hidden = true; institutionInput.setAttribute("aria-expanded", "false"); };
-    const selectInstitution = (item: Institution) => { const message = `${item.name}を選択しました（学校コード: ${item.code}）。`; selectedInstitution = item; institutionInput.value = item.name; closeInstitutionCandidates(); institutionStatus.textContent = message; window.setTimeout(() => { closeInstitutionCandidates(); institutionStatus.textContent = message; }, 100); };
-    const updateInstitutionCandidates = () => { const query = normalizeInstitutionQuery(institutionInput.value); if (selectedInstitution && query === normalizeInstitutionQuery(selectedInstitution.name)) { closeInstitutionCandidates(); return; } if (!query) { institutionList.replaceChildren(); closeInstitutionCandidates(); institutionStatus.textContent = "学校名を入力すると候補が表示されます。"; return; } const matches = institutionDirectory.filter((item) => normalizeInstitutionQuery(item.name).includes(query)).slice(0, 30); institutionList.replaceChildren(...matches.map((item) => { const option = document.createElement("button"); option.type = "button"; option.setAttribute("role", "option"); option.textContent = item.name; option.title = `学校コード: ${item.code}`; option.addEventListener("click", () => selectInstitution(item)); return option; })); institutionList.hidden = matches.length === 0; institutionInput.setAttribute("aria-expanded", String(matches.length > 0)); institutionStatus.textContent = matches.length ? `${matches.length}件の候補を表示しています。クリックして選択してください。` : "候補がない場合は学校名をそのまま入力できます。"; };
-    const loadInstitutionDirectory = async () => { try { const response = await fetch("/data/institutions.json", { cache: "force-cache" }); if (!response.ok) throw new Error(); const data = await response.json() as { institutions?: Institution[] }; institutionDirectory = data.institutions ?? []; institutionDirectoryLoaded = true; updateInstitutionCandidates(); } catch { institutionStatus.textContent = "候補を読み込めませんでした。学校名はそのまま入力できます。"; } };
-    institutionInput.addEventListener("input", () => { if (!selectedInstitution || institutionInput.value !== selectedInstitution.name) selectedInstitution = null; if (institutionDirectoryLoaded) updateInstitutionCandidates(); });
-    institutionInput.addEventListener("focus", () => { if (institutionDirectoryLoaded && institutionInput.value) updateInstitutionCandidates(); });
-    institutionInput.addEventListener("keydown", (event) => { const options = [...institutionList.querySelectorAll<HTMLButtonElement>("[role=option]")]; const active = document.activeElement instanceof HTMLButtonElement && institutionList.contains(document.activeElement) ? options.indexOf(document.activeElement) : -1; if (event.key === "ArrowDown" && options.length) { event.preventDefault(); options[Math.min(active + 1, options.length - 1)]?.focus(); } else if (event.key === "ArrowUp" && options.length) { event.preventDefault(); if (active <= 0) institutionInput.focus(); else options[active - 1]?.focus(); } else if (event.key === "Escape") closeInstitutionCandidates(); });
+    let visibleInstitutions: Institution[] = [];
+    let activeInstitutionOption = -1;
+    const setActiveInstitutionOption = (index: number) => {
+      activeInstitutionOption = index;
+      const options = institutionList.querySelectorAll<HTMLElement>("[role=option]");
+      options.forEach((option, optionIndex) => option.setAttribute("aria-selected", String(optionIndex === index)));
+      if (index < 0) institutionInput.removeAttribute("aria-activedescendant");
+      else institutionInput.setAttribute("aria-activedescendant", `institution-option-${index}`);
+    };
+    const closeInstitutionCandidates = () => {
+      institutionList.hidden = true;
+      institutionInput.setAttribute("aria-expanded", "false");
+      setActiveInstitutionOption(-1);
+    };
+    const selectInstitution = (item: Institution) => {
+      const message = `${item.name}を選択しました（学校コード: ${item.code}）。`;
+      selectedInstitution = item;
+      institutionInput.value = item.name;
+      closeInstitutionCandidates();
+      visibleInstitutions = [];
+      institutionList.replaceChildren();
+      institutionStatus.textContent = message;
+    };
+    const updateInstitutionCandidates = () => {
+      const query = normalizeInstitutionQuery(institutionInput.value);
+      if (selectedInstitution && query === normalizeInstitutionQuery(selectedInstitution.name)) {
+        closeInstitutionCandidates();
+        return;
+      }
+      if (!query) {
+        institutionList.replaceChildren();
+        visibleInstitutions = [];
+        closeInstitutionCandidates();
+        institutionStatus.textContent = "学校名を入力すると候補が表示されます。";
+        return;
+      }
+      visibleInstitutions = institutionDirectory.filter((item) => normalizeInstitutionQuery(item.name).includes(query)).slice(0, 30);
+      institutionList.replaceChildren(...visibleInstitutions.map((item, index) => {
+        const option = document.createElement("div");
+        option.id = `institution-option-${index}`;
+        option.setAttribute("role", "option");
+        option.setAttribute("aria-selected", "false");
+        option.textContent = item.name;
+        option.title = `学校コード: ${item.code}`;
+        option.addEventListener("mousedown", (event) => event.preventDefault());
+        option.addEventListener("click", () => selectInstitution(item));
+        return option;
+      }));
+      activeInstitutionOption = -1;
+      institutionInput.removeAttribute("aria-activedescendant");
+      institutionList.hidden = visibleInstitutions.length === 0;
+      institutionInput.setAttribute("aria-expanded", String(visibleInstitutions.length > 0));
+      institutionStatus.textContent = visibleInstitutions.length
+        ? `${visibleInstitutions.length}件の候補を表示しています。上下キーで選び、Enterで確定できます。`
+        : "候補がない場合は学校名をそのまま入力できます。";
+    };
+    const loadInstitutionDirectory = async () => {
+      try {
+        const response = await fetch("/data/institutions.json", { cache: "force-cache" });
+        if (!response.ok) throw new Error();
+        const data = await response.json() as { institutions?: Institution[] };
+        institutionDirectory = data.institutions ?? [];
+        institutionDirectoryLoaded = true;
+        updateInstitutionCandidates();
+      } catch {
+        institutionStatus.textContent = "候補を読み込めませんでした。学校名はそのまま入力できます。";
+      }
+    };
+    institutionInput.addEventListener("input", () => {
+      if (!selectedInstitution || institutionInput.value !== selectedInstitution.name) selectedInstitution = null;
+      if (institutionDirectoryLoaded) updateInstitutionCandidates();
+    });
+    institutionInput.addEventListener("focus", () => {
+      if (institutionDirectoryLoaded && institutionInput.value) updateInstitutionCandidates();
+    });
+    institutionInput.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown" && visibleInstitutions.length) {
+        event.preventDefault();
+        if (institutionList.hidden) {
+          institutionList.hidden = false;
+          institutionInput.setAttribute("aria-expanded", "true");
+        }
+        setActiveInstitutionOption(Math.min(activeInstitutionOption + 1, visibleInstitutions.length - 1));
+      } else if (event.key === "ArrowUp" && visibleInstitutions.length) {
+        event.preventDefault();
+        setActiveInstitutionOption(activeInstitutionOption < 0
+          ? visibleInstitutions.length - 1
+          : Math.max(activeInstitutionOption - 1, 0));
+      } else if (event.key === "Enter" && activeInstitutionOption >= 0) {
+        event.preventDefault();
+        const item = visibleInstitutions[activeInstitutionOption];
+        if (item) selectInstitution(item);
+      } else if (event.key === "Escape" && !institutionList.hidden) {
+        event.preventDefault();
+        closeInstitutionCandidates();
+      }
+    });
+    institutionPicker.addEventListener("focusout", (event) => {
+      if (event.relatedTarget instanceof Node && institutionPicker.contains(event.relatedTarget)) return;
+      window.setTimeout(() => {
+        if (!institutionPicker.contains(document.activeElement)) closeInstitutionCandidates();
+      }, 0);
+    });
     document.addEventListener("click", (event) => { if (!(event.target instanceof Node) || !institutionInput.closest(".institution-picker")?.contains(event.target)) closeInstitutionCandidates(); });
     void loadInstitutionDirectory();
     try { const current = Intl.DateTimeFormat().resolvedOptions().timeZone; if ([...tz.options].some((option) => option.value === current)) tz.value = current; } catch { /* 古いブラウザでは既定値を使う */ }

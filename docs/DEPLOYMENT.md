@@ -15,6 +15,8 @@
 4. 運営用サイトはPRのCI成功・レビュー後のmainをProduction branchに固定したCloudflare Workers Buildsだけで反映する。`.github/workflows/deploy-admin-from-github.yml`は検証専用で配信しない。`npm run deploy:admin`はWorkers Buildsが使えない緊急時のローカル例外手順（[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)）に限る。
 5. Chromeで公開サイト、`/admin/portal/`、`/admin/member-calendar/`、`/admin/manage/?project=atlas`を確認する
 
+ADMINのmain protectionではCI status checkを維持し、レビュー承認の必須数は0のままとする。通常のPR変更手順でレビューを確認することは、branch protectionで承認を必須化することを意味しない。
+
 本番Worker名・アカウント・ルート・D1は設定ファイルに固定し、`npm run verify:deploy-config`で確認します。ADMINのローカル緊急deployは、これに加えてmain由来の承認SHAとbuild-infoを検証します。
 
 ## ビルド設定
@@ -46,7 +48,7 @@ Build checkout SHA・接続branch・build-infoを照合し、既存bindings・va
 
 WorkerのGitHub同期はCronを分離して8件ずつ処理し、0130のD1チェックポイントから再開します。
 
-D1 migrationは通常Build/Deployに含めません。今回の0127・0128・0129・0130についてバックアップ・共有D1/旧Workerへの影響・復旧方法・隔離検証・適用記録を確定し、新Workerを配信する前に適用します。未適用なら接続・初回Buildを停止します。
+D1 migrationは通常Build/Deployに含めません。2026-10-12に固定Accountと本番D1に対して最新mainの全migration一覧を読み取り専用で照合し、`No migrations to apply!` を確認しました。したがって、0127・0128・0129・0130はこの時点で未適用項目ではありません。これはmigration追跡状態の確認であり、全データの整合性検査ではありません。次のDB変更前には対象mainのmigration一覧、事前バックアップ、共有D1/旧Workerへの影響、復旧方法、隔離検証、明示した適用手順を再確認します。
 
 配信後はWorkers Builds run・checkout SHA、固定Worker Version・100%配信、公開build-info、認証済みChromeを確認します。読み取り専用の`verify-admin-production.yml`はschedule/dispatchで最大15回、60秒間隔、job20分以内に照合し、未一致を失敗として報告します。監査JSONだけのmain advanceは公開SHAがmainの祖先で、差分が`docs/deployments/cloudflare-latest.json`だけと検証できる場合だけ許容します。
 

@@ -12,12 +12,24 @@
 
 ## データと適用順
 
-本番migrationは未適用。既存のADMIN D1に対しレビュー後に以下の順で適用する。
+### 2026-10-12の本番確認
+
+固定Account `812021e62fa20465950b61be55dfe064` を明示し、最新ADMIN main `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370` のmigration一式に対して読み取り専用で次を実行した。Wranglerは `No migrations to apply!` と返した。0120〜0125および0127〜0130が対象で、0126は存在しない。migrationの適用、D1 export、データ行の読み取り・変更は行っていない。この結果はコマンド実行時点のmigration追跡状態を示し、全テーブル・データの整合性確認や次回変更後の状態を保証しない。
+
+```bash
+CLOUDFLARE_ACCOUNT_ID=812021e62fa20465950b61be55dfe064 npx wrangler d1 migrations list atlasez-reports --remote --config wrangler.admin.jsonc
+```
+
+以下の「本番migration未適用」およびproduction Environment承認を使う手順は過去の記録であり、現状確認済みの手順として使用しない。今後のDB変更では、対象mainと固定D1に対する未適用migration一覧、バックアップ、共有D1/旧Workerへの影響、隔離検証、明示した適用手順と結果を個別に記録する。通常のBuild/Deployではmigrationを実行しない。
+
+### 過去の適用前提（履歴）
+
+本書の以下のmigration・動作説明は機能実装時点の履歴である。現状のremote migration一覧を確認せずに再適用しない。
 
 1. `0120_publication_review_started_at.sql`（統計改善PR #481を先に導入する場合）
 2. `0121_editorial_task_templates.sql`
 3. `0122_admin_notification_preferences.sql`
-4. mainのCIとレビュー完了後、GitHub Actionsのproduction Environment承認を通して反映。deploy workflowはmigrationを実行しない。
+4. mainのCIと運用レビュー後、通常のADMIN deployとは分けて明示手順で適用する。deploy workflowはmigrationを実行しない。
 
 0121はテンプレート、0122は本人の通知設定・再表示予約の新規テーブルだけを作成し、既存行を更新しない。0121未適用時は定期作成をスキップしてAPIは503を返す。0122未適用時は従来の通知一覧を表示して設定操作を無効にする。0122内の2テーブルを両方適用してから新しい通知設定を利用する。
 

@@ -20,9 +20,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       <div class="developer-mode-content">
     <section class="diagnostic-panel" aria-labelledby="diagnostic-heading">
       <div class="panel-heading">
-        <div><h2 id="diagnostic-heading">現在の状態</h2><p data-diagnostic-generated>未確認</p></div>
+        <div><h2 id="diagnostic-heading">確認できる診断情報</h2><p data-diagnostic-generated>未確認</p></div>
         <button type="button" data-diagnostic-retry>再確認</button>
       </div>
+      <p class="diagnostic-scope-note">Cloudflareの配信Version、定期処理の実行履歴、メール・Discordの実到達はこの画面だけでは確認できません。表示された設定値と実際の稼働状態を区別してください。</p>
       <AdminRetryNotice message="診断情報を取得できませんでした。" />
       <div class="diagnostic-state" data-diagnostic-state role="status" aria-live="polite">確認しています…</div>
       <div class="diagnostic-list" data-diagnostic-list hidden></div>
@@ -72,6 +73,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .developer-mode-details[open] > summary::before { content: "−"; }
   .developer-mode-content { padding-top: .1rem; }
   .diagnostic-panel, .tool-panel, .notes-panel { background: var(--background-secondary); border: 1px solid var(--border-default); margin-top: 1rem; padding: 1rem; }
+  .diagnostic-scope-note { color: var(--text-secondary); font-size: .74rem; line-height: 1.6; margin: .65rem 0; }
   .panel-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
   .panel-heading h2, .notes-panel h2 { font-size: 1rem; margin: 0; }
   .panel-heading p { color: var(--text-secondary); font-size: .72rem; margin: .3rem 0 0; }

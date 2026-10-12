@@ -58,7 +58,7 @@ npm run deploy:public
 
 ```
 
-ADMIN本番の通常経路は、GitHub `Atlasez/Admin-Atlesez`のProduction branchを`main`に固定したCloudflare Workers Buildsだけです。PRのCI成功・レビューをマージ条件とし、Build側でも検証を実行します。`.github/workflows/deploy-admin-from-github.yml`は検証専用で、ADMIN成果物とdry-runを確認するだけです。Cloudflareへの書き込みは行いません。D1 migrationは自動適用せず、新Workerに必要なmigrationのバックアップ・レビュー・適用記録を先に完了します。`npm run deploy:admin`はWorkers Buildsが使えない緊急時に限り、cleanな`main` checkout、正本remote main由来、レビュー済みSHAの明示指定、別途の実行承認が必要です。固定Worker・Build/Deploy command・切替手順は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)と[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照してください。
+ADMIN本番の通常経路は、GitHub `Atlasez/Admin-Atlesez`のProduction branchを`main`に固定したCloudflare Workers Buildsだけです。PRのCI成功後、通常の変更手順に沿ってレビュー完了を確認し、Build側でも検証を実行します。GitHub branch protectionのrequired approving reviewsは0を維持し、レビュー承認を必須化しません。`.github/workflows/deploy-admin-from-github.yml`は検証専用で、ADMIN成果物とdry-runを確認するだけです。Cloudflareへの書き込みは行いません。D1 migrationは自動適用せず、新Workerに必要なmigrationのバックアップ・レビュー・適用記録を先に完了します。`npm run deploy:admin`はWorkers Buildsが使えない緊急時に限り、cleanな`main` checkout、正本remote main由来、レビュー済みSHAの明示指定、別途の実行承認が必要です。固定Worker・Build/Deploy command・切替手順は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)と[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照してください。
 
 デプロイ前のターゲット検証では、Worker名・Cloudflareアカウント・ドメインルート・D1が正しいか確認します。
 検査に失敗した場合は、設定を手で書き換えて続行せず、正しい設定ファイルを確認してください。

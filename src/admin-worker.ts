@@ -38,6 +38,7 @@ import {
 } from "./lib/date-time";
 import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
 import { dispatchApplicationEmails } from "./lib/application-email-delivery";
+import { purgeExpiredPersonalData } from "./lib/personal-data-retention";
 import { normalizeArticleReferences } from "./lib/article-references.mjs";
 import { tikzPackageHelp } from "./lib/tikz-policy.mjs";
 import { parse as parseYaml } from "yaml";
@@ -1816,9 +1817,13 @@ async function ingestArticleReport(
     return json({ error: "連絡先メールアドレスを確認してください。" }, 400);
 
   const duplicate = await env.REPORTS.prepare(
-    "SELECT id FROM article_reports WHERE id = ? OR content_hash = ? LIMIT 1",
+    "SELECT id FROM article_reports WHERE id = ? OR (content_hash = ? AND created_at >= ?) LIMIT 1",
   )
-    .bind(reportId, contentHash)
+    .bind(
+      reportId,
+      contentHash,
+      new Date(Date.now() - 7 * 24 * 60 * 60 * 1_000).toISOString(),
+    )
     .first<{ id: string }>();
   if (duplicate) return json({ ok: true, duplicate: true }, 200);
 
@@ -3016,9 +3021,28 @@ async function developerDiagnostics(
       return null;
     }
   })();
-  checks.push({ id: "build", label: "配信ビルド情報", status: buildInfo ? "ok" : "warning", detail: buildInfo ? String(buildInfo.commit || "SHAを確認しました") : "build-info.jsonを取得できません" });
-  checks.push({ id: "preview", label: "Preview配信", status: "ok", detail: "本番WorkerのPreview URLは無効です" });
-  checks.push({ id: "cron", label: "定期処理", status: "ok", detail: "1分・5分・毎時の定期処理を設定しています" });
+  checks.push({
+    id: "build",
+    label: "build-info.json取得",
+    status: buildInfo ? "ok" : "warning",
+    detail: buildInfo
+      ? `取得できました（commit: ${String(buildInfo.commit || "不明")}）。mainやCloudflare Versionとの一致はこの画面では照合していません。`
+      : "build-info.jsonを取得できません",
+  });
+  checks.push({
+    id: "preview",
+    label: "Preview URL設定",
+    status: "warning",
+    detail:
+      "この画面はCloudflare上の実設定を読み取りません。配信中WorkerのPreview URL設定をCloudflareで確認してください。",
+  });
+  checks.push({
+    id: "cron",
+    label: "定期処理の稼働",
+    status: "warning",
+    detail:
+      "定期処理の実行履歴を記録・確認していないため、最終成功時刻や滞留をこの画面では判定できません。",
+  });
 
   const configured = {
     collaboration: Boolean(env.EDITORIAL_COLLABORATION),
@@ -3027,7 +3051,17 @@ async function developerDiagnostics(
     email: Boolean(env.RESEND_API_KEY?.trim() && env.EMAIL_FROM?.trim()),
     publicOrigin: Boolean(env.PUBLIC_SITE_ORIGIN?.trim()),
   };
-  checks.push({ id: "bindings", label: "外部連携設定", status: configured.collaboration && configured.github && configured.publicOrigin ? "ok" : "warning", detail: Object.entries(configured).map(([key, value]) => `${key}:${value ? "設定済み" : "未設定"}`).join(" ・ ") });
+  checks.push({
+    id: "bindings",
+    label: "外部連携設定値",
+    status:
+      configured.collaboration && configured.github && configured.publicOrigin
+        ? "ok"
+        : "warning",
+    detail: `${Object.entries(configured)
+      .map(([key, value]) => `${key}:${value ? "設定済み" : "未設定"}`)
+      .join(" ・ ")}（接続疎通・メール到達・Discord反映は未確認）`,
+  });
   checks.push({ id: "response", label: "API応答", status: "ok", detail: `${Math.round(performance.now() - startedAt)}ms` });
   return json({
     scope: { email: scope.email },
@@ -12239,11 +12273,23 @@ async function getMyIntakeTracking(request: Request, env: Env): Promise<Response
   return json({ entries: rows.results ?? [] });
 }
 
+type ApplicationInterviewFinalization = {
+  applicationId: string;
+  interviewId: string;
+  reviewId: string;
+  review: ApplicationInterviewReviewRow | null;
+  note: string;
+  assignedSubjects: string[];
+  decision: "accepted" | "rejected";
+  completedAt: string;
+};
+
 async function updateApplication(
   request: Request,
   env: Env,
   id: string,
   ctx?: WorkerExecutionContext,
+  interviewFinalization?: ApplicationInterviewFinalization,
 ): Promise<Response> {
   const requestedProject =
     new URL(request.url).searchParams.get("project")?.trim().toLowerCase() ??
@@ -12330,12 +12376,22 @@ async function updateApplication(
       },
       409,
     );
-  const now = new Date().toISOString();
+  const now = interviewFinalization?.completedAt ?? new Date().toISOString();
+  const interviewGuardSql = interviewFinalization
+    ? ` AND EXISTS (
+         SELECT 1 FROM atlasez_application_interviews
+         WHERE id=? AND application_id=? AND status='scheduled'
+       )`
+    : "";
+  const interviewGuardValues = interviewFinalization
+    ? [interviewFinalization.interviewId, id]
+    : [];
   if (status !== "accepted") {
-    const [updated, workflowEvent] = await env.REPORTS.batch([
+    const statements: D1PreparedStatement[] = [
       env.REPORTS.prepare(
-        "UPDATE atlasez_member_applications SET status=?,updated_at=? WHERE id=? AND status=? AND updated_at=?",
-      ).bind(status, now, id, application.status, application.updated_at),
+        `UPDATE atlasez_member_applications SET status=?,updated_at=?
+         WHERE id=? AND status=? AND updated_at=?${interviewGuardSql}`,
+      ).bind(status, now, id, application.status, application.updated_at, ...interviewGuardValues),
       workflowEventStatement(
         env,
         {
@@ -12351,7 +12407,17 @@ async function updateApplication(
         },
         true,
       ),
-    ]);
+    ];
+    if (interviewFinalization)
+      statements.push(
+        ...applicationInterviewFinalizationStatements(
+          env,
+          interviewFinalization,
+          scope.email,
+          now,
+        ),
+      );
+    const [updated, workflowEvent] = await env.REPORTS.batch(statements);
     if (!Number(updated?.meta?.changes ?? 0))
       return json({ error: "応募の状態が先に更新されています。再読み込みしてください。", code: "STALE_STATE" }, 409);
     if (Number(workflowEvent?.meta?.changes ?? 0) !== 1)
@@ -12415,8 +12481,8 @@ async function updateApplication(
     env.REPORTS.prepare(
       `UPDATE atlasez_member_applications
        SET status='accepted',provisioning_status=?,provisioning_error='',accepted_by=?,updated_at=?
-       WHERE id=? AND status=? AND updated_at=?`,
-    ).bind(verifiedDiscord ? "pending" : "skipped", scope.email, now, id, application.status, application.updated_at),
+       WHERE id=? AND status=? AND updated_at=?${interviewGuardSql}`,
+    ).bind(verifiedDiscord ? "pending" : "skipped", scope.email, now, id, application.status, application.updated_at, ...interviewGuardValues),
     workflowEventStatement(
       env,
       {
@@ -12461,6 +12527,15 @@ async function updateApplication(
        ON CONFLICT(project_id,email) DO NOTHING`,
     ).bind(membershipProjectId, application.email, now, id, now),
   ];
+  if (interviewFinalization)
+    statements.push(
+      ...applicationInterviewFinalizationStatements(
+        env,
+        interviewFinalization,
+        scope.email,
+        now,
+      ),
+    );
   // D1 batchは一括トランザクション。所属・プロフィール・応募状態の一部だけが残るのを防ぐ。
   try {
     const batchResults = await env.REPORTS.batch(statements);
@@ -12664,6 +12739,131 @@ const interviewHistory = (
     actorEmail,
     createdAt,
   );
+
+const applicationInterviewFinalizationStatements = (
+  env: Env,
+  finalization: ApplicationInterviewFinalization,
+  actorEmail: string,
+  completedAt: string,
+): D1PreparedStatement[] => {
+  const assignedSubjects = finalization.assignedSubjects.join(",");
+  const nextReview = {
+    note: finalization.note,
+    assigned_subjects: assignedSubjects,
+    decision: finalization.decision,
+  };
+  const reviewStatement = finalization.review
+    ? env.REPORTS.prepare(
+        `UPDATE atlasez_application_interview_reviews
+            SET note=?,assigned_subjects=?,decision=?,finalized_at=?,finalized_by=?,updated_by=?,updated_at=?
+          WHERE id=? AND application_id=?
+            AND EXISTS (
+              SELECT 1 FROM atlasez_application_interviews
+               WHERE id=? AND application_id=? AND status='completed' AND completed_at=?
+            )`,
+      ).bind(
+        nextReview.note,
+        nextReview.assigned_subjects,
+        nextReview.decision,
+        completedAt,
+        actorEmail,
+        actorEmail,
+        completedAt,
+        finalization.reviewId,
+        finalization.applicationId,
+        finalization.interviewId,
+        finalization.applicationId,
+        completedAt,
+      )
+    : env.REPORTS.prepare(
+        `INSERT INTO atlasez_application_interview_reviews
+          (id,application_id,interview_id,note,assigned_subjects,decision,finalized_at,finalized_by,created_by,created_at,updated_by,updated_at)
+         SELECT ?,?,?,?,?,?,?,?,?,?,?,?
+         WHERE EXISTS (
+           SELECT 1 FROM atlasez_application_interviews
+            WHERE id=? AND application_id=? AND status='completed' AND completed_at=?
+         )`,
+      ).bind(
+        finalization.reviewId,
+        finalization.applicationId,
+        finalization.interviewId,
+        nextReview.note,
+        nextReview.assigned_subjects,
+        nextReview.decision,
+        completedAt,
+        actorEmail,
+        actorEmail,
+        completedAt,
+        actorEmail,
+        completedAt,
+        finalization.interviewId,
+        finalization.applicationId,
+        completedAt,
+      );
+  return [
+    env.REPORTS.prepare(
+      `UPDATE atlasez_application_interviews
+          SET status='completed',completed_at=?,updated_by=?,updated_at=?
+        WHERE id=? AND application_id=? AND status='scheduled'
+          AND EXISTS (
+            SELECT 1 FROM atlasez_member_applications
+             WHERE id=? AND status=? AND updated_at=?
+          )`,
+    ).bind(
+      completedAt,
+      actorEmail,
+      completedAt,
+      finalization.interviewId,
+      finalization.applicationId,
+      finalization.applicationId,
+      finalization.decision,
+      completedAt,
+    ),
+    reviewStatement,
+    env.REPORTS.prepare(
+      `INSERT INTO atlasez_application_interview_history
+        (id,application_id,interview_id,review_id,event_type,before_json,after_json,actor_email,created_at)
+       SELECT ?,?,?,?,?,?,?,?,?
+       WHERE EXISTS (
+         SELECT 1 FROM atlasez_application_interviews
+          WHERE id=? AND application_id=? AND status='completed' AND completed_at=?
+       ) AND EXISTS (
+         SELECT 1 FROM atlasez_application_interview_reviews
+          WHERE id=? AND application_id=? AND decision=? AND finalized_at=?
+       )`,
+    ).bind(
+      crypto.randomUUID(),
+      finalization.applicationId,
+      finalization.interviewId,
+      finalization.reviewId,
+      "interview_completed",
+      JSON.stringify(
+        finalization.review
+          ? {
+              id: finalization.review.id,
+              note: finalization.review.note,
+              assigned_subjects: finalization.review.assigned_subjects,
+              decision: finalization.review.decision,
+            }
+          : null,
+      ),
+      JSON.stringify({
+        note: finalization.note,
+        assigned_subjects: finalization.assignedSubjects,
+        decision: finalization.decision,
+      }),
+      actorEmail,
+      completedAt,
+      finalization.interviewId,
+      finalization.applicationId,
+      completedAt,
+      finalization.reviewId,
+      finalization.applicationId,
+      finalization.decision,
+      completedAt,
+    ),
+  ];
+};
 
 async function getApplicationInterview(
   request: Request,
@@ -12921,10 +13121,22 @@ async function completeApplicationInterview(
   if (!interview || interview.status !== "scheduled")
     return json({ error: "予定済みの面談だけ完了できます。" }, 409);
   const current = await env.REPORTS.prepare(
-    "SELECT id,note,assigned_subjects,decision FROM atlasez_application_interview_reviews WHERE application_id=?",
-  ).bind(id).first<{ id: string; note: string; assigned_subjects: string; decision: string }>();
+    "SELECT id,application_id,interview_id,note,assigned_subjects,decision,finalized_at,finalized_by,created_by,created_at,updated_by,updated_at FROM atlasez_application_interview_reviews WHERE application_id=?",
+  ).bind(id).first<ApplicationInterviewReviewRow>();
   const note = text(payload?.note, MAX_INTERVIEW_NOTE_LENGTH) || current?.note || "";
-  // 採否確定は既存の受入処理を通し、参加登録・プロフィール・Discord同期・承認メールを同じ経路で行う。
+  const finalizedAt = new Date().toISOString();
+  const reviewId = current?.id ?? crypto.randomUUID();
+  const finalization: ApplicationInterviewFinalization = {
+    applicationId: id,
+    interviewId: interview.id,
+    reviewId,
+    review: current,
+    note,
+    assignedSubjects,
+    decision,
+    completedAt: finalizedAt,
+  };
+  // 応募判断・所属・面談完了・審査記録・履歴を同じD1 batchで確定する。
   const updateRequest = new Request(
     `${new URL(request.url).origin}/api/admin/applications/${encodeURIComponent(id)}?project=${encodeURIComponent(access.access.project.slug)}`,
     {
@@ -12933,29 +13145,15 @@ async function completeApplicationInterview(
       body: JSON.stringify({ status: decision, desiredSubjects: assignedSubjects }),
     },
   );
-  const applicationResult = await updateApplication(updateRequest, env, id, ctx);
+  const applicationResult = await updateApplication(
+    updateRequest,
+    env,
+    id,
+    ctx,
+    finalization,
+  );
   if (!applicationResult.ok) return applicationResult;
-  const now = new Date().toISOString();
-  const reviewId = current?.id ?? crypto.randomUUID();
-  const reviewStatement = current
-    ? env.REPORTS.prepare(
-        `UPDATE atlasez_application_interview_reviews
-            SET note=?,assigned_subjects=?,decision=?,finalized_at=?,finalized_by=?,updated_by=?,updated_at=?
-          WHERE id=? AND application_id=?`,
-      ).bind(note, assignedSubjects.join(","), decision, now, access.access.scope.email, access.access.scope.email, now, reviewId, id)
-    : env.REPORTS.prepare(
-        `INSERT INTO atlasez_application_interview_reviews
-          (id,application_id,interview_id,note,assigned_subjects,decision,finalized_at,finalized_by,created_by,created_at,updated_by,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      ).bind(reviewId, id, interview.id, note, assignedSubjects.join(","), decision, now, access.access.scope.email, access.access.scope.email, now, access.access.scope.email, now);
-  await env.REPORTS.batch([
-    env.REPORTS.prepare(
-      "UPDATE atlasez_application_interviews SET status='completed',completed_at=?,updated_by=?,updated_at=? WHERE id=? AND status='scheduled'",
-    ).bind(now, access.access.scope.email, now, interview.id),
-    reviewStatement,
-    interviewHistory(env, id, interview.id, reviewId, "interview_completed", current, { note, assigned_subjects: assignedSubjects, decision }, access.access.scope.email, now),
-  ]);
-  return json({ ok: true, decision, assignedSubjects, finalizedAt: now, application: await applicationResult.json() });
+  return json({ ok: true, decision, assignedSubjects, finalizedAt, application: await applicationResult.json() });
 }
 
 async function operationsInsights(request: Request, env: Env): Promise<Response> {
@@ -14665,34 +14863,6 @@ async function submitMemberApplication(
     },
     201,
   );
-}
-
-async function purgeExpiredPersonalData(env: Env) {
-  const now = new Date();
-  const expiredSessions = new Date(
-    now.getTime() - 24 * 60 * 60 * 1_000,
-  ).toISOString();
-  const expiredApplications = new Date(
-    now.getTime() - 180 * 24 * 60 * 60 * 1_000,
-  ).toISOString();
-  const expiredRateLimits = Math.floor(
-    (now.getTime() - 24 * 60 * 60 * 1_000) / 600_000,
-  );
-  await Promise.all([
-    env.REPORTS.prepare("DELETE FROM admin_auth_sessions WHERE expires_at < ?")
-      .bind(expiredSessions)
-      .run(),
-    env.REPORTS.prepare(
-      "DELETE FROM atlasez_application_rate_limits WHERE bucket < ?",
-    )
-      .bind(expiredRateLimits)
-      .run(),
-    env.REPORTS.prepare(
-      "DELETE FROM atlasez_member_applications WHERE status IN ('rejected','accepted') AND updated_at < ?",
-    )
-      .bind(expiredApplications)
-      .run(),
-  ]);
 }
 
 const publicApplicationConfig = (env: Env): Response =>
@@ -24210,6 +24380,20 @@ async function archiveStaleAuditLogs(env: Env) {
   }
 }
 
+export async function runPersonalDataRetention(
+  db: D1Database,
+  now = new Date(),
+) {
+  try {
+    const counts = await purgeExpiredPersonalData(db, now);
+    console.info("personal_data_retention_completed", counts);
+    return counts;
+  } catch (error) {
+    console.error("personal_data_retention_failed");
+    throw error;
+  }
+}
+
 export default {
   async fetch(
     request: Request,
@@ -24281,7 +24465,7 @@ export default {
     ctx.waitUntil(
       Promise.all([
         progressEditorialPublicationRuns(env),
-        purgeExpiredPersonalData(env),
+        runPersonalDataRetention(env.REPORTS),
         applyDueMemberProcedures(env.REPORTS),
         dispatchDueTaskReminders(env),
         dispatchTaskTemplates(env.REPORTS,primaryAdminEmail(env)),

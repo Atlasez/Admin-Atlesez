@@ -22,7 +22,7 @@ GitHubの`main`を唯一の本番ソースとする。ADMIN本番の通常配信
 
 Cloudflare Workers Buildsでrepositoryを`Atlasez/Admin-Atlesez`、Production branchを`main`、root directoryをリポジトリルートに固定する。固定Worker・Account・Custom Domain・D1・DOを変更しない。他branchの自動配信・Preview配信は有効にしない。
 
-1. GitHubのmain保護でPRのCI成功・レビューを必須にする。CI失敗や未レビューの変更をmainへマージしない。
+1. GitHubのmain保護ではCI status checkを維持し、レビュー承認をrequired approving reviewsとして必須化しない。現在のrequired approving review countは0であり、ユーザー方針により0を維持する。コード変更は通常のPR運用とルートの`AGENTS.md`に従い、CI成功とレビュー完了を確認してからマージする。この手順上のレビューとbranch protectionの承認必須設定を混同しない。
 2. `.github/workflows/deploy-admin-from-github.yml`は旧filenameを保った**検証専用**Workflowである。表示名は`Verify ADMIN build only`。成功したmain CIの成果物を検査し、dry-runと7日間のartifact保存だけを行う。deploy job、production Environment、Cloudflare書き込みtokenを追加しない。
 3. Workers BuildsのBuild commandを次に固定する。全検証が成功した場合だけDeployへ進む。
 
