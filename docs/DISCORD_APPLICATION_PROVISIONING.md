@@ -37,9 +37,9 @@ Discord APIまたは対象メンバーの取得に失敗した場合は、その
 
 ## 運営メンバーのアーカイブとDiscord同期エラー
 
-- 通常の退会・担当解除は `/admin/member-management/` の「アーカイブ」を使います。連携済みアカウントでDiscord同期が失敗・skipした場合、画面にエラーが表示され、Atlas側の権限・membership・activeなDiscord割り当ては変更されません。エラーが出た状態を完了扱いせず、同じ処理を繰り返さないでください。
+- 通常の退会・担当解除は `/admin/member-management/` の「アーカイブ」を使います。Discord同期が失敗・skipし、連携行またはactiveなDiscordロール割当が残っている場合、画面にエラーが表示され、Atlas側の権限・membership・activeなDiscord割当は変更されません。連携行がないのにactive割当が残る場合も、外部ロールの失効を特定・確認できないため停止します。エラーが出た状態を完了扱いせず、同じ処理を繰り返さないでください。
 - Discord担当が対象サーバー、BotのAPI状態、「ロールの管理」権限、Botより上位にある対象role、対象者の現在の所属を確認します。原因解消後に運営担当がUIから再実行し、成功表示と監査履歴を確認します。Discordに実際に残ったroleもDiscord担当が照合します。
-- UIにないlegacy `DELETE /api/admin/member-management?email=<対象>` は使わないでください。現行mainではDiscord同期がskipでもAtlas側のmembershipを削除する経路があり、P1修正はPR #526 branchにあります。修正がmain/liveへ反映され、linked accountのsync skip/failedで409/502となりAtlas状態が保たれることをsandboxで確認するまで、このAPIを直接呼び出さないでください。
+- UIにないlegacy `DELETE /api/admin/member-management?email=<対象>` は使わないでください。P1修正はPR #526 branchにあり、linked accountのsync skip/failed、および連携行がないのにactive割当が残る場合に409/502で停止し、Atlas状態を保つ回帰テストを追加しています。修正がmain/liveへ反映されるまでは、このAPIを直接呼び出さないでください。
 - Discord同期の失敗だけを理由にD1のDiscord account/assignment行を手で削除しないでください。外部roleの状態が分からない場合はDiscord担当と運営責任者へ引き継ぎ、外部状態とAtlas側のactive membership/permissionを照合してから再開します。記録にはemail、Discord ID、tokenを貼らず、時刻・失敗分類・担当・次の期限だけを残します。
 
 ### 個別の自動付与除外

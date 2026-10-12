@@ -344,6 +344,13 @@ ADMINの現在Version・live `build-info.json`・認証済みChromeの過去記�
 - OPS-20は当初P0候補にしたが、現行UI `/admin/member-management/` のアーカイブ操作は `POST /api/admin/member-management` を使い、Discord同期がfailedまたはlinked accountでskippedならAtlas権限・membershipを変更せず409/502で停止する。問題はUIから呼ばれていない同APIのlegacy `DELETE` 経路に限定されるため、P1へ再分類した。PR #526では同じfail-closed guardを追加済み。
 - OPS-28はscoped editor自身がURL直打ちできるAPIで、他分野の非公開proposal本文・memoを返し得る直接の認可境界漏れであるためP0を維持する。PR #526 branchの修正・403/redaction testがmain/liveに反映されるまで限定運用を開始しない。
 
+### 2026-10-13 退会・アーカイブのDiscordロール残留再監査
+
+- PR #526の退会/アーカイブ実装を追加で追跡し、従来のlinked-account判定だけでは不足する状態を特定した。`atlasez_member_discord_accounts`の連携行がなく、`atlasez_member_discord_role_assignments`にactive行が残る場合、Discord同期がskipしても以前の分岐はローカルの権限・membership・active割当を削除/無効化し得た。Discord側の対象者を特定できず、外部ロール残留の可能性があるためP1 OPS-20を継続する。
+- 修正は両方の経路（通常UIのPOST archiveと非推奨legacy DELETE）で、同期skip時に連携行またはactive割当が残っていれば409で停止する。連携行がないのにactive割当が残る場合は、再連携とロール解除確認を案内する。失敗時はローカル権限・membership・active割当を保持する。
+- 隔離SQLite fixtureのunit testで、連携なし+active割当のarchive/deleteが拒否され状態を保持すること、active割当がない連携なしdeleteは継続できることを確認する。実Discord・本番D1・実会員データは使っていない。Chrome専用アカウントが未準備のため、本番管理画面の操作結果は未検証。
+- PR #526 branch上の変更であり、CI確認後もmain/liveへ未反映。本番でこの状態に遭遇した場合は確定ボタンを繰り返さず、Discord担当が本人再連携または対象ロールの外部状態を安全に確認し、担当運営へ引き継ぐ。合格条件は、main/live反映後の隔離受入でAPIが409となり権限・membership・active割当が残り、リンク復旧・同期成功の別受入が完了すること。
+
 ### 外部依存と次の担当操作
 
 | 担当role                               | 次の操作                                                                                                                                                         | 合格条件                                                                                                                                                                                                 |

@@ -3893,12 +3893,8 @@ async function removeAtlasMember(
     })),
   );
   if (provisioning.status === "failed") return discordSyncFailure(provisioning);
-  if (provisioning.status === "skipped") {
-    const linkedAccount = await env.REPORTS.prepare(
-      "SELECT 1 AS found FROM atlasez_member_discord_accounts WHERE lower(email)=lower(?) LIMIT 1",
-    ).bind(email).first<{ found: number }>();
-    if (linkedAccount) return discordSyncFailure(provisioning);
-  }
+  const skipFailure = await discordRemovalSkipFailure(env, email, provisioning);
+  if (skipFailure) return skipFailure;
 
   await env.REPORTS.batch([
     env.REPORTS.prepare(
@@ -4122,12 +4118,8 @@ async function changeAtlasMemberLifecycle(
       state.manualAssignments.map((assignment) => ({ ...assignment, is_active: 0 })),
     );
     if (provisioning.status === "failed") return discordSyncFailure(provisioning);
-    if (provisioning.status === "skipped") {
-      const linkedAccount = await env.REPORTS.prepare(
-        "SELECT 1 AS found FROM atlasez_member_discord_accounts WHERE lower(email)=lower(?) LIMIT 1",
-      ).bind(email).first<{ found: number }>();
-      if (linkedAccount) return discordSyncFailure(provisioning);
-    }
+    const skipFailure = await discordRemovalSkipFailure(env, email, provisioning);
+    if (skipFailure) return skipFailure;
 
     const statements = [
       env.REPORTS.prepare(
@@ -8802,6 +8794,33 @@ const discordSyncFailure = (provisioning: DiscordProvisioningResult) =>
     },
     provisioning.status === "skipped" ? 409 : 502,
   );
+
+async function discordRemovalSkipFailure(
+  env: Env,
+  email: string,
+  provisioning: DiscordProvisioningResult,
+): Promise<Response | null> {
+  if (provisioning.status !== "skipped") return null;
+  const [linkedAccount, activeAssignment] = await Promise.all([
+    env.REPORTS.prepare(
+      "SELECT 1 AS found FROM atlasez_member_discord_accounts WHERE lower(email)=lower(?) LIMIT 1",
+    )
+      .bind(email)
+      .first<{ found: number }>(),
+    env.REPORTS.prepare(
+      "SELECT 1 AS found FROM atlasez_member_discord_role_assignments WHERE lower(email)=lower(?) AND is_active=1 LIMIT 1",
+    )
+      .bind(email)
+      .first<{ found: number }>(),
+  ]);
+  if (!linkedAccount && !activeAssignment) return null;
+  const warnings = [...provisioning.warnings];
+  if (!linkedAccount && activeAssignment)
+    warnings.push(
+      "有効なDiscordロール割当がありますが連携先IDを確認できないため停止しました。Discordを再連携し、ロール解除を確認してから再試行してください。",
+    );
+  return discordSyncFailure({ ...provisioning, warnings });
+}
 
 const discordRoleMutationWarning = (
   action: "付与" | "削除",

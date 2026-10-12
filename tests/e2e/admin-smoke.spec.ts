@@ -346,6 +346,58 @@ test("運営メンバーをアーカイブ・復元すると担当範囲と一�
   ]);
 });
 
+test("Discordロールの失効確認に失敗した場合はメンバーを名簿に残して理由を表示する", async ({
+  page,
+}) => {
+  await mockAdminApis(page);
+  let archiveAttempts = 0;
+  await page.route("**/api/admin/genre-overviews*", async (route) => {
+    await route.fulfill({
+      json: {
+        members: [
+          {
+            email: "member@example.org",
+            display_name: "運営メンバー",
+            role: "member",
+            assignments: ["数学"],
+          },
+        ],
+        pagination: { hasMore: false, nextCursor: null },
+      },
+    });
+  });
+  await page.route("**/api/admin/member-management*", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: { members: [] } });
+      return;
+    }
+    archiveAttempts += 1;
+    await route.fulfill({
+      status: 409,
+      json: {
+        ok: false,
+        error:
+          "Discord同期に失敗したため、変更は保存していません。有効なDiscordロール割当がありますが連携先IDを確認できないため停止しました。",
+      },
+    });
+  });
+  page.on("dialog", (dialog) => dialog.accept());
+
+  await page.goto("admin/member-management/");
+  const row = page.locator("[data-table-body] tr").filter({
+    hasText: "member@example.org",
+  });
+  await expect(row).toBeVisible();
+  await row.locator("[data-archive-member]").click();
+
+  await expect(page.locator("[data-message]")).toContainText(
+    "有効なDiscordロール割当があります",
+  );
+  await expect(row).toBeVisible();
+  await expect(row.locator("[data-archive-member]")).toBeEnabled();
+  expect(archiveAttempts).toBe(1);
+});
+
 test("運営メンバー一覧からプロフィールと変更履歴を確認できる", async ({
   page,
 }) => {
