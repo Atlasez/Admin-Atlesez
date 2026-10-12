@@ -28,6 +28,10 @@ export type NotificationPreferences = {
   mutedKinds: string[];
   summaryEnabled: boolean;
 };
+export type GlobalNotificationCutoff = {
+  available: boolean;
+  clearedBefore: string | null;
+};
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
     status,
@@ -58,11 +62,34 @@ export async function loadNotificationPreferences(
     summaryEnabled: row ? Boolean(row.summary_enabled) : true,
   };
 }
+export async function loadGlobalNotificationCutoff(
+  db: D1Database,
+): Promise<GlobalNotificationCutoff> {
+  const table = await db
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='admin_notification_global_cutoff'",
+    )
+    .first<{ name: string }>();
+  if (!table) return { available: false, clearedBefore: null };
+  const row = await db
+    .prepare(
+      "SELECT cleared_before FROM admin_notification_global_cutoff WHERE singleton=1",
+    )
+    .first<{ cleared_before: string }>();
+  if (
+    !row ||
+    typeof row.cleared_before !== "string" ||
+    !Number.isFinite(Date.parse(row.cleared_before))
+  )
+    return { available: false, clearedBefore: null };
+  return { available: true, clearedBefore: row.cleared_before };
+}
 export function notificationSourceMetadata(sql: string) {
   if (sql.includes("FROM editorial_task_reminders"))
     return {
       id: "'task-reminder-rule-' || s.reminder_id || '-' || s.remind_at",
       time: "remind_at",
+      cutoffTime: "remind_at_utc",
       kind: "'task-reminder'",
       dueReminder: true,
     };
