@@ -126,6 +126,50 @@ test("カレンダー設定は初期化中のクリックを取りこぼさな�
   await expect(page.locator("[data-calendar-settings-status]")).toBeHidden();
 });
 
+test("予定追加の催し名入力にアクセシブルな名前がある", async ({ page }) => {
+  await page.route("**/api/admin/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/auth-status")) {
+      await route.fulfill({
+        json: { email: "manager@example.com", isManager: true },
+      });
+      return;
+    }
+    if (pathname.endsWith("/profile")) {
+      await route.fulfill({ json: { profile: { display_name: "管理者" } } });
+      return;
+    }
+    if (pathname.endsWith("/notifications")) {
+      await route.fulfill({ json: { notifications: [] } });
+      return;
+    }
+    if (pathname === "/api/admin/operations") {
+      await route.fulfill({
+        json: {
+          scope: { email: "manager@example.com", isManager: true },
+          project: { id: "atlas", slug: "atlas", name: "アトラス" },
+          members: [],
+          tasks: [],
+          events: [],
+          progress: [],
+          availabilityBlocks: [],
+          availabilityRules: [],
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: {} });
+  });
+
+  await page.goto("admin/calendar/?project=atlas");
+  await expect(page.locator("[data-event-create]")).toBeVisible();
+  const eventTitle = page.locator("[data-event-title]");
+  await expect(eventTitle).toHaveAttribute("aria-label", "催し名");
+  await expect(
+    page.getByRole("textbox", { name: "催し名", exact: true }),
+  ).toBeVisible();
+});
+
 test("予定の取得に失敗してもカレンダーを表示する", async ({ page }) => {
   const now = new Date();
   const expectedDays = new Date(
