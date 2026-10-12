@@ -207,7 +207,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       <section class="wide" hidden={!calendarPage}>
         <h2>同時作業会・交流会の日程</h2>
         <p>
-          日付をクリック、またはドラッグして、自分が動ける／動けない期間を登録できます。曜日見出しの「一括」を押すと、その曜日の可否を毎週の設定として登録できます。
+          日付をクリック、またはドラッグして、自分が動ける／動けない期間を登録できます。キーボードでは日付に移動して矢印キーで日を移動できます。曜日見出しの「一括」を押すと、その曜日の可否を毎週の設定として登録できます。
         </p>
         <div class="calendar-actions"><span class="calendar-settings-status" id="calendar-settings-status" data-calendar-settings-status role="status">カレンダーを準備しています…</span><button type="button" data-open-calendar-settings aria-haspopup="dialog" aria-describedby="calendar-settings-status" disabled>⚙️ 設定</button></div>
         <dialog class="calendar-settings-dialog" data-calendar-settings-dialog aria-labelledby="calendar-settings-heading">
@@ -1714,7 +1714,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         const participants = dayParticipants([...dayBlocks, ...recurringBlocks]);
         const dateLabel = `${month.getFullYear()}年${month.getMonth() + 1}月${day}日`;
         const eventMarkup = dayEvents.map((event) => { const parts = dateParts(event.starts_at); return `<span class="calendar-event" data-calendar-event-id="${escapeHtml(event.id)}" title="${escapeHtml(event.title)}"><span>${parts.hour}:${parts.minute} ${escapeHtml(event.title)}</span>${availabilitySummary(`${event.title}の参加状況`, event.participants ?? [], event.availabilityCounts)}</span>`; }).join('');
-        cells.push(`<div class="calendar-cell${dayHolidays.length ? ' calendar-cell--holiday' : ''}" data-calendar-date="${key}"><div class="calendar-cell-header" data-calendar-date-header><button type="button" class="calendar-date-select" data-calendar-select aria-label="${escapeHtml(dateLabel)}を可否期間に選択"><span class="calendar-day">${escapeHtml(dayFormatter.format(new Date(month.getFullYear(), month.getMonth(), day)))}</span></button></div><div class="calendar-cell-content">${dayHolidays.map((holiday) => `<span class="calendar-holiday" title="${escapeHtml(holiday.regionName)}">${escapeHtml(holiday.region)}: ${escapeHtml(holiday.name)}</span>`).join('')}${eventMarkup}${availabilitySummary(`${dateLabel}の対応可否`, participants)}</div></div>`);
+        cells.push(`<div class="calendar-cell${dayHolidays.length ? ' calendar-cell--holiday' : ''}" data-calendar-date="${key}"><div class="calendar-cell-header" data-calendar-date-header><button type="button" class="calendar-date-select" data-calendar-select tabindex="${day === 1 ? 0 : -1}" aria-label="${escapeHtml(dateLabel)}を可否期間に選択"><span class="calendar-day">${escapeHtml(dayFormatter.format(new Date(month.getFullYear(), month.getMonth(), day)))}</span></button></div><div class="calendar-cell-content">${dayHolidays.map((holiday) => `<span class="calendar-holiday" title="${escapeHtml(holiday.regionName)}">${escapeHtml(holiday.region)}: ${escapeHtml(holiday.name)}</span>`).join('')}${eventMarkup}${availabilitySummary(`${dateLabel}の対応可否`, participants)}</div></div>`);
       }
       calendar.innerHTML = cells.join('');
       const today = dateParts(new Date().toISOString());
@@ -2115,6 +2115,35 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     // API の応答を待たずに月表示を作る。認証切れや一時的な取得失敗が
     // あっても、カレンダーそのものと月移動は利用できる状態を保つ。
     renderCalendar();
+    calendar.addEventListener('focusin', (event) => {
+      const activeDate = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-calendar-select]');
+      if (!activeDate) return;
+      calendar.querySelectorAll<HTMLButtonElement>('[data-calendar-select]').forEach((button) => {
+        button.tabIndex = button === activeDate ? 0 : -1;
+      });
+    });
+    calendar.addEventListener('keydown', (event) => {
+      const activeDate = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-calendar-select]');
+      if (!activeDate) return;
+      const dateKey = activeDate.closest<HTMLElement>('[data-calendar-date]')?.dataset.calendarDate;
+      if (!dateKey) return;
+      const current = new Date(`${dateKey}T12:00:00Z`);
+      const weekday = current.getUTCDay();
+      let offset: number | null = null;
+      if (event.key === 'ArrowLeft') offset = -1;
+      else if (event.key === 'ArrowRight') offset = 1;
+      else if (event.key === 'ArrowUp') offset = -7;
+      else if (event.key === 'ArrowDown') offset = 7;
+      else if (event.key === 'Home') offset = -weekday;
+      else if (event.key === 'End') offset = 6 - weekday;
+      if (offset === null) return;
+      event.preventDefault();
+      current.setUTCDate(current.getUTCDate() + offset);
+      if (current.getUTCMonth() !== month.getMonth() || current.getUTCFullYear() !== month.getFullYear()) return;
+      const nextKey = current.toISOString().slice(0, 10);
+      const nextDate = calendar.querySelector<HTMLButtonElement>(`[data-calendar-date="${nextKey}"] [data-calendar-select]`);
+      nextDate?.focus();
+    });
     retry = createAdminLoadRetry(root, () => load(), '運営情報を読み込めませんでした。');
     void load().catch((error) => {
       const message = error instanceof Error ? error.message : '進行管理を読み込めませんでした。';

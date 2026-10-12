@@ -170,6 +170,92 @@ test("予定追加の催し名入力にアクセシブルな名前がある", as
   ).toBeVisible();
 });
 
+test("カレンダーの日付は矢印キーで移動しTab stopを一つに保つ", async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date("2026-10-13T12:00:00Z") });
+  await page.route("**/api/admin/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/auth-status")) {
+      await route.fulfill({
+        json: { email: "manager@example.com", isManager: true },
+      });
+      return;
+    }
+    if (pathname.endsWith("/profile")) {
+      await route.fulfill({ json: { profile: { display_name: "管理者" } } });
+      return;
+    }
+    if (pathname.endsWith("/notifications")) {
+      await route.fulfill({ json: { notifications: [] } });
+      return;
+    }
+    if (pathname === "/api/admin/operations") {
+      await route.fulfill({
+        json: {
+          scope: { email: "manager@example.com", isManager: true },
+          project: { id: "atlas", slug: "atlas", name: "アトラス" },
+          members: [],
+          tasks: [],
+          events: [],
+          progress: [],
+          availabilityBlocks: [],
+          availabilityRules: [],
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: {} });
+  });
+
+  await page.goto("admin/calendar/?project=atlas");
+  const dateButtons = page.locator("[data-calendar-select]");
+  const firstDate = page.locator(
+    '[data-calendar-date="2026-10-01"] [data-calendar-select]',
+  );
+  const secondDate = page.locator(
+    '[data-calendar-date="2026-10-02"] [data-calendar-select]',
+  );
+  await expect(dateButtons).toHaveCount(31);
+  await expect(firstDate).toHaveAttribute("tabindex", "0");
+  await expect(secondDate).toHaveAttribute("tabindex", "-1");
+  expect(
+    await dateButtons.evaluateAll(
+      (buttons) => buttons.filter((button) => button.tabIndex === 0).length,
+    ),
+  ).toBe(1);
+
+  await firstDate.focus();
+  await firstDate.press("ArrowRight");
+  await expect(secondDate).toBeFocused();
+  await expect(firstDate).toHaveAttribute("tabindex", "-1");
+  await expect(secondDate).toHaveAttribute("tabindex", "0");
+
+  await secondDate.press("ArrowDown");
+  const ninthDate = page.locator(
+    '[data-calendar-date="2026-10-09"] [data-calendar-select]',
+  );
+  await expect(ninthDate).toBeFocused();
+  await ninthDate.press("Home");
+  const fourthDate = page.locator(
+    '[data-calendar-date="2026-10-04"] [data-calendar-select]',
+  );
+  await expect(fourthDate).toBeFocused();
+  await fourthDate.press("End");
+  const tenthDate = page.locator(
+    '[data-calendar-date="2026-10-10"] [data-calendar-select]',
+  );
+  await expect(tenthDate).toBeFocused();
+
+  await firstDate.focus();
+  await firstDate.press("ArrowLeft");
+  await expect(firstDate).toBeFocused();
+  const eventTitle = page.locator("[data-event-title]");
+  await expect(eventTitle).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(eventTitle).toBeFocused();
+});
+
 test("予定の取得に失敗してもカレンダーを表示する", async ({ page }) => {
   const now = new Date();
   const expectedDays = new Date(
