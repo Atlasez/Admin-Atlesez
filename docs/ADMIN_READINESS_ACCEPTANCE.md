@@ -13,7 +13,7 @@
 
 ## 本番受入の記録欄
 
-以下はADMINのGitHub Actions deploy復旧と対象main SHA・配信Version一致の確認後に実行する。日付、対象SHA、操作者、結果、監査ID、秘密値を含まない証拠を記録する。
+以下はADMINのWorkers Builds復旧後、対象main SHAの成功run、固定Worker `atlasez-admin` のVersion 100%配信、公開`build-info.json`の一致を確認してから実行する。日付、PR/main SHA、Worker Version、操作者のrole、結果を記録し、秘密値・個人情報・OAuth stateを記録しない。最新の復旧状態は[実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)と[Issue #509](https://github.com/Atlasez/Admin-Atlesez/issues/509)を実行直前に照合する。
 
 | 項目       | 手順                                                                                                         | 合格条件                                                                                              | 実績   |
 | ---------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------ |
