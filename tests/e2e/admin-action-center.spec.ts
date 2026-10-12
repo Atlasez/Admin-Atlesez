@@ -2,7 +2,6 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function mockShell(
   page: Page,
-  onTransition?: (body: unknown) => void,
   includeBulkTasks = false,
   assignedTotal = 1,
   assignedItemsTruncated = false,
@@ -158,7 +157,6 @@ async function mockShell(
       return;
     }
     if (url.pathname === "/api/admin/workflow/transition") {
-      onTransition?.(route.request().postDataJSON());
       await route.fulfill({
         json: {
           ok: true,
@@ -192,10 +190,7 @@ async function mockShell(
 }
 
 test("アクションセンターで絞り込みと状態変更を操作できる", async ({ page }) => {
-  let transitionBody: Record<string, unknown> | null = null;
-  await mockShell(page, (body) => {
-    transitionBody = body as Record<string, unknown>;
-  });
+  await mockShell(page);
   await page.goto("admin/action-center/");
   await expect(
     page.getByRole("heading", { name: "アクションセンター" }),
@@ -234,8 +229,15 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
       .first()
       .locator(".item-priority-dot"),
   ).toBeVisible();
+  const transitionRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      request.method() === "POST" &&
+      url.pathname === "/api/admin/workflow/transition"
+    );
+  });
   await page.getByRole("button", { name: "着手" }).click();
-  expect(transitionBody).toMatchObject({
+  expect((await transitionRequest).postDataJSON()).toMatchObject({
     expectedUpdatedAt: "2026-09-10T00:00:00.000Z",
   });
   await expect(page.locator("[data-action-items] .action-item")).toHaveCount(1);
@@ -246,7 +248,7 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
 test("担当項目が表示上限を超えた場合は全件数と一覧への導線を示す", async ({
   page,
 }) => {
-  await mockShell(page, undefined, false, 51, true);
+  await mockShell(page, false, 51, true);
   await page.goto("admin/action-center/");
   const notice = page.locator("[data-action-truncation]");
   await expect(notice).toBeVisible();
@@ -353,16 +355,20 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
 test("要対応ポップアップから状態変更を実行し、通知を混在させない", async ({
   page,
 }) => {
-  let transitionBody: Record<string, unknown> | null = null;
-  await mockShell(page, (body) => {
-    transitionBody = body as Record<string, unknown>;
-  });
+  await mockShell(page);
   await page.goto("admin/articles/");
   const dialog = page.locator("[data-admin-command-dialog]");
   await page.getByRole("link", { name: "アクションセンター" }).click();
   await expect(dialog.getByRole("button", { name: "着手" })).toBeVisible();
+  const transitionRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      request.method() === "POST" &&
+      url.pathname === "/api/admin/workflow/transition"
+    );
+  });
   await dialog.getByRole("button", { name: "着手" }).click();
-  expect(transitionBody).toMatchObject({
+  expect((await transitionRequest).postDataJSON()).toMatchObject({
     entityType: "task",
     entityId: "task-1",
     fromState: "open",
@@ -401,11 +407,15 @@ test("アクションセンターをタブで開いた履歴を別画面の操�
 
 test("選択したタスクを一括完了し、直後に元へ戻せる", async ({ page }) => {
   const transitionBodies: Array<Record<string, unknown>> = [];
-  await mockShell(
-    page,
-    (body) => transitionBodies.push(body as Record<string, unknown>),
-    true,
-  );
+  await mockShell(page, true);
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (
+      request.method() === "POST" &&
+      url.pathname === "/api/admin/workflow/transition"
+    )
+      transitionBodies.push(request.postDataJSON() as Record<string, unknown>);
+  });
   await page.goto("admin/action-center/");
   await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
   await page.locator('[data-action-select="task:task-1"]').check();
@@ -418,12 +428,14 @@ test("選択したタスクを一括完了し、直後に元へ戻せる", async
   await expect(page.locator("[data-action-undo]")).toContainText(
     "2件を完了にしました。",
   );
+  await expect.poll(() => transitionBodies.length).toBe(2);
   expect(
     transitionBodies.filter((body) => body.toState === "done"),
   ).toHaveLength(2);
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "元に戻す", exact: true }).click();
   await expect(page.locator("[data-action-undo]")).toBeHidden();
+  await expect.poll(() => transitionBodies.length).toBe(4);
   expect(
     transitionBodies.filter(
       (body) => body.fromState === "done" && body.toState === "open",
