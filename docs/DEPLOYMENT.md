@@ -11,9 +11,9 @@
 
 1. `main`へマージする前にCIを通す
 2. ローカルで `npm run verify:deploy-config` を実行する
-3. 公開サイトは既存の公開サイト向け手順に従う。
-4. 運営用サイトはPRのCI成功・レビュー後のmainをProduction branchに固定したCloudflare Workers Buildsだけで反映する。`.github/workflows/deploy-admin-from-github.yml`は検証専用で配信しない。`npm run deploy:admin`はWorkers Buildsが使えない緊急時のローカル例外手順（[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)）に限る。
-5. Chromeで公開サイト、`/admin/portal/`、`/admin/member-calendar/`、`/admin/manage/?project=atlas`を確認する
+3. 公開サイトは`Atlasez/Atlasez01`の`main`を対象にしたCloudflare Workers Buildsだけで反映する。この監査時点では公開repositoryのmainに旧Pages/手動配信記述が残っており、既存PR [#140](https://github.com/Atlasez/Atlasez01/pull/140) がその運用文書を更新中である。#140がmainへ反映されるまでは、本書と[公開チェックリスト](PUBLISH.md)にあるmain-only/Workers Buildsの停止条件を適用し、公開側の旧直接deploy手順を実行しない。このrepositoryの`npm run deploy:public`も通常の配信に使わない。
+4. ADMINはPRのCI成功と通常のPR手順での確認後、`main`をProduction branchに固定したCloudflare Workers Buildsだけで反映する。`.github/workflows/deploy-admin-from-github.yml`は検証専用で配信しない。Workers Builds復旧は[Issue #509](https://github.com/Atlasez/Admin-Atlesez/issues/509)で進行中のため、Build/Version/SHAの証拠が揃うまで配信完了と扱わない。`npm run deploy:admin`は別途明示承認された緊急例外だけに限り、詳細は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)を参照する。
+5. 配信成功を証拠で確認した後、Chromeで公開サイト、`/admin/portal/`、`/admin/member-calendar/`、`/admin/manage/?project=atlas`を確認する
 
 ADMINのmain protectionではCI status checkを維持し、レビュー承認の必須数は0のままとする。通常のPR変更手順でレビューを確認することは、branch protectionで承認を必須化することを意味しない。
 

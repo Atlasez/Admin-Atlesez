@@ -2,41 +2,63 @@
 
 ## 目的
 
-Cloudflare本番がGitHub `main`と一致しているかを、定期的にGitHub上で確認できるようにする。Cloudflareからコードを正本として取り込むのではなく、Deployment・Version・配信割合・Source・作成時刻・公開`build-info.json`を監査記録として同期する。
+Cloudflare本番のDeployment・Version・配信割合・Source・作成時刻と公開
+`build-info.json`を読み取り、GitHub `main`の監査記録と照合します。Cloudflareからコードを
+正本として取り込まず、記録を本番コードの代わりにしません。
 
 ## 動作
 
-`.github/workflows/cloudflare-deployment-sync.yml`が15分ごと、または手動起動で次を読み取る。
+`.github/workflows/cloudflare-deployment-sync.yml`が15分ごと、または手動起動で次を読み取ります。
 
-- `atlasez-admin`のProduction Deploymentと直近10件のDeployment
-- `atlasez01`のProduction Deploymentと直近10件のDeployment
+- Worker `atlasez-admin`のProduction Deploymentと直近10件のDeployment
+- Worker `atlasez01`のProduction Deploymentと直近10件のDeployment
 - `https://admin.atlasez.org/build-info.json`
 - `https://atlasez.org/build-info.json`
 
-`.github/workflows/verify-admin-production.yml`はADMIN deploy workflowの完了後と15分ごとに、現在の`main` SHAと公開ADMINの`build-info.json`を照合する。production Environment承認待ちや別deploy実行中は照合を保留し、配信後に再確認する。Cloudflareへの書き込みや手動Deployは行わない。
+差分がある場合だけ、`ops/cloudflare-deployment-sync`ブランチへ監査記録をcommitし、
+`main`向けの同期PRを作成または更新します。差分がなければPRを作成しません。
+記録は[`docs/deployments/cloudflare-latest.json`](deployments/cloudflare-latest.json)です。
 
-差分がある場合だけ、`ops/cloudflare-deployment-sync`ブランチへ記録をCommitし、`main`向けの同期PRを作成または更新する。差分がない場合はPRを作成しない。
-
-記録ファイルは[`docs/deployments/cloudflare-latest.json`](deployments/cloudflare-latest.json)である。これは本番コードの正本ではなく、CloudflareとGitHubの状態を突き合わせる証跡である。
+`.github/workflows/verify-admin-production.yml`はschedule（15分ごと）と
+`workflow_dispatch`でのみ起動し、その時点の`main` SHAと公開ADMINの`build-info.json`を
+読み取り照合します。ADMIN deploy workflowの完了には依存せず、GitHub `production`
+Environmentの承認待ちも監視しません。main SHAが照合中に進んだ場合は最新SHAを読み直します。
+Workers Buildsの反映遅延は最大15回、各60秒で待機し、照合できなければWorkflowを失敗させます。
+Cloudflareへの書き込みやDeployはどちらのWorkflowも行いません。
 
 ## 必要なSecret
 
-GitHub Actions Secret `CLOUDFLARE_API_TOKEN`を設定する。Tokenは対象AccountのWorkers Scripts Readだけを持つ読み取り専用Tokenとし、Deploy、Versions Upload、Versions Deploy、Routes、D1、Secretsの権限を付与しない。
+- GitHub Actions Secret `CLOUDFLARE_API_TOKEN`は対象AccountのWorkers Scripts Readだけを
+  持つ読み取り専用Tokenです。Deploy、Versions Upload/Deploy、Routes、D1、Secretsの権限を
+  付与しません。
+- 同期PR作成に使う`GH_SYNC_TOKEN`は`Admin-Atlesez`だけを対象にしたFine-grained Tokenです。
+  ContentsとPull requestsのRead and writeだけを持ち、有効期限を設定します。
 
-同期PRを作成するため、`GH_SYNC_TOKEN`も設定する。これは`Admin-Atlesez`だけを対象にしたFine-grained Tokenで、ContentsとPull requestsのRead and writeだけを持つ。組織全体のActions権限を変更する代替として使用し、他のリポジトリやCloudflare APIにはアクセスできない。有効期限は必ず設定し、期限前に同じ最小権限でローテーションする。
+Secret未設定、API取得失敗、Source不明、`build-info.json`欠落も監査結果として記録します。
+コードの自動復元、自動Merge、自動Rollback、自動Promoteは行いません。
 
-Secretが未設定、API取得失敗、Source不明、`build-info.json`欠落の場合も、記録にはその状態を残す。コードの自動復元、自動Merge、自動Rollback、自動Promoteは行わない。
+## 同期PRと本番配信の扱い
 
-## PRの扱い
-
-- 同期PRは必ずレビューする。
-- 公開build-infoが対象main SHAとすでに一致する場合は、同じ内容を再配信しないためdeployを省略する。
-- 同期PRが`docs/deployments/cloudflare-latest.json`だけを変更する場合、Merge後のWorker deployを省略する。`build-info.json.commit`は直前のコードdeploy SHAのままとし、次のコード・コンテンツ・設定変更が入ったmain pushで新しいSHAへ進める。
-- 公開`build-info.json.commit`とGitHub `main`のSHAが違う場合は、両SHA間の差分を確認する。差分が監査JSON一つだけなら正常な監査PR後の状態、それ以外の差分・不正なSHA・比較不能はインシデントとして扱う。
-- Cloudflare VersionのSourceが`Unknown`または手動Uploadの場合は、コード同期済みとみなさない。
-- 同期PRのMergeは記録をGitHubに残すためのものであり、CloudflareへのDeployを意味しない。ADMIN deploy workflowは監査JSONだけの差分を検出してEnvironment承認・Worker配信を省略する。
-- 本番Deployはレビュー済みのGitHub `main`を唯一の入口とする。
+- 同期PRは通常のPR/CI手順で内容を確認します。GitHub `main`のrequired approving reviews設定は
+  変更しません。
+- 同期Workflow自体は読み取り専用です。ただし同期PRを`main`へmergeするとmainが進むため、
+  接続済みWorkers BuildsがBuildを開始する場合があります。mergeをDeploy停止操作とみなさず、
+  Build run、checkout SHA、固定Worker Version、配信率を通常どおり確認します。
+- 公開`build-info.json`のSHAが対象main SHAに一致している場合でも、merge後のBuildが自動で
+  省略されるとは仮定しません。Buildが走った場合はその成否と対象SHAを確認します。
+- 同期PRが`docs/deployments/cloudflare-latest.json`だけを変更した場合、公開SHAが`main`の祖先で、
+  両SHA間の変更がその監査JSONだけであることを読み取り検証できたときに限り、既存コード配信SHAを
+  維持した状態として説明できます。ADMINの停止条件と照合手順は
+  [ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)を参照してください。
+- `build-info.json`とmainの不一致、比較不能、不正なSHA、Cloudflare VersionのSourceが`Unknown`または
+  手動Uploadなら、同期済みと扱わずIssueで調査します。
+- 本番DeployはGitHub `main`を唯一のソースにしたCloudflare Workers Buildsから行います。
+  `.github/workflows/deploy-admin-from-github.yml`は検証専用で、本番Deployを行いません。
 
 ## 初回導入時
 
-現在の本番VersionにGit SHAがない場合、最初のPRは「本番展開記録」として作成される。Cloudflareから完全なソースを復元できないVersionについて、推測でコードを生成してはならない。現行本番の変更をGitHubへ反映する必要がある場合は、別途、実コードを確認した同期PRを作成する。
+現在の本番VersionにGit SHAがない場合、最初の同期PRは「本番展開記録」として作成されます。
+Cloudflareから完全なソースを復元できないVersionについて推測でコードを生成しません。
+Workers Builds復旧Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509)の
+解決と対象main SHA/固定Worker Version/build-info照合を確認するまで、ADMINの新しい配信成功とは
+扱いません。

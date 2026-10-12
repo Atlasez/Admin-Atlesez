@@ -50,13 +50,7 @@ npm run format:check
 npm test
 ```
 
-公開サイト・学習サイトのデプロイには次のコマンドを使います。
-
-```bash
-# 公開サイト・学習サイト
-npm run deploy:public
-
-```
+公開サイト・学習サイトの通常配信は、正本repository `Atlasez/Atlasez01` の`main`を対象にしたCloudflare Workers Buildsから行います。このrepositoryの`npm run deploy:public`はローカルから直接配信するため、通常運用では使いません。監査時点では公開repository mainの配信文書に旧手動手順が残っており、既存PR [#140](https://github.com/Atlasez/Atlasez01/pull/140) で修正中です。#140反映までは本書のmain-only条件を優先し、旧手動手順を実行しません。
 
 ADMIN本番の通常経路は、GitHub `Atlasez/Admin-Atlesez`のProduction branchを`main`に固定したCloudflare Workers Buildsだけです。PRのCI成功後、通常の変更手順に沿ってレビュー完了を確認し、Build側でも検証を実行します。GitHub branch protectionのrequired approving reviewsは0を維持し、レビュー承認を必須化しません。`.github/workflows/deploy-admin-from-github.yml`は検証専用で、ADMIN成果物とdry-runを確認するだけです。Cloudflareへの書き込みは行いません。D1 migrationは自動適用せず、新Workerに必要なmigrationのバックアップ・レビュー・適用記録を先に完了します。`npm run deploy:admin`はWorkers Buildsが使えない緊急時に限り、cleanな`main` checkout、正本remote main由来、レビュー済みSHAの明示指定、別途の実行承認が必要です。固定Worker・Build/Deploy command・切替手順は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)と[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照してください。
 
