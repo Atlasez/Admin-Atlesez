@@ -216,6 +216,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
 <nav class="admin-breadcrumbs" data-admin-breadcrumbs aria-label="パンくず" hidden={site === "portal"} transition:persist="admin-breadcrumbs"><a href="/admin/portal/">Atlasezメンバー用サイト</a><span aria-hidden="true">›</span>{projectHome.has(current) ? <span aria-current="page">{brandLabel}</span> : <><a href={homePath}>{brandLabel}</a><span aria-hidden="true">›</span><span aria-current="page">{pageLabel}</span></>}</nav>
 <script>
   import { navigate } from "astro:transitions/client";
+  import { formatNotificationTimestamp, notificationKindLabel, safeNotificationHref } from "../lib/admin-notification-features";
 
   (() => {
     const preferencesKey = 'atlasez-prefs';
@@ -396,8 +397,13 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const menuToggle = document.querySelector<HTMLButtonElement>('[data-admin-menu-toggle]');
       const primaryNav = document.querySelector<HTMLElement>('#admin-primary-nav');
       let notifications: Array<{ id: string; title: string; detail: string; href: string; kind?: string; updatedAt?: string; read?: boolean }> = [];
+      let notificationStatus = "";
       const escape = (value: string) => value.replace(/[&<>"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[character] ?? character);
-      const formatNotificationTime = (value?: string) => value ? new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '';
+      const syncNotificationButtonLabel = (open: boolean) => {
+        if (!notificationButton) return;
+        const action = open ? "通知を閉じる" : "通知を開く";
+        notificationButton.setAttribute("aria-label", notificationStatus ? `${action}。${notificationStatus}` : action);
+      };
       const profileCacheKey = 'atlasez-admin-profile-cache';
       type CachedProfile = { email?: string; display_name?: string; avatar_url?: string };
       type ProfileResponse = { profile?: { display_name?: string; avatar_url?: string }; profileChangeRequest?: { status?: string; proposed_display_name?: string } };
@@ -470,7 +476,10 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           if (!Array.isArray(data.notifications)) throw new Error('invalid notification response');
           notifications = data.notifications;
           const unreadCount = Math.max(0, Math.trunc(Number(data.unreadNotificationsCount ?? notifications.filter((item) => !item.read).length)));
-          if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : `${unreadCount}${data.notificationsTruncated && unreadCount ? "+" : ""}`; notificationCount.hidden = unreadCount === 0; }
+          const truncated = data.notificationsTruncated === true;
+          notificationStatus = unreadCount > 99 || (truncated && unreadCount > 0) ? `未読${Math.min(unreadCount, 99)}件以上` : unreadCount > 0 ? `未読${unreadCount}件` : truncated ? "未読数は確定できません" : "未読はありません";
+          syncNotificationButtonLabel(notificationButton?.getAttribute("aria-expanded") === "true");
+          if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : `${unreadCount}${truncated && unreadCount ? "+" : ""}`; notificationCount.hidden = unreadCount === 0; }
           if (markAllRead) markAllRead.hidden = unreadCount === 0 && data.notificationsTruncated !== true;
           if (markAllRead) markAllRead.disabled = data.legacyReminderNormalizationPending === true;
           if (legacyReminderStatus) {
@@ -478,10 +487,11 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
             legacyReminderStatus.hidden = data.legacyReminderNormalizationPending !== true;
           }
           if (legacyReminderFailed) legacyReminderFailed.hidden = data.legacyReminderNormalizationFailed !== true;
-          const kindLabel = (kind: string) => ({ comment: 'コメント', mention: 'メンション', review: 'フィードバック依頼', 'feedback-request': 'フィードバック依頼', 'task-request': 'タスク依頼', application: '応募', approved: 'フィードバック完了', published: '公開', 'publication-ready': '公開準備完了' } as Record<string, string>)[kind] ?? '記事';
-          notificationList.innerHTML = notifications.length ? notifications.map((item) => `<div class="admin-notification-item${item.read ? ' is-read' : ''}"><a href="${item.href}" data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a>${item.read ? '<span class="notification-read-label">既読</span>' : `<button type="button" data-read-notification="${escape(item.id)}">既読にする</button>`}</div>`).join('') : '<span class="admin-notification-empty">通知はまだありません。</span>';
+          notificationList.innerHTML = notifications.length ? notifications.map((item) => `<div class="admin-notification-item${item.read ? ' is-read' : ''}"><a href="${escape(safeNotificationHref(item.href, location.origin))}" data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(notificationKindLabel(item.kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTimestamp(item.updatedAt))}</time></a>${item.read ? '<span class="notification-read-label">既読</span>' : `<button type="button" data-read-notification="${escape(item.id)}">既読にする</button>`}</div>`).join('') : '<span class="admin-notification-empty">通知はまだありません。</span>';
         } catch {
           notifications = [];
+          notificationStatus = "通知を取得できませんでした";
+          syncNotificationButtonLabel(notificationButton?.getAttribute("aria-expanded") === "true");
           if (notificationCount) notificationCount.hidden = true;
           if (markAllRead) markAllRead.hidden = true;
           notificationList.innerHTML = '<span class="admin-notification-empty" role="status">通知を取得できませんでした。時間をおいて再度お試しください。</span>';
@@ -492,7 +502,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         const wasOpen = !notificationPanel.hidden;
         notificationPanel.hidden = !open;
         notificationButton.setAttribute('aria-expanded', String(open));
-        notificationButton.setAttribute('aria-label', open ? '通知を閉じる' : '通知を開く');
+        syncNotificationButtonLabel(open);
         if (!open && wasOpen && restoreFocus) notificationButton.focus();
       };
       notificationButton?.addEventListener('click', () => { setNotificationPanelOpen(Boolean(notificationPanel?.hidden)); });
