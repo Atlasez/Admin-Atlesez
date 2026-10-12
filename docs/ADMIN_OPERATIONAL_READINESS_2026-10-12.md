@@ -88,7 +88,7 @@
 | OPS-18 / P1決定待ち | pause/退会時にDiscord側の既存ロールを解除するか未定義。D1上で権限が失効してもDiscord権限が残る場合、外部チャンネルアクセスとADMIN内scopeが食い違い得る。 | pause/withdrawalによるD1 membership/権限stateとDiscord上のroleは別の副作用。どのroleをどの退会範囲で解除するか運営判断がなく、実Discord操作は未実施。 | **運営決定待ち**。運営代表/Discord管理者がpause時の解除/維持、Atlas退会時の対象projectのみ/全解除、全体停止時の扱い、本人案内、再開時の再付与を記録する。決定前にroleを変更しない。 |
 | OPS-36 / P2 | calendarをキーボードで使うと、曜日一括選択後に日付セルが一日ずつTab順に並び、予定追加欄へ進むまでに多数の移動が必要。日付にフォーカスして矢印キーを押しても隣の日へ移らない。 | 2026-10-13のprimary-admin Chromeで再現。日曜の曜日一括選択から日付31個を順に通り、催し名欄まで38回Tab。10/31にフォーカスしてArrowUpを押しても同じ日付に残った。現mainには日付tabindex制御とcalendar keydown handlerがない。保存・送信なし。 | **修正・隔離E2E済み / PR #526 branch、main/live未反映**。表示月内の日付を1つのTab stopにし、矢印キーとHome/Endで移動。操作説明と回帰E2Eを追加。対象E2Eとローカル全検証はpass。source head `3e8ad1f2...`のGitHub verify [38313633441](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38313633441)・native regressions [38313633462](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38313633462)もSUCCESS。main/liveとスクリーンリーダーは未受入。 |
 | OPS-37 / P2 | Primary-adminが`/admin/calendar/`で日付をEnter選択後、可否フォームは開くがフォーカスがページ全体へ落ち、連続したキーボード選択を続けにくい。 | `renderCalendar()`がcalendar DOMを全面置換し、選択前のdate/weekday focusを復元しなかった。 | **修正・ローカル/CI検証済み、main/live未反映**。日付/曜日focusを再描画後に戻し、キーボード範囲・曜日選択E2E追加。source/test head `9f565fc8...`のverify [38315932565](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38315932565)・native [38315932547](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38315932547)成功。Chrome後受入未実施。 |
-| OPS-38 / P2 | 375px Chromeで日付選択ボタンが約25×25px、月移動が約35×37px。小さく、意図しない隣日選択につながりやすい。横overflowはなし。 | date buttonが`1.55rem`固定で、後段mobile cell paddingがcontent幅を約36pxに制限。 | **修正・targeted E2E済み、追補CI待ち**。日付ボタン38px、月移動40pxに拡大し、375×812 E2Eで最小サイズと横overflowを確認。専用PR #526へ集約予定。main/live未確認。 |
+| OPS-38 / P2 | 375px Chromeで日付選択ボタンが約25×25px、月移動が約35×37px。小さく、意図しない隣日選択につながりやすい。横overflowはなし。 | date buttonが`1.55rem`固定で、後段mobile cell paddingがcontent幅を約36pxに制限。 | **修正・targeted E2E・GitHub CI済み**。日付ボタン38px、月移動40pxに拡大し、375×812 E2Eで最小サイズと横overflowを確認。PR #526 head `94cdfa66...`のverify [38318107695](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38318107695)・native regressions [38318107707](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38318107707)はSUCCESS。main/live未確認。 |
 
 ### 2026-10-12追加監査: 再現・予防・未決事項
 
@@ -522,9 +522,9 @@ Cron診断は「正常」「1分・5分・毎時の定期処理を設定して�
 
 - **現在確認:** 主管理者のDeveloper diagnosticsとAtlas calendarをChromeで表示し、読み取り専用の「再確認」、calendar設定の開閉を行った。main SHAとlive build-infoは一致。Cron/Preview false-green、催し名のAX名欠落を現在のmain/liveで確認した。
 - **修正済み・本番未確認:** Cron/Preview表示、prototype routeの主管理者限定、GitHub診断条件、OPS-35の催し名accessible name、OPS-36の日付keyboard navigationはPR #526 branchの変更。branch上の修正であって、本番の挙動変更とは扱わない。
-- **未検証:** project manager/editor/applicant/member/suspended/withdrawn roleのChrome受入、200% browser zoom、375px ADMIN viewport、実スクリーンリーダー、Google OAuth完了、応募保存、実メール/Discord、外部Cron成功・遅延/再試行、最新本番backupと隔離restore。受入に必要な専用環境と合成accountは未準備。
+- **未検証:** project manager/editor/applicant/member/suspended/withdrawn roleのChrome受入、カレンダー以外の375px ADMIN viewport、200% browser zoom、実スクリーンリーダー、Google OAuth完了、応募保存、実メール/Discord、外部Cron成功・遅延/再試行、最新本番backupと隔離restore。受入に必要な専用環境と合成accountは未準備。
 - **外部復旧待ち:** Issue #509のWorkers Builds provenance・成功run/checkout SHAとWorker Versionの対応付け。token権限調査の反復・権限拡大・別配信経路は行わない。
-- **次のCI:** OPS-36 source head `3e8ad1f2...`でCI verify/native regressions成功を確認。required approving reviewsは追加せず、PRはmergeしない。
+- **PR/CI:** PR #526 head `94cdfa66b49563aaa7fa4cd9d00ce174b6e87287`のGitHub verify [38318107695](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38318107695)（E2E/axe・Lighthouseを含む）とnative regressions [38318107707](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38318107707)はSUCCESS。PRはOPEN・未merge。required approving reviewsは0。
 
 ### 2026-10-13 OPS-35修正後のPR・検証状態
 
@@ -556,3 +556,12 @@ Cron診断は「正常」「1分・5分・毎時の定期処理を設定して�
 - **修正:** mobile CSSで日付ボタンを38×38px、calendar headerを40px、月移動ボタンを最低40×40pxとし、後段のcell paddingを縮小してボタンがflex shrinkしない幅を確保した。
 - **回帰確認:** mocked-manager E2Eを375×812で実行し、31個すべての日付ボタンが38×38px以上、月移動が40×40px以上、documentに横overflowがないことを検査する。既存のキーボード選択・フォーカス維持ケースも同じテストで継続確認する。strict size assertion付きtargeted E2E 1 passed、calendar E2E 11 passed、full E2E 385 passed / 14 opt-in production smoke skipped。`verify:deploy-config`、check (341 files / 0 errors / 0 warnings / 10 existing hints)、lint、unit (69 files / 559 tests)、format:check、ADMIN buildがローカルでpass。既存500 kB超chunk warningと10 Astro hintsは継続。PR #526の新head CIはpush後に確認する。
 - **受入範囲:** production Chromeで確認したのは修正前UIのサイズのみ。修正版は隔離ビルド/E2Eで確認し、本番では未確認。200%ズーム・実スクリーンリーダー・別roleは未検証。production dataは変更していない。
+
+### 2026-10-13 07:50 JST: PR #526 OPS-38 CI・本番状態再照合
+
+- **PR/CIの現在確認:** ADMIN `main` SHAは`89d943f7d8c88c1ec813810c56444ae1cfe7ab82`、作業branch/PR #526 headは`94cdfa66b49563aaa7fa4cd9d00ce174b6e87287`、PRはOPEN・未merge。head `94cdfa6`のGitHub verify [38318107695](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38318107695)とnative regressions [38318107707](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38318107707)はどちらもSUCCESS。ローカルworktreeはこの追補着手時にclean。監査PRを本番反映したことを示す証拠ではない。
+- **Chromeで現在確認した画面条件:** primary-adminの本番カレンダーのみ、CSS viewport 375×812で寸法を読み取り、横overflowなし・日付31個約24.8×24.8px・曜日一括7個約44×41px・月移動2個約35×37pxを測定した。確認後viewport overrideをresetし、1353×758へ復帰。修正版はmocked-manager Playwrightで各日付38×38px以上、月移動40×40px以上、overflowなしを検証済み。Chromeでの修正版受入、他ページの375px、200%ズーム、スクリーンリーダー、他roleは未確認。
+- **live/deployment:** `https://admin.atlasez.org/build-info.json`はmain SHA `89d943f7d8c88c1ec813810c56444ae1cfe7ab82`、ref `main`、target `admin`、builtAt `2026-10-12T21:17:03.381Z`。固定Workerの保存済みread-only確認はVersion `324870cc-e3ad-4e98-a850-cd7bd85b0c6a`、100%、`source=wrangler`、`triggered_by=deployment`で、成功Workers Builds run/checkout SHAとの対応なし。Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509)はOPEN。Workers Builds復旧済みとは扱わず、Worker設定・配信は変更しない。
+- **公開サイトの依存:** 公開PR [#140](https://github.com/Atlasez/Atlasez01/pull/140)と[#141](https://github.com/Atlasez/Atlasez01/pull/141)はOPEN。公開サイトmainの保存済み確認SHAは`17abea4ed6eeb97719dee60f57bc6b26d5d2d53a`。公開募集/プライバシー文言の変更は未反映として扱う。
+- **D1/ガード:** 固定Accountを明示した読み取り専用migration listでは`0132_application_email_first_attempt.sql`のみ未適用。migration ledger以外のDB整合性や復旧可能性を証明せず、書込み・migration・export・restoreは実施していない。required approving reviewsは0であり変更なし。実応募・招待・メール・Discord・記事公開・本番設定変更もなし。
+- **次の受入:** ADMIN運用責任者/maintainerが隔離Worker/D1、OAuth専用合成アカウント、役割別fixtureを準備し、応募から承認/見送り、初回タスク、休止/退会/再開、権限失効を保存・通知まで確認する。合格条件は、権限境界・状態遷移・再試行/重複防止をroleごとの証拠で確認し、PIIを監査成果物へ残さないこと。準備前はrole別の実画面受入を未検証のまま維持する。
