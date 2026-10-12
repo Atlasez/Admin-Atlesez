@@ -1,7 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function mockOperationsApi(page: Page) {
-  const tasks = [
+async function mockOperationsApi(
+  page: Page,
+  taskFixtures?: Record<string, unknown>[],
+) {
+  const tasks: Record<string, unknown>[] = taskFixtures ?? [
     {
       id: "task-1",
       title: "既存のタスク",
@@ -415,4 +418,70 @@ test("進捗報告のいいねは状態と件数を更新できる", async ({ pa
     { reacted: true, pathname: "/api/admin/progress/progress-react/reaction" },
     { reacted: false, pathname: "/api/admin/progress/progress-react/reaction" },
   ]);
+});
+
+test("375px幅のタスク一覧で主要操作のタッチ領域を44px以上に保つ", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await mockOperationsApi(page, [
+    {
+      id: "task-open",
+      title: "進行中タスク",
+      status: "open",
+      subject: "mathematics",
+      assignee_email: "alice@example.com",
+      created_by: "alice@example.com",
+      due_at: null,
+      due_timezone: "Asia/Tokyo",
+      details: "",
+      reminders: [],
+      created_at: "2026-09-01T00:00:00.000Z",
+    },
+    {
+      id: "task-done",
+      title: "完了タスク",
+      status: "done",
+      subject: "mathematics",
+      assigned_to_me: true,
+      created_by_me: true,
+      created_by: "alice@example.com",
+      assignee_display_name: "Alice",
+      created_by_display_name: "Alice",
+      can_update: true,
+      due_at: null,
+      due_timezone: "Asia/Tokyo",
+      details:
+        "記事編集画面: /admin/editor/?document=11111111-1111-4111-8111-111111111111",
+      reminders: [],
+      created_at: "2026-09-02T00:00:00.000Z",
+    },
+  ]);
+  await page.goto("admin/operations/?project=atlas");
+  await page.locator('[data-task-filter="all"]').click();
+  await page.getByLabel("完了済みを表示").check();
+  await expect(page.locator("[data-task-list] .task-item")).toHaveCount(2);
+  await expect(
+    page.locator("[data-task-list] .task-archive-button"),
+  ).toHaveCount(1);
+  await expect(page.locator("[data-task-list] .task-open-editor")).toHaveCount(
+    1,
+  );
+
+  const targets = [
+    page.locator(".task-create-open"),
+    ...(await page.locator(".task-filters button").all()),
+    ...(await page.locator(".task-view-tools label").all()),
+    ...(await page.locator("[data-task-list] .task-archive-button").all()),
+    ...(await page.locator("[data-task-list] .task-open-editor").all()),
+  ];
+  for (const target of targets) {
+    const bounds = await target.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.width).toBeGreaterThanOrEqual(44);
+    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+  }
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(375);
 });

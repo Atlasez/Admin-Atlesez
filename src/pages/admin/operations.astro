@@ -1349,9 +1349,12 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     .grid section { padding: 1rem; }
     .task-list-heading { align-items: flex-start; }
     .task-create-label { display: none; }
-    .task-create-open { padding: .5rem !important; }
+    .task-create-open { box-sizing: border-box; flex-basis: 44px; height: 44px; min-height: 44px; min-width: 44px; padding: .5rem !important; width: 44px; }
     .task-filters { width: 100%; }
-    .task-filters button { flex: 1 1 0; }
+    .task-filters button { flex: 1 1 0; min-height: 44px; }
+    .task-view-tools label { min-height: 44px; }
+    .task-archive-button { min-height: 44px; }
+    .task-open-editor { align-items: center; display: inline-flex; min-height: 44px; }
     .task-workspace .task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   }
 </style>
