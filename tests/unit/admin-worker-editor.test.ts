@@ -113,7 +113,9 @@ describe("admin worker editor APIs", () => {
     ];
     const merged = mergeEditorialTaxonomyYaml(yaml, rows, "informatics");
     expect(merged).toContain("- id: informatics");
-    expect(merged).toContain('name: { ja: "機械学習", en: "機械学習" }');
+    expect(merged).toContain(
+      'name:\n        ja: "機械学習"\n        en: "機械学習"',
+    );
     expect(merged).toContain("entryConceptIds: []");
     expect(merged.indexOf("- id: informatics")).toBeGreaterThan(
       merged.indexOf("- id: physics"),
@@ -178,7 +180,7 @@ describe("admin worker editor APIs", () => {
           kind: "subject",
           subject_slug: "readiness-fixture",
           slug: "readiness-fixture",
-          name: "運用準備用の長い分野名と英語表示名",
+          name: "運用準備用の長い分野名と英語表示名 αβγ مرحبا",
           description:
             "管理画面で新しく作成され、公開サイトへ追加される分野の長い説明文です。",
           sort_order: 161,
@@ -267,10 +269,12 @@ describe("admin worker editor APIs", () => {
       "mathematics",
     );
     expect(merged).toContain("  order: 20");
-    expect(merged).toContain('name: { ja: "機械学習", en: "機械学習" }');
+    expect(merged).toContain(
+      'name:\n        ja: "機械学習"\n        en: "機械学習"',
+    );
     expect(merged).toContain("      order: 30");
     expect(merged).toContain(
-      'entryConceptIds: ["math.machine-learning.concentration-inequality"]',
+      'entryConceptIds:\n        - "math.machine-learning.concentration-inequality"',
     );
   });
 
@@ -310,9 +314,11 @@ describe("admin worker editor APIs", () => {
       "mathematics",
     );
 
-    expect(merged).toContain('name: { ja: "機械学習", en: "機械学習" }');
     expect(merged).toContain(
-      'entryConceptIds: ["math.machine-learning.new-concept-identifier"]',
+      'name:\n        ja: "機械学習"\n        en: "機械学習"',
+    );
+    expect(merged).toContain(
+      'entryConceptIds:\n        - "math.machine-learning.new-concept-identifier"',
     );
     expect(merged).not.toContain("古い長いカテゴリ名です");
     expect(merged).not.toContain("old-concept-identifier");

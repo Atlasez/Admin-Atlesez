@@ -17107,30 +17107,16 @@ type EditorialTaxonomyPublicationRow = Pick<
 };
 
 const yamlScalar = (value: string) => JSON.stringify(value);
-const yamlDisplayWidth = (value: string) =>
-  Array.from(value).reduce(
-    (width, char) => width + (char.codePointAt(0)! > 0xff ? 2 : 1),
-    0,
-  );
-const yamlLocalizedPair = (indent: string, key: string, value: string) => {
-  const pair = `{ ja: ${yamlScalar(value)}, en: ${yamlScalar(value)} }`;
-  const line = `${indent}${key}: ${pair}`;
-  return yamlDisplayWidth(line) <= 80
-    ? line
-    : [
-        `${indent}${key}:`,
-        `${indent}  {`,
-        `${indent}    ja: ${yamlScalar(value)},`,
-        `${indent}    en: ${yamlScalar(value)},`,
-        `${indent}  }`,
-      ].join("\n");
-};
-const yamlEntryConceptIds = (indent: string, ids: string[]) => {
-  const line = `${indent}entryConceptIds: [${ids.map(yamlScalar).join(", ")}]`;
-  return line.length <= 80
-    ? line
-    : `${indent}entryConceptIds:\n${indent}  [${ids.map(yamlScalar).join(", ")}]`;
-};
+const yamlLocalizedPair = (indent: string, key: string, value: string) =>
+  [
+    `${indent}${key}:`,
+    `${indent}  ja: ${yamlScalar(value)}`,
+    `${indent}  en: ${yamlScalar(value)}`,
+  ].join("\n");
+const yamlEntryConceptIds = (indent: string, ids: string[]) =>
+  ids.length
+    ? `${indent}entryConceptIds:\n${ids.map((id) => `${indent}  - ${yamlScalar(id)}`).join("\n")}`
+    : `${indent}entryConceptIds: []`;
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const replaceEditorialTaxonomyCategoryField = (
