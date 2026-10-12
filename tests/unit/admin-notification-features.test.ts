@@ -3,9 +3,14 @@ import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import type { D1Database } from "../../src/lib/admin-database";
 import {
+  formatNotificationTimestamp,
   handleNotificationFeatures,
   loadNotificationPreferences,
   notificationFeatureFilter,
+  notificationKindLabel,
+  notificationKinds,
+  portalUnreadSummary,
+  safeNotificationHref,
 } from "../../src/lib/admin-notification-features";
 function fixture() {
   const sqlite = new DatabaseSync(":memory:");
@@ -178,5 +183,89 @@ describe("通知設定と再表示予約の永続化・集計", () => {
         .get()?.count,
     ).toBe(0);
     sqlite.close();
+  });
+});
+
+describe("notification presentation", () => {
+  it("keeps a truncated portal unread total distinct from zero", () => {
+    expect(
+      portalUnreadSummary({
+        unreadNotificationsCount: null,
+        notificationsTruncated: true,
+        notifications: [{ read: false }, { read: false }, { read: true }],
+      }),
+    ).toEqual({
+      value: "2+",
+      detail: "表示中の未読（続きあり）",
+      state: "attention",
+    });
+    expect(
+      portalUnreadSummary({
+        unreadNotificationsCount: null,
+        notificationsTruncated: true,
+        notifications: [{ read: true }],
+      }),
+    ).toEqual({
+      value: "0+",
+      detail: "表示分に未読はありません（続きあり）",
+    });
+  });
+
+  it("uses a finite server unread total when the page is complete", () => {
+    expect(
+      portalUnreadSummary({
+        unreadNotificationsCount: 0,
+        notifications: [{ read: false }],
+      }),
+    ).toEqual({
+      value: "0",
+      detail: "未読はありません",
+      state: "success",
+    });
+    expect(
+      portalUnreadSummary({
+        notifications: [{ read: false }, { read: true }],
+      }),
+    ).toEqual({ value: "1", detail: "通知を確認", state: "attention" });
+    expect(
+      portalUnreadSummary({
+        notificationsUnavailable: true,
+        unreadNotificationsCount: 4,
+      }),
+    ).toEqual({
+      value: "—",
+      detail: "通知を取得できません",
+      state: "attention",
+    });
+  });
+
+  it("labels every notification kind, including review and reminder rows", () => {
+    expect(notificationKindLabel("publication-review")).toBe("公開審査");
+    expect(notificationKindLabel("publication-review-returned")).toBe(
+      "公開審査から差し戻し",
+    );
+    expect(notificationKindLabel("task-reminder")).toBe("リマインダー");
+    expect(notificationKindLabel("comment")).toBe("コメント");
+    expect(notificationKindLabel(undefined)).toBe("通知");
+    for (const kind of notificationKinds)
+      expect(notificationKindLabel(kind)).not.toBe("通知");
+  });
+
+  it("keeps notification links inside admin pages and skips invalid times", () => {
+    const base = "https://admin.atlasez.org/admin/portal/";
+    expect(safeNotificationHref("/admin/editor/?document=doc-1", base)).toBe(
+      "/admin/editor/?document=doc-1",
+    );
+    expect(safeNotificationHref("javascript:alert(1)", base)).toBe(
+      "/admin/notifications/",
+    );
+    expect(safeNotificationHref("https://evil.example/admin/x", base)).toBe(
+      "/admin/notifications/",
+    );
+    expect(safeNotificationHref("/apply/", base)).toBe("/admin/notifications/");
+    expect(formatNotificationTimestamp("not-a-date")).toBe("");
+    expect(formatNotificationTimestamp("2026-08-22T00:00:00.000Z")).not.toBe(
+      "",
+    );
   });
 });

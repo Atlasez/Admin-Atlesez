@@ -2,6 +2,9 @@ import { adminMutation, withAdminButtonLock } from "./admin-mutation";
 import {
   notificationKinds,
   importantKinds,
+  notificationKindLabel,
+  formatNotificationTimestamp,
+  safeNotificationHref,
   type NotificationPreferences,
 } from "../lib/admin-notification-features";
 
@@ -64,38 +67,8 @@ const initNotificationInbox = () => {
           "'": "&#39;",
         })[character] ?? character,
     );
-  const labels: Record<string, string> = {
-    comment: "コメント",
-    mention: "メンション",
-    review: "フィードバック依頼",
-    "feedback-request": "フィードバック依頼",
-    "task-request": "タスク依頼",
-    application: "応募",
-    approved: "フィードバック完了",
-    published: "公開",
-    "publication-ready": "公開準備完了",
-    "publication-review": "公開審査",
-    "publication-review-returned": "公開審査から差し戻し",
-    "task-reminder": "リマインダー",
-  };
-  const formatTime = (value?: string) => {
-    if (!value || Number.isNaN(new Date(value).getTime())) return "";
-    return new Intl.DateTimeFormat("ja-JP", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
-  };
-  const safeHref = (value: string) => {
-    try {
-      const url = new URL(value, location.origin);
-      return url.origin === location.origin &&
-        url.pathname.startsWith("/admin/")
-        ? `${url.pathname}${url.search}${url.hash}`
-        : "/admin/notifications/";
-    } catch {
-      return "/admin/notifications/";
-    }
-  };
+  const safeHref = (value: string) =>
+    safeNotificationHref(value, location.origin);
   let rows: Notification[] = [];
   let unreadTotal = 0;
   let notificationsTruncated = false;
@@ -122,7 +95,7 @@ const initNotificationInbox = () => {
     notificationKinds
       .map(
         (kind) =>
-          `<label><input type="checkbox" name="kind" value="${kind}" checked /> ${labels[kind]}</label>`,
+          `<label><input type="checkbox" name="kind" value="${kind}" checked /> ${notificationKindLabel(kind)}</label>`,
       )
       .join("");
 
@@ -130,7 +103,7 @@ const initNotificationInbox = () => {
     const visible = rows;
     const groups = new Map<string, { total: number; unread: number }>();
     for (const row of rows) {
-      const key = labels[row.kind ?? ""] ?? "通知";
+      const key = notificationKindLabel(row.kind);
       const group = groups.get(key) ?? { total: 0, unread: 0 };
       group.total++;
       if (!row.read) group.unread++;
@@ -174,7 +147,7 @@ const initNotificationInbox = () => {
           (item) => `
           <article class="notification-row${item.read ? " is-read" : " is-unread"}">
             <div class="notification-row-main">
-              <div class="notification-row-meta"><span>${escape(labels[item.kind ?? ""] ?? "通知")}</span>${(item.importance ?? (importantKinds.has(item.kind ?? "") ? "important" : "normal")) === "important" ? "<strong>要対応</strong>" : ""}${item.updatedAt ? `<time datetime="${escape(item.updatedAt)}">${escape(formatTime(item.updatedAt))}</time>` : ""}</div>
+              <div class="notification-row-meta"><span>${escape(notificationKindLabel(item.kind))}</span>${(item.importance ?? (importantKinds.has(item.kind ?? "") ? "important" : "normal")) === "important" ? "<strong>要対応</strong>" : ""}${item.updatedAt ? `<time datetime="${escape(item.updatedAt)}">${escape(formatNotificationTimestamp(item.updatedAt))}</time>` : ""}</div>
               <a class="notification-title" href="${escape(safeHref(item.href))}" data-notification-open="${escape(item.id)}">${escape(item.title)}</a>
               <p>${escape(item.detail)}</p>
             </div>

@@ -510,12 +510,13 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 <script>
   import { createAdminLoadRetry } from '../../scripts/admin-load-retry';
   import { taskDeadlineEpoch } from '../../lib/admin-deadline-summary';
+  import { portalUnreadSummary } from '../../lib/admin-notification-features';
   import { formatTaskDeadline } from '../../lib/task-deadline';
   type PortalProject = { id: string; slug?: string; name: string; description?: string | null; role?: string };
   type PortalTodo = { id?: string; project_id: string; project_name?: string; subject?: string | null; task_kind?: string; title: string; details?: string | null; status: string; due_at?: string | null; due_timezone?: string | null };
   type PortalCalendarEvent = { id: string; kind: 'organization' | 'personal'; title: string; details?: string | null; startsAt: string; endsAt?: string | null; timezone: string; projectName: string };
   type PortalNotification = { kind?: string; read?: boolean };
-  type PortalData = { projects?: PortalProject[]; availableProjects?: PortalProject[]; todos?: PortalTodo[]; taskSummary?: { openCount?: number; dueToday?: number; dueSoon?: number }; calendar?: { rangeStart?: string; rangeEnd?: string; events?: PortalCalendarEvent[] }; notifications?: PortalNotification[]; notificationsTruncated?: boolean; notificationsUnavailable?: boolean; unreadNotificationsCount?: number; pendingApprovals?: number; error?: string };
+  type PortalData = { projects?: PortalProject[]; availableProjects?: PortalProject[]; todos?: PortalTodo[]; taskSummary?: { openCount?: number; dueToday?: number; dueSoon?: number }; calendar?: { rangeStart?: string; rangeEnd?: string; events?: PortalCalendarEvent[] }; notifications?: PortalNotification[]; notificationsTruncated?: boolean; notificationsUnavailable?: boolean; unreadNotificationsCount?: number | null; pendingApprovals?: number; error?: string };
   const initializePortal = () => {
     const root = document.querySelector<HTMLElement>('[data-portal]');
     if (!root || root.dataset.initialized === 'true') return;
@@ -692,25 +693,17 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       const dueSoon = Number.isFinite(serverDueSoon) ? Math.max(0, Math.trunc(serverDueSoon)) : dueDates.filter((item) => item.time > todayEnd.getTime() && item.time <= now + 7 * 24 * 60 * 60 * 1000 && item.todo.status !== 'done').length;
       setSummary('today', dueToday, dueToday ? `${dueToday}件の期限を確認` : '期限のあるタスクはありません', dueToday ? 'attention' : 'success');
       setSummary('due-soon', dueSoon, dueSoon ? '7日以内に期限' : '7日以内の期限はありません', dueSoon ? 'attention' : 'success');
-      const notifications = data.notifications ?? [];
-      const serverUnread = Number(data.unreadNotificationsCount);
-      const hasServerUnread = Number.isFinite(serverUnread);
-      const unread = hasServerUnread ? Math.max(0, Math.trunc(serverUnread)) : notifications.filter((item) => !item.read).length;
-      const notificationsUnavailable = data.notificationsUnavailable === true;
-      const notificationsTruncated = data.notificationsTruncated === true;
+      const unreadSummary = portalUnreadSummary({
+        unreadNotificationsCount: data.unreadNotificationsCount,
+        notifications: data.notifications ?? [],
+        notificationsTruncated: data.notificationsTruncated === true,
+        notificationsUnavailable: data.notificationsUnavailable === true,
+      });
       // 承認待ちは通知の残存数ではなく、承認ページと同じ pending 状態の申請数を使う。
       // 通知は既読・処理済みになっても履歴として残るため、ここで数えると実態とずれる。
       const approvalCount = Number(data.pendingApprovals ?? 0);
       const approvals = Number.isFinite(approvalCount) ? Math.max(0, Math.trunc(approvalCount)) : 0;
-      if (notificationsUnavailable) {
-        setSummary('unread', '—', '通知を取得できません', 'attention');
-      } else if (hasServerUnread) {
-        setSummary('unread', unread, unread ? '通知を確認' : '未読はありません', unread ? 'attention' : 'success');
-      } else if (notificationsTruncated) {
-        setSummary('unread', unread ? `${unread}+` : '0', unread ? '最新20件中の未読（続きあり）' : '最新20件を確認', unread ? 'attention' : undefined);
-      } else {
-        setSummary('unread', unread, unread ? '通知を確認' : '未読はありません', unread ? 'attention' : 'success');
-      }
+      setSummary('unread', unreadSummary.value, unreadSummary.detail, unreadSummary.state);
       setSummary('approvals', approvals, approvals ? '確認が必要な項目' : '承認待ちはありません', approvals ? 'attention' : 'success');
       const next = (data.calendar?.events ?? []).filter((event) => Number.isFinite(Date.parse(event.startsAt)) && Date.parse(event.startsAt) >= now).sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt))[0];
       if (next) {
