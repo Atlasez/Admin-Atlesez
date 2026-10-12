@@ -11984,6 +11984,102 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
   const fetchedRows = rows.results ?? [];
   const hasMore = fetchedRows.length > pageLimit;
   const applications = fetchedRows.slice(0, pageLimit);
+  type ApplicationEmailDeliverySummary = {
+    kind: string;
+    total: number;
+    sent: number;
+    pending: number;
+    sending: number;
+    retry: number;
+    failed: number;
+    attemptCount: number;
+    nextAttemptAt: string | null;
+    updatedAt: string;
+    lastError: string | null;
+  };
+  const emailDeliveriesByApplication = new Map<
+    string,
+    ApplicationEmailDeliverySummary[]
+  >();
+  if (applications.length) {
+    const applicationIds = applications.map((application) => String(application.id));
+    const deliveryRows = await env.REPORTS.prepare(
+      `SELECT application_id,kind,status,attempt_count,next_attempt_at,last_error,updated_at
+       FROM atlasez_application_email_deliveries
+       WHERE application_id IN (${applicationIds.map(() => "?").join(",")})
+       ORDER BY updated_at DESC,id DESC`,
+    )
+      .bind(...applicationIds)
+      .all<{
+        application_id: string;
+        kind: string;
+        status: string;
+        attempt_count: number;
+        next_attempt_at: string | null;
+        last_error: string | null;
+        updated_at: string;
+      }>();
+    const summaries = new Map<
+      string,
+      Map<string, ApplicationEmailDeliverySummary>
+    >();
+    const safeEmailError = (value: string | null) => {
+      if (value === "invalid_recipient") return value;
+      if (
+        value === "provider_idempotency_window_expired" ||
+        value === "claim_expired_max_attempts" ||
+        value === "timeout" ||
+        value === "network_or_provider"
+      )
+        return value;
+      const providerStatus = value?.match(/^provider_(408|409|425|429|5\d\d)$/);
+      return providerStatus ? providerStatus[0] : value ? "delivery_error" : null;
+    };
+    for (const row of deliveryRows.results ?? []) {
+      let applicationSummaries = summaries.get(row.application_id);
+      if (!applicationSummaries) {
+        applicationSummaries = new Map();
+        summaries.set(row.application_id, applicationSummaries);
+      }
+      let summary = applicationSummaries.get(row.kind);
+      if (!summary) {
+        summary = {
+          kind: row.kind,
+          total: 0,
+          sent: 0,
+          pending: 0,
+          sending: 0,
+          retry: 0,
+          failed: 0,
+          attemptCount: 0,
+          nextAttemptAt: null,
+          updatedAt: row.updated_at,
+          lastError: null,
+        };
+        applicationSummaries.set(row.kind, summary);
+      }
+      summary.total += 1;
+      if (row.status === "sent") summary.sent += 1;
+      else if (row.status === "pending") summary.pending += 1;
+      else if (row.status === "sending") summary.sending += 1;
+      else if (row.status === "retry") summary.retry += 1;
+      else if (row.status === "failed") summary.failed += 1;
+      summary.attemptCount = Math.max(summary.attemptCount, Number(row.attempt_count) || 0);
+      if (
+        (row.status === "pending" || row.status === "retry") &&
+        row.next_attempt_at &&
+        (!summary.nextAttemptAt || row.next_attempt_at < summary.nextAttemptAt)
+      )
+        summary.nextAttemptAt = row.next_attempt_at;
+      if (!summary.lastError && (row.status === "failed" || row.status === "retry"))
+        summary.lastError = safeEmailError(row.last_error);
+    }
+    for (const [applicationId, applicationSummaries] of summaries)
+      emailDeliveriesByApplication.set(
+        applicationId,
+        [...applicationSummaries.values()],
+      );
+  }
   const lastApplication = applications.at(-1);
   const nextCursor = hasMore && lastApplication
     ? `${String(lastApplication.created_at ?? "")}|${String(lastApplication.id ?? "")}`
@@ -11997,7 +12093,10 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
   }
   return json({
     project: { slug: projectSlug, name: access.project.name },
-    applications,
+    applications: applications.map((application) => ({
+      ...application,
+      email_deliveries: emailDeliveriesByApplication.get(String(application.id)) ?? [],
+    })),
     pagination: { limit: pageLimit, nextCursor, hasMore, total: summary.total },
     summary,
     subjectLabels: APPLICATION_SUBJECT_LABELS,
