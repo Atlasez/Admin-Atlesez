@@ -567,11 +567,10 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   await menu.locator("[data-a11y-reset]").click();
   await expect(slider).toHaveValue("60");
   await expect(value).toHaveText("40%");
-  expect(
-    await page.evaluate(
-      () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass ?? null,
-    ),
-  ).toBeNull();
+  const resetGlass = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
+  );
+  expect(resetGlass).toBeUndefined();
   await page.reload();
   await page.getByRole("link", { name: "アクションセンター" }).click();
   const standard = await readCommandPanel(dialog);
