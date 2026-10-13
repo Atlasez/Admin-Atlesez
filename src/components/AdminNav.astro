@@ -646,7 +646,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         const root = document.documentElement;
         root.style.setProperty('--command-glass-opacity', `${opacity}%`);
         root.style.setProperty('--command-glass-blur', `${Math.round(opacity * 0.1)}px`);
-        syncGlassSlider();
+        
         try {
           const stored = JSON.parse(localStorage.getItem('atlasez-prefs') ?? '{}') as Record<string, unknown> | null;
           const prefs = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
@@ -659,18 +659,18 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const applyCommandMode = (mode: 'command' | 'action') => {
         openMode = mode;
         dialog.dataset.commandMode = mode;
-        if (glassAdjust) glassAdjust.hidden = mode !== 'action';
+        
         if (glassSlider) {
           glassSlider.disabled = reducedTransparency.matches;
           glassSlider.title = reducedTransparency.matches
             ? 'OSの「透明度を下げる」設定が優先されています。'
             : '背景の透け感を0〜100%で調整';
         }
-        if (mode === 'action') syncGlassSlider();
+        
         applyGlassFilter();
       };
       window.addEventListener('atlasez-glass-change', () => {
-        syncGlassSlider();
+        
         applyGlassFilter();
       });
       reducedTransparency.addEventListener('change', () => applyCommandMode(openMode));
