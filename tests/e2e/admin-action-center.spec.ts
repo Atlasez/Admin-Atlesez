@@ -44,23 +44,21 @@ async function readCommandPanel(dialog: Locator) {
       .join(" ");
     const search = element.querySelector(".admin-command-search");
     const action = element.querySelector(".admin-command-action");
-    const backing = (node: Element | null) => {
-      let current = node;
-      while (current) {
-        const color = getComputedStyle(current).backgroundColor;
-        const alpha = color.match(/[\d.]+/g)?.map(Number) ?? [];
-        if (alpha.length < 4 || alpha[3] >= 0.99) return color;
-        current = current.parentElement;
-      }
-      return "";
-    };
     const meta = element.querySelector("small");
+    const row = element.querySelector(".admin-command-action-item");
+    const list = element.querySelector(".admin-command-list");
+    const hint = element.querySelector(".admin-command-hint");
+    const inner = element.querySelector(".admin-command-inner");
     return {
       background: style.backgroundColor,
+      backdrop: getComputedStyle(element, "::backdrop").backgroundColor,
       filter,
       title: getComputedStyle(element.querySelector("h2")!).color,
       meta: meta ? getComputedStyle(meta).color : "",
-      metaBackground: backing(meta),
+      row: row ? getComputedStyle(row).backgroundColor : "",
+      list: list ? getComputedStyle(list).backgroundColor : "",
+      hint: hint ? getComputedStyle(hint).backgroundColor : "",
+      inner: inner ? getComputedStyle(inner).backgroundColor : "",
       search: search ? getComputedStyle(search).backgroundColor : "",
       action: action ? getComputedStyle(action).backgroundColor : "",
     };
@@ -68,10 +66,14 @@ async function readCommandPanel(dialog: Locator) {
   const background = parseColor(raw.background);
   return {
     ...background,
+    backdropAlpha: parseColor(raw.backdrop).alpha,
     filter: raw.filter,
     title: parseColor(raw.title).rgb,
     meta: parseColor(raw.meta).rgb,
-    metaBackground: parseColor(raw.metaBackground).rgb,
+    row: parseColor(raw.row),
+    listAlpha: parseColor(raw.list).alpha,
+    hintAlpha: parseColor(raw.hint).alpha,
+    innerAlpha: parseColor(raw.inner).alpha,
     searchAlpha: parseColor(raw.search).alpha,
     actionAlpha: parseColor(raw.action).alpha,
   };
@@ -384,6 +386,12 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   });
   expect(searchPanel.background).toBe("rgb(245, 247, 248)");
   expect(searchPanel.filter).not.toContain("saturate");
+  const searchBackdrop = parseColor(
+    await dialog.evaluate(
+      (element) => getComputedStyle(element, "::backdrop").backgroundColor,
+    ),
+  );
+  expect(searchBackdrop.alpha).toBeGreaterThan(0.5);
   const dialogSize = await dialog.evaluate((element) => ({
     width: Number.parseFloat(getComputedStyle(element).width),
     maxHeight: Number.parseFloat(getComputedStyle(element).maxHeight),
@@ -439,21 +447,32 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
   await expect(page).toHaveURL(/\/admin\/articles\//);
   await expect(dialog).toHaveAttribute("data-command-mode", "action");
   const glass = await readCommandPanel(dialog);
-  expect(glass.alpha).toBeGreaterThanOrEqual(0.7);
-  expect(glass.alpha).toBeLessThanOrEqual(0.8);
+  expect(glass.alpha).toBeGreaterThanOrEqual(0.55);
+  expect(glass.alpha).toBeLessThanOrEqual(0.65);
+  expect(glass.backdropAlpha).toBeGreaterThanOrEqual(0.12);
+  expect(glass.backdropAlpha).toBeLessThanOrEqual(0.25);
+  expect(glass.listAlpha).toBe(0);
+  expect(glass.hintAlpha).toBe(0);
+  expect(glass.innerAlpha).toBe(0);
+  expect(glass.row.alpha).toBeGreaterThan(0.4);
+  expect(glass.row.alpha).toBeLessThan(0.95);
   expect(glass.filter).toContain("blur");
   expect(glass.filter).toContain("saturate");
   expect(glass.searchAlpha).toBe(1);
   expect(glass.actionAlpha).toBe(1);
-  const behind = [255, 255, 255].map((channel) => channel * 0.38);
+  const behind = [255, 255, 255].map(
+    (channel) => channel * (1 - glass.backdropAlpha),
+  );
   const panel = glass.rgb.map(
     (channel, index) =>
       channel * glass.alpha + behind[index] * (1 - glass.alpha),
   );
-  expect(contrast(glass.title, panel)).toBeGreaterThanOrEqual(4.5);
-  expect(contrast(glass.meta, glass.metaBackground)).toBeGreaterThanOrEqual(
-    4.5,
+  const row = glass.row.rgb.map(
+    (channel, index) =>
+      channel * glass.row.alpha + panel[index] * (1 - glass.row.alpha),
   );
+  expect(contrast(glass.title, panel)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(glass.meta, row)).toBeGreaterThanOrEqual(4.5);
 });
 
 test("要対応ポップアップは透過を減らす設定で不透明に戻る", async ({ page }) => {
@@ -485,6 +504,63 @@ test("要対応ポップアップは透過を減らす設定で不透明に戻�
   await expect(
     dialog.getByRole("heading", { name: "操作を検索" }),
   ).toBeVisible();
+});
+
+test("表示設定で要対応の透過を切り替え、開いたまま反映する", async ({
+  page,
+}) => {
+  await mockShell(page);
+  await page.goto("admin/articles/");
+  const menu = page.locator("[data-settings-menu]");
+  const glassSetting = menu.locator("fieldset", { hasText: "要対応の透過" });
+  await menu.locator("> summary").click();
+  await glassSetting.getByText("強め", { exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--command-glass-opacity")
+          .trim(),
+      ),
+    )
+    .toBe("40%");
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}"),
+    ),
+  ).toMatchObject({ glass: "40%" });
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await expect(dialog).toHaveAttribute("data-command-mode", "action");
+  const strong = await readCommandPanel(dialog);
+  expect(strong.alpha).toBeGreaterThanOrEqual(0.35);
+  expect(strong.alpha).toBeLessThanOrEqual(0.45);
+  expect(strong.backdropAlpha).toBeLessThanOrEqual(0.2);
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty(
+      "--command-glass-opacity",
+      "100%",
+    );
+  });
+  const solid = await readCommandPanel(dialog);
+  expect(solid.alpha).toBe(1);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await menu.locator("> summary").click();
+  await glassSetting.getByText("標準", { exact: true }).click();
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
+    ),
+  ).toBeUndefined();
+  await page.reload();
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const standard = await readCommandPanel(
+    page.locator("[data-admin-command-dialog]"),
+  );
+  expect(standard.alpha).toBeGreaterThanOrEqual(0.55);
+  expect(standard.alpha).toBeLessThanOrEqual(0.65);
 });
 
 test("要対応ポップアップから状態変更を実行し、通知を混在させない", async ({

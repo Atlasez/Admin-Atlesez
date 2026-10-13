@@ -104,6 +104,9 @@ const ogImage = new URL(
         motion: "data-pref-motion",
         font: "data-pref-font",
       };
+      if (prefs.glass === "100%" || prefs.glass === "40%") {
+        d.style.setProperty("--command-glass-opacity", prefs.glass);
+      }
       Object.keys(keys).forEach(function (k) {
         if (prefs[k] && prefs[k] !== "default") {
           // ブラックモードは既存の暗色テーマ用ページ固有CSSも利用しつつ、
