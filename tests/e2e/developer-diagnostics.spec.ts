@@ -62,7 +62,7 @@ test("開発者向け診断は状態を一覧表示し、再確認できる", as
   await expect.poll(() => requests).toBe(2);
 });
 
-test("主管理者でない場合は試作ページへのリンクを表示しない", async ({
+test("診断フラグが無い全分野管理者にはログイン画面案だけを表示する", async ({
   page,
 }) => {
   await page.route("**/api/admin/auth-status", (route) =>
@@ -84,14 +84,69 @@ test("主管理者でない場合は試作ページへのリンクを表示し�
   await page.goto("admin/developer/?mode=developer");
   await expect(page.getByText(/最終確認：/)).toBeVisible();
   const prototypeLinks = page.locator("[data-prototype-link]");
-  await expect(prototypeLinks).toHaveCount(3);
+  await expect(prototypeLinks).toHaveCount(2);
   await expect(
     prototypeLinks.filter({ hasText: "XAI UIプロトタイプ" }),
   ).toBeHidden();
   await expect(
     prototypeLinks.filter({ hasText: "ポータル UIプロトタイプ" }),
   ).toBeHidden();
+  const welcomeScreens = page.locator("[data-welcome-screens-link]");
+  await expect(welcomeScreens).toBeVisible();
+  await expect(welcomeScreens).toHaveAttribute(
+    "href",
+    "/admin/ui-prototype/welcome-screens/",
+  );
+});
+
+test("全分野管理者でない場合はログイン画面案を表示しない", async ({ page }) => {
+  await page.route("**/api/admin/auth-status", (route) =>
+    route.fulfill({
+      json: { email: "project-manager@example.com", isManager: false },
+    }),
+  );
+  await page.route("**/api/admin/notifications", (route) =>
+    route.fulfill({ json: { notifications: [] } }),
+  );
+  await page.route("**/api/admin/developer/diagnostics", (route) =>
+    route.fulfill({
+      json: {
+        prototypeAccess: false,
+        generatedAt: "2026-09-10T00:00:00.000Z",
+        checks: [],
+      },
+    }),
+  );
+
+  await page.goto("admin/developer/?mode=developer");
+  await expect(page.getByText(/最終確認：/)).toBeVisible();
+  await expect(page.locator("[data-welcome-screens-link]")).toBeHidden();
+  await expect(page.locator("[data-prototype-link]")).toHaveCount(2);
+});
+
+test("診断の取得に失敗しても全分野管理者にはログイン画面案を表示する", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/auth-status", (route) =>
+    route.fulfill({
+      json: { email: "global-admin@example.com", isManager: true },
+    }),
+  );
+  await page.route("**/api/admin/notifications", (route) =>
+    route.fulfill({ json: { notifications: [] } }),
+  );
+  await page.route("**/api/admin/developer/diagnostics", (route) =>
+    route.fulfill({ status: 503, json: { error: "一時的な障害" } }),
+  );
+
+  await page.goto("admin/developer/?mode=developer");
+  await expect(page.getByRole("button", { name: "再試行" })).toBeVisible();
+  await expect(page.getByText("一時的な障害")).toBeVisible();
+  await expect(page.locator("[data-welcome-screens-link]")).toBeVisible();
+  await expect(page.locator("[data-prototype-link]")).toHaveCount(2);
   await expect(
-    prototypeLinks.filter({ hasText: "ログイン・エラー画面案" }),
+    page
+      .locator("[data-prototype-link]")
+      .filter({ hasText: "XAI UIプロトタイプ" }),
   ).toBeHidden();
 });
