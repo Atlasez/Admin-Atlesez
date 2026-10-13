@@ -1,0 +1,53 @@
+---
+import Prototype from "../layouts/Prototype.astro";
+import { breadcrumbLabels } from "../labels";
+
+const examples = ["notifications", "action-center", "member-tasks", "member-calendar", "procedures"];
+---
+
+<Prototype title="ADMIN UIプロトタイプ" screen="index">
+  <main class="review-index">
+    <h1>運営サイト UIプロトタイプ</h1>
+    <p>
+      ポータルと通知の現行画面と案を並べて確認するための静的プロトタイプです。書体、色、ボタンの見た目は現行のライトテーマのままです。本番のページ、Worker、D1には接続していません。
+    </p>
+    <div class="review-links">
+      <a href="/portal/before/">ポータル · 現行</a>
+      <a href="/portal/after/">ポータル · 案</a>
+      <a href="/notifications/before/">通知 · 現行</a>
+      <a href="/notifications/after/">通知 · 案</a>
+    </div>
+    <h2>案で変えていること</h2>
+    <ul>
+      <li>狭い画面のヘッダーを1行にする。部品の見た目は維持し、「表示設定」と「ログアウト」は既存のメニューを開いた中に置く。</li>
+      <li>件数0のKPIは灰色。1件以上だけ現行の緑のまま。</li>
+      <li>カードの入れ子は1段まで。内側は仕切り線。</li>
+      <li>見出しを言い換えるだけの説明文を外す。</li>
+      <li>空状態は破線とチェック印をやめ、1行の静かな文にする。</li>
+      <li>参加後フォローの青い左線を外し、ほかの区切りと同じ1pxの線にする。</li>
+      <li>余白は 4 / 8 / 12 / 16 / 24 / 32px だけを使う。</li>
+      <li>パンくずのスラッグを日本語にする。未読0件の「0件が未読｜0件を表示」は出さない。</li>
+    </ul>
+    <h2>変えていないこと</h2>
+    <ul>
+      <li>フォント、文字サイズ、色、角丸、プライマリの「応募フォームへ」。</li>
+      <li>「表示設定」ボタン自体の形。メニューボタンの見た目。</li>
+    </ul>
+    <h2>パンくずスラッグ</h2>
+    <table>
+      <thead>
+        <tr><th>スラッグ</th><th>表示</th></tr>
+      </thead>
+      <tbody>
+        {
+          examples.map((slug) => (
+            <tr>
+              <td><code>{slug}</code></td>
+              <td>{breadcrumbLabels[slug]}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </main>
+</Prototype>

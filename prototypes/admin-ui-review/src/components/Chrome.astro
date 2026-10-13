@@ -1,0 +1,87 @@
+---
+import { breadcrumbLabels } from "../labels";
+
+interface Props {
+  variant: "before" | "after";
+  screen: "portal" | "notifications";
+}
+
+const { variant, screen } = Astro.props;
+const showBreadcrumb = screen === "notifications";
+---
+
+<header class="admin-nav" data-admin-nav>
+  <a class="admin-nav-brand-logo" href="/portal/before/" aria-label="Atlasezメンバー用サイトのトップへ戻る">
+    <img src="/images/atlasez-logo.png" alt="" width="34" height="34" />
+  </a>
+  <div class="admin-project-switcher">
+    <a class="admin-project-switcher-title" href="/portal/before/">Atlasezメンバー用サイト</a>
+  </div>
+  <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav" aria-label="メニュー">
+    <span aria-hidden="true">☰</span><span>メニュー</span>
+  </button>
+  <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
+    {
+      variant === "after" && (
+        <div class="mobile-overflow">
+          <details class="settings-menu">
+            <summary>表示設定</summary>
+          </details>
+          <form>
+            <button type="button" class="admin-logout">ログアウト</button>
+          </form>
+        </div>
+      )
+    }
+    <a href="#tasks">タスク管理</a>
+    <a href="#calendar">カレンダー</a>
+    <a href="#profile">マイページ</a>
+  </nav>
+  <div class="admin-account">
+    <a class="admin-action-center-utility-link" href="#actions" aria-label="要対応一覧（アクションセンター）">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M3 8h7M3 11.5h5"></path></svg>
+      <span>要対応</span>
+    </a>
+    <button type="button" class="admin-command-button" aria-label="操作を検索">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.3 15.3 5.2 5.2"></path></svg>
+    </button>
+    <details class="settings-menu">
+      <summary>表示設定</summary>
+    </details>
+    <button type="button" class="admin-notifications" aria-label="通知を開く">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg>
+    </button>
+    <a class="admin-account-profile" href="#profile" aria-label="マイページを開く">
+      <span class="admin-account-avatar" aria-hidden="true">A</span>
+      <span class="admin-account-email">member@atlasez.org</span>
+    </a>
+    <form>
+      <button type="button" class="admin-logout">ログアウト</button>
+    </form>
+  </div>
+</header>
+{
+  showBreadcrumb && (
+    <nav class="admin-breadcrumbs" aria-label="パンくず">
+      <a href="/portal/before/">Atlasezメンバー用サイト</a>
+      <span aria-hidden="true">›</span>
+      {variant === "before" ? (
+        <>
+          <a href="#atlas">学習サイト「アトラス」運営用サイト</a>
+          <span aria-hidden="true">›</span>
+          <span aria-current="page">notifications</span>
+        </>
+      ) : (
+        <span aria-current="page">{breadcrumbLabels.notifications}</span>
+      )}
+    </nav>
+  )
+}
+<script>
+  const toggle = document.querySelector("[data-admin-menu-toggle]");
+  const nav = document.querySelector("#admin-primary-nav");
+  toggle?.addEventListener("click", () => {
+    const open = nav?.classList.toggle("is-open") ?? false;
+    toggle.setAttribute("aria-expanded", String(open));
+  });
+</script>

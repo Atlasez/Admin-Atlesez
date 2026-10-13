@@ -1,0 +1,34 @@
+---
+import "../styles/review.css";
+
+interface Props {
+  title: string;
+  variant?: "before" | "after";
+  screen: "index" | "portal" | "notifications";
+}
+
+const { title, variant, screen } = Astro.props;
+const variantLabel =
+  variant === "before" ? "現行" : variant === "after" ? "案" : "目次";
+const screenLabel =
+  screen === "portal" ? "ポータル" : screen === "notifications" ? "通知" : "UIプロトタイプ";
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title}</title>
+  </head>
+  <body class:list={[variant === "before" && "is-before", variant === "after" && "is-after"]} data-variant={variant ?? "index"} data-screen={screen}>
+    <p class="review-bar">
+      <a href="/">UIプロトタイプ</a>
+      <span aria-hidden="true"> · </span>
+      <span>{screenLabel} / {variantLabel}</span>
+      <span aria-hidden="true"> · </span>
+      未承認。本番の画面ではありません。
+    </p>
+    <slot />
+  </body>
+</html>
