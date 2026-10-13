@@ -614,3 +614,10 @@ Cron診断は「正常」「1分・5分・毎時の定期処理を設定して�
 - **未検証・外部依存は継続:** Chromeで実操作した役割はprimary adminだけ。ユーザー回答どおり隔離環境・合成role accountが未準備のため応募者、一般会員、project manager、editor、休止・退会・権限失効後の実Chrome/API受入は未検証。Google OAuth完了、実メール/Discord、最新本番backupと暗号化保存先、隔離restoreの実測、RPO/RTO、screen reader・200% zoom、実通知/Cronの最終成功、Workers Builds provenance/#509の復旧も未完了。担当者・代理・対応時間、保存期間、privacy文言、限定運用上限、障害停止/再開権限は運営決定待ちであり、限定運用・一般募集のGo条件を満たしたとは判定しない。
 - **受入ケースの明示:** [`ADMIN_READINESS_ACCEPTANCE.md`](ADMIN_READINESS_ACCEPTANCE.md)に、退会申請のpending/reviewing/scheduled取り下げ、applied後の拒否、既存sessionからの画面/URL/APIアクセス拒否、退会後の再開申請の役割別受入条件を追加した。ケース自体は専用sandbox・合成アカウントができるまで未実施。
 - **PR・本番境界:** PR #526にはWorkerコード、フロントエンド、GitHub workflow、mocked tests、運用文書とD1 migration `0132_application_email_first_attempt.sql`（メールprovider初回試行時刻）が含まれる。PRは未mergeで、Worker deployおよびこのmigrationの本番適用は未実施。Cloudflare設定/route/cacheと本番データは変更していない。migration適用・Worker配信は別の明示承認と既定のWorkers Builds/backup/順序確認がそろうまで保留する。required approving reviewsは現在値を維持し、本番配信・rollback・promoteは行わない。
+
+### 2026-10-13 本番の読み取り専用再照合
+
+- **現在確認:** ADMIN `main`は`edf2c3952049a706d45154c21fb775f803a502d3`。公開`build-info.json`はrepository `Atlasez/Admin-Atlesez`、ref `main`、同commit、target `admin`、builtAt `2026-10-12T23:57:25.003Z`。読み取り専用の`verify-admin-production` [run 38326317560](https://github.com/Atlasez/Admin-Atlesez/actions/runs/38326317560)は1/15回でsuccessし、このmain SHAを照合した。
+- **未確認:** `wrangler deployments list`の読取結果では固定Worker `atlasez-admin` の最新deployment `4cd33a14-78ca-4b86-a051-2d0227ea911c`、Version `6bfe081d-0b95-4f80-a545-8b42d0bf1bb8`、100%配信、source field `wrangler`、作成`2026-10-12T23:58:00.940704Z`。このVersionとWorkers Builds成功run/checkout SHAを結ぶ証拠は確認できていない。source fieldから実行者・実行経路を推測しない。mainとbuild-infoが一致しても、Workers Builds復旧済みとは扱わない。
+- **Chrome:** 最新の`build-info.json`をChromeから直接開こうとしたが`net::ERR_BLOCKED_BY_CLIENT`となり、認証済み主要画面が当該Versionを表示するかは再受入できていない。既存のカレンダー画面に戻した。このブラウザー側ブロックをADMINの不具合とは判定しない。
+- **記録・境界:** 上記のrun/Version/build-info証拠と次の読取確認は既存Issue [#509 comment](https://github.com/Atlasez/Admin-Atlesez/issues/509#issuecomment-6135126751)へ追記した。設定変更、token/scope調査、deploy、rollback、promote、cache purge、route変更、D1操作はしていない。
