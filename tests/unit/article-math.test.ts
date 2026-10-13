@@ -65,6 +65,33 @@ describe("article math macros", () => {
     expect(rendered.code).toContain("mathbf");
   });
 
+  it("does not inherit KaTeX trust settings from Object.prototype", async () => {
+    const previousTrust = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      "trust",
+    );
+    Object.defineProperty(Object.prototype, "trust", {
+      configurable: true,
+      value: true,
+    });
+
+    try {
+      const processor = await createMarkdownProcessor(
+        ARTICLE_MARKDOWN_PROCESSOR_OPTIONS,
+      );
+      const rendered = await processor.render(
+        "$\\href{javascript:alert(1)}{click}$",
+      );
+      expect(rendered.code).not.toMatch(/<a\b[^>]*href=/i);
+    } finally {
+      if (previousTrust) {
+        Object.defineProperty(Object.prototype, "trust", previousTrust);
+      } else {
+        Reflect.deleteProperty(Object.prototype, "trust");
+      }
+    }
+  });
+
   it("renders editorial image width metadata as responsive inline style", async () => {
     const processor = await createMarkdownProcessor(
       ARTICLE_MARKDOWN_PROCESSOR_OPTIONS,

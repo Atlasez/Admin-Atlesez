@@ -304,6 +304,16 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     .procedures-page .procedure-steps {
       grid-template-columns: 1fr;
     }
+
+    .procedures-page .project-picker {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .procedures-page .project-picker select {
+      box-sizing: border-box;
+      min-width: 0;
+      width: 100%;
+    }
   }
 </style>
 

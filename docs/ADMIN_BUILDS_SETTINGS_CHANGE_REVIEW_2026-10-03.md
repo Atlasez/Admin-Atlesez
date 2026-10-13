@@ -1,6 +1,8 @@
 # ADMIN Workers Builds接続設定の変更レビュー
 
-追跡: [Issue #407](https://github.com/Atlasez/Admin-Atlesez/issues/407)。固定値は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)に従う。この文書はCloudflareの変更前レビュー記録であり、設定保存やトークン作成の実施記録ではない。
+> **履歴記録（2026-10-03）:** この設定案はIssue #407の当時の変更前レビューです。現在の復旧状況と停止条件は[ADMIN本番デプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)、[2026-10-12実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)、[Issue #509](https://github.com/Atlasez/Admin-Atlesez/issues/509)を確認してください。設定保存やトークン作成の実施記録ではなく、コマンドや前提を現状確認なしに適用しないでください。
+
+追跡: 旧Issue [#407](https://github.com/Atlasez/Admin-Atlesez/issues/407)。
 
 ## 変更対象と設定値
 
@@ -56,3 +58,33 @@ Build cache: disabled
 ## 現在の状態
 
 本レビュー時点で、token作成、GitHub認可、接続保存、Build開始、Worker/D1/Route/Version変更は行っていない。
+
+## 2026-10-13 追加レビュー: 本番Deployに必要なRoute権限
+
+### 確認した状態
+
+- Cloudflare Dashboardでは、Worker `atlasez-admin`、GitHub `Atlasez/Admin-Atlesez`、production branch `main` のWorkers Builds接続が稼働している。
+- Build token欄には `Atlasez ADMIN Builds Deploy` と表示されている。
+- main SHA `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370` のBuildはBuild commandを完了した後、Deploy commandでWorkerをアップロードし、`/zones/f9dc11b6714d2c431f7c9ce9187a98df/workers/routes` のAPIから `No access to the specified resource` を返されて失敗した。
+- `wrangler.admin.jsonc` のCustom Domainは `admin.atlasez.org`、Zoneは `atlasez.org`。Cloudflareの案内では、RouteまたはCustom DomainをDeploy時に追加・更新・削除するにはWorkerのEditor権限と、対象Zoneの `Workers Routes Write` が必要。
+- 失敗後のDeployment/Version一覧では、既存Version `d4387787-e85e-4de4-8973-5795bd634149` が引き続き100%配信され、新しいVersionは確認されなかった。公開 `build-info.json` もmainの上記SHAを示している。
+
+### 提案する設定値と影響
+
+- 対象token: Cloudflare Workers BuildsのBuild token欄で利用中の `Atlasez ADMIN Builds Deploy`。変更前にDashboardでtokenの識別情報とWorkers Buildsからの参照を照合する。
+- 追加する権限: `Zone > Workers Routes > Write`。
+- Resource scope: Account `812021e62fa20465950b61be55dfe064` 内のZone `atlasez.org` のみに限定する。他のZoneやAccountへ広げない。
+- 目的: `atlasez-admin` の既存 `admin.atlasez.org` Custom Domainを含む、`wrangler.admin.jsonc` に基づくWorkers Builds Deployを完了させる。
+- 影響範囲: このZone-scoped権限は `atlasez-admin` だけには限定されず、`atlasez.org` Zone内のWorker RoutesやCustom Domainの追加・更新・削除を行える。Zone内の他ホスト名のWorker接続にも影響しうる。アカウント内の他ZoneのRoute権限は追加しない。
+- 変更前確認: 対象tokenのWorker Editor/Worker Scripts権限、Zone名、tokenのBuilds参照先を読み取り専用で照合する。現在の既存Custom Domain Route、Worker名、公開build-info SHAを記録する。
+
+### 復旧方法
+
+1. Deploy後にWorker `atlasez-admin`、Version ID、100%配信、公開build-info SHA、認証済みChromeの主要ADMIN画面を確認する。
+2. Routeの誤変更、想定外のWorker/Version、配信率の異常があれば、それ以上のBuild/Deploy操作を止める。推測でRouteやVersionを変更・rollbackしない。
+3. 追加権限が原因と確認でき、復旧Deployが不要な場合は、参照先を照合した同じBuild tokenから `atlasez.org` の `Workers Routes Write` だけを外し、既存のCustom DomainとWorker配信を読み取り専用で再確認する。Build tokenそのものを失効・再作成しない。
+4. tokenがCloudflare側で編集不能な管理tokenと判明した場合は変更を止め、代替接続方式と必要な権限を別途レビューする。Account内の全Zoneへ一括でRoute権限を広げない。
+
+### 承認前の停止事項
+
+これは本番Zone上のRoute/Custom Domainを変更できる権限の追加である。PRで設定値・影響・復旧方法をレビューし、実行者がCloudflare Dashboardで上記の対象tokenとZone scopeを再照合した後にだけ変更する。この追記時点ではWorkers Buildsのtoken、Worker、Route、Version、本番配信を変更していない。

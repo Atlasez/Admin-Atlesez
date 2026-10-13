@@ -42,6 +42,7 @@ const createEnvironment = () => {
     CREATE TABLE admin_genre_role_assignments (catalog_id TEXT NOT NULL, email TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(catalog_id,email));
     CREATE TABLE admin_genre_role_catalog (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL);
     CREATE TABLE atlasez_project_memberships (project_id TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, joined_at TEXT NOT NULL, PRIMARY KEY(project_id,email));
+    CREATE TABLE atlasez_project_manager_grants (project_id TEXT NOT NULL, email TEXT NOT NULL, PRIMARY KEY(project_id,email));
     CREATE TABLE atlasez_member_discord_role_assignments (email TEXT NOT NULL, discord_role_id TEXT NOT NULL, is_active INTEGER NOT NULL, assigned_at TEXT NOT NULL, assigned_by TEXT NOT NULL, PRIMARY KEY(email,discord_role_id));
     CREATE TABLE atlasez_member_discord_accounts (email TEXT PRIMARY KEY, discord_user_id TEXT NOT NULL);
     CREATE TABLE editorial_member_profiles (email TEXT PRIMARY KEY, display_name TEXT, bio TEXT, avatar_url TEXT, university TEXT, year TEXT, interests TEXT, affiliation_type TEXT, country TEXT, timezone TEXT, updated_at TEXT);
@@ -109,8 +110,34 @@ const request = (
     body: JSON.stringify({ action, email }),
   });
 
+const removalRequest = (email: string) =>
+  new Request(
+    `https://admin.example/api/admin/member-management?email=${encodeURIComponent(email)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        origin: "https://admin.example",
+      },
+    },
+  );
+
+const discordUnlinkRequest = (email: string) =>
+  new Request("https://admin.example/api/admin/member-discord-user", {
+    method: "PUT",
+    headers: {
+      "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+      origin: "https://admin.example",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ email, discordUserId: "" }),
+  });
+
 it("archives and restores only operational scopes while retaining member data and audit history", async () => {
   const { db, environment } = createEnvironment();
+  db.prepare(
+    "UPDATE atlasez_member_discord_role_assignments SET is_active=0 WHERE email='member@example.org'",
+  ).run();
 
   const archived = await worker.fetch(
     request("archive", "member@example.org"),
@@ -182,7 +209,7 @@ it("archives and restores only operational scopes while retaining member data an
     workflowRoles: [{ role: "subject-coordinator", subject: "mathematics" }],
     genreRoles: [{ catalog_id: "catalog-role-1" }],
     atlasMemberships: [{ role: "member" }],
-    discordRoles: [{ discord_role_id: "123456789012345678", is_active: 1 }],
+    discordRoles: [{ discord_role_id: "123456789012345678", is_active: 0 }],
   });
 
   const restored = await worker.fetch(
@@ -224,7 +251,7 @@ it("archives and restores only operational scopes while retaining member data an
         "SELECT is_active FROM atlasez_member_discord_role_assignments WHERE email='member@example.org'",
       )
       .get(),
-  ).toMatchObject({ is_active: 1 });
+  ).toMatchObject({ is_active: 0 });
   expect(
     db
       .prepare(
@@ -261,8 +288,40 @@ it("requires a global administrator and prevents archiving the acting account", 
   ).toMatchObject({ count: 0 });
 });
 
+it("prevents another global administrator from archiving the configured primary administrator", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    "INSERT INTO report_admin_permissions(email,subject) VALUES (?,?)",
+  ).run("other-admin@example.org", "*");
+
+  const response = await worker.fetch(
+    request("archive", "ukyoukay0@gmail.com", "other-admin@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(409);
+  await expect(response.json()).resolves.toMatchObject({
+    error: expect.stringContaining(
+      "設定された主管理者アカウントはアーカイブできません",
+    ),
+  });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM admin_member_lifecycle").get(),
+  ).toMatchObject({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT subject FROM report_admin_permissions WHERE email='ukyoukay0@gmail.com'",
+      )
+      .get(),
+  ).toMatchObject({ subject: "*" });
+});
+
 it("rejects malformed restore snapshots without changing archived state", async () => {
   const { db, environment } = createEnvironment();
+  db.prepare(
+    "UPDATE atlasez_member_discord_role_assignments SET is_active=0 WHERE email='member@example.org'",
+  ).run();
   const archived = await worker.fetch(
     request("archive", "member@example.org"),
     environment as never,
@@ -392,6 +451,199 @@ it("does not expose member details to a non-global operator", async () => {
     environment as never,
   );
   expect(response.status).toBe(403);
+});
+
+it("keeps Atlas and Discord permissions intact when removal cannot sync a linked Discord account", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    "INSERT INTO atlasez_member_discord_accounts (email,discord_user_id) VALUES (?,?)",
+  ).run("member@example.org", "discord-user-id");
+
+  const response = await worker.fetch(
+    removalRequest("member@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ ok: false });
+  expect(
+    db
+      .prepare("SELECT subject FROM report_admin_permissions WHERE email=?")
+      .all("member@example.org"),
+  ).toEqual([{ subject: "mathematics" }]);
+  expect(
+    db
+      .prepare(
+        "SELECT project_id FROM atlasez_project_memberships WHERE email=?",
+      )
+      .all("member@example.org"),
+  ).toEqual([{ project_id: "atlas" }]);
+  expect(
+    db
+      .prepare(
+        "SELECT is_active FROM atlasez_member_discord_role_assignments WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ is_active: 1 });
+});
+
+it("blocks Discord unlink while active Discord role assignments remain", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    "INSERT INTO atlasez_member_discord_accounts (email,discord_user_id) VALUES (?,?)",
+  ).run("member@example.org", "123456789012345678");
+
+  const response = await worker.fetch(
+    discordUnlinkRequest("member@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(409);
+  await expect(response.json()).resolves.toMatchObject({
+    error: expect.stringContaining("有効なDiscordロール割当"),
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT discord_user_id FROM atlasez_member_discord_accounts WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toEqual({ discord_user_id: "123456789012345678" });
+  expect(
+    db
+      .prepare(
+        "SELECT is_active FROM atlasez_member_discord_role_assignments WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ is_active: 1 });
+});
+
+it("allows Discord unlink after all active Discord role assignments are removed", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    "INSERT INTO atlasez_member_discord_accounts (email,discord_user_id) VALUES (?,?)",
+  ).run("member@example.org", "123456789012345678");
+  db.prepare(
+    "UPDATE atlasez_member_discord_role_assignments SET is_active=0 WHERE email=?",
+  ).run("member@example.org");
+
+  const response = await worker.fetch(
+    discordUnlinkRequest("member@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(200);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_discord_accounts WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT is_active FROM atlasez_member_discord_role_assignments WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ is_active: 0 });
+});
+
+it("allows Atlas removal when no Discord account is linked", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    "UPDATE atlasez_member_discord_role_assignments SET is_active=0 WHERE email='member@example.org'",
+  ).run();
+
+  const response = await worker.fetch(
+    removalRequest("member@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(200);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM report_admin_permissions WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_project_memberships WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_discord_role_assignments WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ count: 0 });
+});
+
+it("blocks Atlas removal when active Discord roles remain without a linked account", async () => {
+  const { db, environment } = createEnvironment();
+
+  const response = await worker.fetch(
+    removalRequest("member@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(409);
+  await expect(response.json()).resolves.toMatchObject({
+    error: expect.stringContaining("有効なDiscordロール割当"),
+  });
+  expect(
+    db
+      .prepare("SELECT subject FROM report_admin_permissions WHERE email=?")
+      .all("member@example.org"),
+  ).toEqual([{ subject: "mathematics" }]);
+  expect(
+    db
+      .prepare(
+        "SELECT project_id FROM atlasez_project_memberships WHERE email=?",
+      )
+      .all("member@example.org"),
+  ).toEqual([{ project_id: "atlas" }]);
+  expect(
+    db
+      .prepare(
+        "SELECT is_active FROM atlasez_member_discord_role_assignments WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ is_active: 1 });
+});
+
+it("blocks member archival when active Discord roles remain without a linked account", async () => {
+  const { db, environment } = createEnvironment();
+
+  const response = await worker.fetch(
+    request("archive", "member@example.org"),
+    environment as never,
+  );
+
+  expect(response.status).toBe(409);
+  await expect(response.json()).resolves.toMatchObject({
+    error: expect.stringContaining("有効なDiscordロール割当"),
+  });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM admin_member_lifecycle").get(),
+  ).toMatchObject({ count: 0 });
+  expect(
+    db
+      .prepare("SELECT subject FROM report_admin_permissions WHERE email=?")
+      .all("member@example.org"),
+  ).toEqual([{ subject: "mathematics" }]);
+  expect(
+    db
+      .prepare(
+        "SELECT is_active FROM atlasez_member_discord_role_assignments WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ is_active: 1 });
 });
 
 it("records workflow-role history only when a role assignment actually changes", async () => {

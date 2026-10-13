@@ -22,7 +22,7 @@ GitHubの`main`を唯一の本番ソースとする。ADMIN本番の通常配信
 
 Cloudflare Workers Buildsでrepositoryを`Atlasez/Admin-Atlesez`、Production branchを`main`、root directoryをリポジトリルートに固定する。固定Worker・Account・Custom Domain・D1・DOを変更しない。他branchの自動配信・Preview配信は有効にしない。
 
-1. GitHubのmain保護でPRのCI成功・レビューを必須にする。CI失敗や未レビューの変更をmainへマージしない。
+1. GitHubのmain保護ではCI status checkを維持し、レビュー承認をrequired approving reviewsとして必須化しない。現在のrequired approving review countは0であり、ユーザー方針により0を維持する。コード変更は通常のPR運用とルートの`AGENTS.md`に従い、CI成功とレビュー完了を確認してからマージする。この手順上のレビューとbranch protectionの承認必須設定を混同しない。
 2. `.github/workflows/deploy-admin-from-github.yml`は旧filenameを保った**検証専用**Workflowである。表示名は`Verify ADMIN build only`。成功したmain CIの成果物を検査し、dry-runと7日間のartifact保存だけを行う。deploy job、production Environment、Cloudflare書き込みtokenを追加しない。
 3. Workers BuildsのBuild commandを次に固定する。全検証が成功した場合だけDeployへ進む。
 
@@ -41,6 +41,8 @@ Cloudflare Workers Buildsでrepositoryを`Atlasez/Admin-Atlesez`、Production br
 5. Build checkoutのHEAD、Production branch、生成されたbuild-infoのcommit/ref/targetを照合する。`CF_BRANCH=main`だけを接続branch確認の代用にしない。任意のSHAを環境変数へ固定して成果物の身元を偽装しない。Cloudflare既存bindings・varsを維持し、接続前後の値をレビューする。
 6. 通常Build/DeployではD1 migrationを実行しない。バックアップ・レビュー・適用・復旧方法を伴う別手順として、新Workerを配信する前に必要なmigrationの適用を記録する。今回の0127・0128・0129・0130が未適用なら初回Buildを開始しない。
 7. Custom Domain `admin.atlasez.org`だけを本番確認先とし、`workers_dev`と`preview_urls`を無効にする。
+
+このBuildのDeploy commandは`atlasez-admin`だけを配信する。外部binding先の`atlasez-editorial-collaboration`は別Workerであり、`npm run dry-run:admin:collaboration`は構文/Build確認専用で本番配信を行わない。DO Workerの変更を本番へ出す場合は、GitHub `main`を正本とするWorkers Buildsの対象・コマンド・Version検証・復旧方法を先にPRでレビューする。現在のBuild設定だけでDO Workerも更新されたと推測せず、直接Wrangler deployを使わない。
 
 切替手順は[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照する。この方針・検証専用Workflowのレビュー済みmain反映を先に行い、旧Workflow定義で待機・実行中のActions deployを別途停止してrun ID・状態を記録する。Workflowのmergeだけでは既存runは取消されない。新しい定義にdeploy jobがないこと、旧runが残っていないこと、migration前提を確認してからWorkers Buildsを接続する。ActionsとWorkers Buildsの二経路を同時に有効にしない。
 

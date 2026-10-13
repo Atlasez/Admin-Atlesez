@@ -1,35 +1,97 @@
 import { describe, expect, it, vi } from "vitest";
 import worker from "../../src/admin-worker";
+import { createAdminTestEnvironment } from "../helpers/admin-test-environment";
 
 describe("independent xAI prototype static route", () => {
-  it("serves the prototype and its assets without an ADMIN session", async () => {
-    const requests: Request[] = [];
-    const env = {
-      ASSETS: {
-        fetch: vi.fn(async (request: Request) => {
-          requests.push(request);
-          return new Response("prototype fixture", {
-            headers: { "content-type": "text/html" },
-          });
-        }),
-      },
-    };
+  it("limits the page and every nested asset to the primary admin", async () => {
+    const { db, env, request } = createAdminTestEnvironment();
+    const assets = vi.spyOn(env.ASSETS, "fetch");
+    const now = new Date().toISOString();
+    db.prepare(
+      "INSERT INTO report_admin_permissions(email,subject) VALUES (?,'mathematics')",
+    ).run("developer-scope@example.test");
+    db.prepare(
+      "INSERT INTO atlasez_project_memberships(project_id,email,role,joined_at) VALUES ('atlas',?,'manager',?)",
+    ).run("developer-scope@example.test", now);
+    db.prepare(
+      "INSERT INTO report_admin_permissions(email,subject) VALUES (?,'mathematics')",
+    ).run("regular-staff@example.test");
 
-    const page = await worker.fetch(
-      new Request("https://admin.atlasez.test/xai-prototype/"),
-      env as never,
+    for (const path of [
+      "/xai-prototype/",
+      "/xai-prototype/_astro/site.css",
+      "/admin/portal-prototype/",
+    ]) {
+      const response = await request(path, "regular-staff@example.test");
+      expect(response.status, path).toBe(403);
+      const managerResponse = await request(
+        path,
+        "developer-scope@example.test",
+      );
+      expect(managerResponse.status, path).toBe(403);
+    }
+
+    const page = await request("/xai-prototype/", "global@atlasez.test");
+    const asset = await request(
+      "/xai-prototype/_astro/site.css",
+      "global@atlasez.test",
     );
-    const asset = await worker.fetch(
-      new Request("https://admin.atlasez.test/xai-prototype/_astro/site.css"),
-      env as never,
+    const portal = await request(
+      "/admin/portal-prototype/",
+      "global@atlasez.test",
     );
 
     expect(page.status).toBe(200);
     expect(asset.status).toBe(200);
-    expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
-      "/xai-prototype/",
-      "/xai-prototype/_astro/site.css",
-    ]);
+    expect(portal.status).toBe(200);
+    expect(page.headers.get("cache-control")).toContain("no-store");
+    expect(assets).toHaveBeenCalledTimes(3);
+  });
+
+  it("reports prototype access only for the primary admin", async () => {
+    const { db, request } = createAdminTestEnvironment();
+    const now = new Date().toISOString();
+    db.prepare(
+      "INSERT INTO report_admin_permissions(email,subject) VALUES (?,'mathematics')",
+    ).run("project-manager@example.test");
+    db.prepare(
+      "INSERT INTO atlasez_project_memberships(project_id,email,role,joined_at) VALUES ('atlas',?,'manager',?)",
+    ).run("project-manager@example.test", now);
+
+    const primaryAdmin = await request(
+      "/api/admin/developer/diagnostics",
+      "global@atlasez.test",
+    );
+    const projectManager = await request(
+      "/api/admin/developer/diagnostics",
+      "project-manager@example.test",
+    );
+
+    expect(primaryAdmin.status).toBe(200);
+    expect(projectManager.status).toBe(200);
+    await expect(primaryAdmin.json()).resolves.toMatchObject({
+      prototypeAccess: true,
+    });
+    await expect(projectManager.json()).resolves.toMatchObject({
+      prototypeAccess: false,
+    });
+  });
+
+  it("does not serve either prototype before authentication", async () => {
+    const { env } = createAdminTestEnvironment();
+    const assets = vi.spyOn(env.ASSETS, "fetch");
+    const xai = await worker.fetch(
+      new Request("https://admin.atlasez.test/xai-prototype/"),
+      env as never,
+    );
+    const portal = await worker.fetch(
+      new Request("https://admin.atlasez.test/admin/portal-prototype/"),
+      env as never,
+    );
+
+    expect(xai.status).toBe(401);
+    expect(portal.status).toBe(302);
+    expect(assets).not.toHaveBeenCalled();
   });
 
   it("does not match adjacent routes or allow writes", async () => {

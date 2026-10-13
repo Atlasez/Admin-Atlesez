@@ -23,10 +23,95 @@ export const importantKinds = new Set<string>([
   "task-request",
   "task-reminder",
 ]);
+export const notificationKindLabels: Record<
+  (typeof notificationKinds)[number],
+  string
+> = {
+  comment: "コメント",
+  mention: "メンション",
+  application: "応募",
+  "publication-review-returned": "公開審査から差し戻し",
+  "publication-review": "公開審査",
+  "publication-ready": "公開準備完了",
+  review: "フィードバック依頼",
+  "feedback-request": "フィードバック依頼",
+  "task-request": "タスク依頼",
+  approved: "フィードバック完了",
+  published: "公開",
+  "task-reminder": "リマインダー",
+};
+export function notificationKindLabel(kind: string | undefined) {
+  if (!kind) return "通知";
+  return (
+    notificationKindLabels[kind as (typeof notificationKinds)[number]] ?? "通知"
+  );
+}
+export type PortalUnreadSummary = {
+  value: string;
+  detail: string;
+  state?: "attention" | "success";
+};
+/** A finite server total is complete. Null means the returned rows are only a page. */
+export function portalUnreadSummary(input: {
+  unreadNotificationsCount?: number | null;
+  notifications?: Array<{ read?: boolean }>;
+  notificationsTruncated?: boolean;
+  notificationsUnavailable?: boolean;
+}): PortalUnreadSummary {
+  if (input.notificationsUnavailable)
+    return {
+      value: "—",
+      detail: "通知を取得できません",
+      state: "attention",
+    };
+  const reported = input.unreadNotificationsCount;
+  const hasServerUnread =
+    typeof reported === "number" && Number.isFinite(reported);
+  const unread = hasServerUnread
+    ? Math.max(0, Math.trunc(reported))
+    : (input.notifications ?? []).filter((item) => !item.read).length;
+  if (input.notificationsTruncated && !hasServerUnread)
+    return unread
+      ? {
+          value: `${unread}+`,
+          detail: "表示中の未読（続きあり）",
+          state: "attention",
+        }
+      : { value: "0+", detail: "表示分に未読はありません（続きあり）" };
+  return unread
+    ? { value: String(unread), detail: "通知を確認", state: "attention" }
+    : { value: "0", detail: "未読はありません", state: "success" };
+}
+export function safeNotificationHref(value: string, base: string) {
+  try {
+    const url = new URL(value, base);
+    if (
+      url.origin !== new URL(base).origin ||
+      !url.pathname.startsWith("/admin/")
+    )
+      return "/admin/notifications/";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/admin/notifications/";
+  }
+}
+export function formatNotificationTimestamp(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ja-JP", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
 export type NotificationPreferences = {
   available: boolean;
   mutedKinds: string[];
   summaryEnabled: boolean;
+};
+export type GlobalNotificationCutoff = {
+  available: boolean;
+  clearedBefore: string | null;
 };
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
@@ -58,11 +143,34 @@ export async function loadNotificationPreferences(
     summaryEnabled: row ? Boolean(row.summary_enabled) : true,
   };
 }
+export async function loadGlobalNotificationCutoff(
+  db: D1Database,
+): Promise<GlobalNotificationCutoff> {
+  const table = await db
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='admin_notification_global_cutoff'",
+    )
+    .first<{ name: string }>();
+  if (!table) return { available: false, clearedBefore: null };
+  const row = await db
+    .prepare(
+      "SELECT cleared_before FROM admin_notification_global_cutoff WHERE singleton=1",
+    )
+    .first<{ cleared_before: string }>();
+  if (
+    !row ||
+    typeof row.cleared_before !== "string" ||
+    !Number.isFinite(Date.parse(row.cleared_before))
+  )
+    return { available: false, clearedBefore: null };
+  return { available: true, clearedBefore: row.cleared_before };
+}
 export function notificationSourceMetadata(sql: string) {
   if (sql.includes("FROM editorial_task_reminders"))
     return {
       id: "'task-reminder-rule-' || s.reminder_id || '-' || s.remind_at",
       time: "remind_at",
+      cutoffTime: "remind_at_utc",
       kind: "'task-reminder'",
       dueReminder: true,
     };

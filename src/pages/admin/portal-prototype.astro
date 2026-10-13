@@ -1,0 +1,842 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
+---
+<AdminLayout title="ポータル UIプロトタイプ" description="Atlasezの全プロジェクトへの入口">
+  <main class="portal portal-xai" data-portal data-admin-load-surface aria-busy="true">
+    <header>
+      <div>
+        <h1 data-admin-i18n data-admin-ja="Atlasezメンバー用サイト" data-admin-en="Atlasez member site">Atlasezメンバー用サイト</h1>
+      </div>
+      <a class="application-link" href="/apply/" data-admin-i18n data-admin-ja="応募フォームへ →" data-admin-en="Open application form →">応募フォームへ →</a>
+    </header>
+
+    <aside class="welcome-entry" aria-label="初参加の方へ">
+      <div><strong>初参加の方へ</strong><p>プロフィール、相談先、最初の小タスクを確認しましょう。</p></div>
+      <a href="/admin/getting-started/">参加後の案内 →</a>
+      <a href="/admin/procedures/">休止・退会・再開の手続き →</a>
+    </aside>
+
+    <section class="my-intake" data-my-intake hidden aria-label="あなたの参加後フォロー">
+      <h2>あなたの参加後フォロー</h2>
+      <p data-my-intake-summary>読み込み中…</p>
+      <div data-my-intake-entries></div>
+      <button type="button" data-my-intake-retry hidden>参加後フォローを再読み込み</button>
+    </section>
+
+    <section class="portal-summary" aria-label="ポータルの概要" data-portal-summary>
+      <a class="portal-summary-item portal-summary-item--action" href="/admin/action-center/">
+        <span class="portal-summary-label">今日の要対応</span>
+        <strong data-summary-value="today">—</strong>
+        <small data-summary-detail="today">期限のあるタスクを確認</small>
+      </a>
+      <a class="portal-summary-item portal-summary-item--action" href="/admin/action-center/">
+        <span class="portal-summary-label">期限が近いタスク</span>
+        <strong data-summary-value="due-soon">—</strong>
+        <small data-summary-detail="due-soon">7日以内の期限</small>
+      </a>
+      <button class="portal-summary-item portal-summary-item--action" type="button" data-summary-notifications>
+        <span class="portal-summary-label">未読通知</span>
+        <strong data-summary-value="unread">—</strong>
+        <small data-summary-detail="unread">通知を確認</small>
+      </button>
+      <a class="portal-summary-item portal-summary-item--action" href="/admin/action-center/">
+        <span class="portal-summary-label">承認待ち</span>
+        <strong data-summary-value="approvals">—</strong>
+        <small data-summary-detail="approvals">確認が必要な項目</small>
+      </a>
+      <a class="portal-summary-item" href="/admin/member-calendar/">
+        <span class="portal-summary-label">次回予定</span>
+        <strong data-summary-value="next">—</strong>
+        <small data-summary-detail="next">予定を読み込み中…</small>
+      </a>
+    </section>
+
+    <AdminRetryNotice message="ポータル情報を読み込めませんでした。" legacyPortal />
+
+    <section class="project-entry" aria-labelledby="projects-entry-heading">
+      <div class="project-entry-heading">
+        <h2 id="projects-entry-heading" data-admin-i18n data-admin-ja="参加中のプロジェクト" data-admin-en="Your projects">参加中のプロジェクト</h2>
+        <p data-admin-i18n data-admin-ja="あなたの権限に応じた参加中のプロジェクトです。" data-admin-en="Projects you are participating in, grouped by your role.">あなたの権限に応じた参加中のプロジェクトです。</p>
+      </div>
+      <div class="project-entry-groups">
+        <section class="project-group" aria-labelledby="managed-projects-heading">
+          <header class="project-group-heading"><h3 id="managed-projects-heading" data-admin-i18n data-admin-ja="運営として参加中" data-admin-en="As an operator">運営として参加中</h3><span data-project-count="managed">—</span></header>
+          <div class="project-entry-cards" data-project-group="managed"><p class="project-empty" data-admin-i18n data-admin-ja="読み込み中…" data-admin-en="Loading…">読み込み中…</p></div>
+        </section>
+        <section class="project-group" aria-labelledby="member-projects-heading">
+          <header class="project-group-heading"><h3 id="member-projects-heading" data-admin-i18n data-admin-ja="参加者として参加中" data-admin-en="As a participant">参加者として参加中</h3><span data-project-count="member">—</span></header>
+          <div class="project-entry-cards" data-project-group="member"><p class="project-empty" data-admin-i18n data-admin-ja="読み込み中…" data-admin-en="Loading…">読み込み中…</p></div>
+        </section>
+      </div>
+    </section>
+
+    <div class="home-grid">
+      <section class="home-section calendar-section">
+        <div class="section-heading">
+          <div><h2 data-admin-i18n data-admin-ja="同時作業会・交流会の日程" data-admin-en="Co-working & social events">同時作業会・交流会の日程</h2><small class="calendar-timezone-note" data-calendar-timezone-note></small></div>
+          <a href="/admin/member-calendar/" data-admin-i18n data-admin-ja="→" data-admin-en="→" aria-label="横断カレンダーを開く">→</a>
+        </div>
+        <div class="calendar-toolbar" role="group" aria-label="今日のカレンダー"><div class="calendar-heading"><strong data-calendar-title>読み込み中…</strong><small data-calendar-range></small></div></div>
+        <fieldset class="calendar-filters" aria-label="カレンダー表示対象"><legend data-admin-i18n data-admin-ja="表示する予定" data-admin-en="Show events">表示する予定</legend><label class="calendar-filter-option"><input type="checkbox" data-calendar-source="organization" checked /><span class="calendar-filter-mark" aria-hidden="true"></span><span class="calendar-filter-copy"><b data-admin-i18n data-admin-ja="同時作業会・交流会" data-admin-en="Co-working & socials">同時作業会・交流会</b><small data-admin-i18n data-admin-ja="全体の予定" data-admin-en="Organization">全体の予定</small></span></label><label class="calendar-filter-option"><input type="checkbox" data-calendar-source="personal" /><span class="calendar-filter-mark" aria-hidden="true"></span><span class="calendar-filter-copy"><b data-admin-i18n data-admin-ja="自分の期限" data-admin-en="My deadlines">自分の期限</b><small data-admin-i18n data-admin-ja="担当タスクの期限" data-admin-en="Assigned tasks">担当タスクの期限</small></span></label></fieldset>
+        <div class="calendar-agenda" data-calendar-agenda aria-live="polite"></div>
+      </section>
+      <section class="home-section">
+        <div class="section-heading">
+          <div><h2 data-admin-i18n data-admin-ja="自分の未完了タスク" data-admin-en="My open tasks">自分の未完了タスク</h2><small class="todo-section-note" data-todo-summary>読み込み中…</small></div>
+          <a href="/admin/member-tasks/" data-admin-i18n data-admin-ja="→" data-admin-en="→" aria-label="横断タスク管理を開く">→</a>
+        </div>
+        <div class="todo-list" data-todos aria-live="polite">読み込み中…</div>
+      </section>
+    </div>
+
+    <section class="available-projects" data-available-projects aria-labelledby="available-projects-heading" hidden>
+      <div class="section-heading">
+        <div>
+          <h2 id="available-projects-heading" data-admin-i18n data-admin-ja="未参加のプロジェクト" data-admin-en="Projects to join">未参加のプロジェクト</h2>
+          <p data-admin-i18n data-admin-ja="参加したいプロジェクトを選んで応募できます。" data-admin-en="Choose a project to learn more and apply.">参加したいプロジェクトを選んで応募できます。</p>
+        </div>
+      </div>
+      <div class="project-entry-cards" data-project-group="available"></div>
+    </section>
+
+    <footer class="portal-app-download" aria-label="macOSアプリ">
+      <strong>
+        <span data-admin-i18n data-admin-ja="Atlasez運営アプリ" data-admin-en="Atlasez Admin app">Atlasez運営アプリ</span>
+        <span class="portal-app-test-label" data-admin-i18n data-admin-ja="テスト機能" data-admin-en="Test feature">テスト機能</span>
+      </strong>
+      <a href="https://github.com/Atlasez/Admin-Atlesez/releases/latest/download/Atlasez-Admin.dmg" rel="noreferrer">
+        <span data-admin-i18n data-admin-ja="macOS版をダウンロード" data-admin-en="Download for macOS">macOS版をダウンロード</span>
+        <span aria-hidden="true">↓</span>
+      </a>
+    </footer>
+  </main>
+</AdminLayout>
+
+<style>
+  .portal { margin: 0 auto; max-width: 1200px; padding: 0 1.25rem 4rem; }
+  .welcome-entry { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .8rem; border-bottom: 1px solid var(--border-default); padding: 1rem 0; }
+  .welcome-entry strong { font-size: .85rem; }
+  .welcome-entry p { color: var(--text-secondary); font-size: .8rem; line-height: 1.6; margin: .25rem 0 0; }
+  .welcome-entry a { color: var(--accent-primary); font-size: .85rem; font-weight: 700; }
+  .my-intake { background: var(--background-secondary); border: 1px solid var(--border-default); border-left: 3px solid var(--accent-primary); margin: 1rem 0; padding: .85rem 1rem; }
+  .my-intake h2 { font-size: .95rem; margin: 0 0 .4rem; }
+  .my-intake p, .my-intake li { color: var(--text-secondary); font-size: .78rem; line-height: 1.55; }
+  .my-intake p { margin: .25rem 0; }
+  .my-intake ul { margin: .3rem 0 0; padding-left: 1.2rem; }
+  .my-intake a { color: var(--accent-primary); font-weight: 700; }
+  .portal-app-download { align-items: center; border-top: 1px solid var(--border-default); color: var(--text-primary); display: flex; gap: 1rem; justify-content: space-between; margin-top: 2rem; padding-top: 1rem; }
+  .portal-app-download strong { align-items: baseline; display: inline-flex; flex-wrap: wrap; font-size: .82rem; gap: .4rem; }
+  .portal-app-test-label { color: var(--danger); }
+  .portal-app-download a { align-items: center; border: 1px solid var(--border-default); color: var(--text-primary); display: inline-flex; flex: 0 0 auto; font-size: .75rem; font-weight: 700; gap: .65rem; padding: .55rem .7rem; text-decoration: none; }
+  .portal-app-download a:hover, .portal-app-download a:focus-visible { border-color: var(--accent-primary); color: var(--accent-primary); }
+  .portal > header { border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2.1rem 0 1.3rem; }
+  .portal h1 { font-size: clamp(2rem, 4vw, 2.7rem); letter-spacing: -.04em; margin: .25rem 0; }
+  .portal > header span, .portal small { color: var(--text-secondary); line-height: 1.6; }
+  .application-link { align-self: center; background: var(--accent-primary); color: #fff; font-size: .8rem; font-weight: 800; padding: .7rem .9rem; text-decoration: none; white-space: nowrap; }
+  .application-link:hover { filter: brightness(.94); transform: translateY(-1px); }
+  .portal-summary { align-items: stretch; background: var(--background-secondary); border: 1px solid var(--border-default); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 1rem 0 1.5rem; overflow: hidden; }
+  .portal-summary-item { background: transparent; border: 0; border-left: 1px solid var(--border-default); color: var(--text-primary); display: grid; gap: .22rem; min-width: 0; padding: .72rem .85rem; text-align: left; text-decoration: none; }
+  .portal-summary-item:first-child { border-left: 0; }
+  .portal-summary-item--action { cursor: pointer; font: inherit; }
+  .portal-summary-item--action:hover, .portal-summary-item--action:focus-visible { background: var(--background-inset); outline: 0; }
+  .portal-summary-label { color: var(--text-secondary); font-size: .7rem; font-weight: 800; line-height: 1.35; }
+  /* Linear風に、サマリーの数値は小さく鮮明な緑で統一する。
+     背景やラベルは無彩色のままにし、色の面積を増やさない。 */
+  .portal-summary-item strong { color: var(--task-count); font-size: 1.2rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .portal-summary-item small { color: var(--text-muted); font-size: .68rem; line-height: 1.35; min-height: 1.35em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .portal-summary-item[data-summary-state="attention"] strong,
+  .portal-summary-item[data-summary-state="success"] strong { color: var(--task-count); }
+  .project-entry { border: 1px solid var(--border-default); display: grid; gap: 1.25rem; margin: 1.5rem 0; padding: 1.25rem; }
+  .project-entry h2 { font-size: 1.2rem; margin: .25rem 0 .35rem; }
+  .project-entry-heading p { color: var(--text-secondary); font-size: .82rem; line-height: 1.6; margin: 0; }
+  .project-entry-groups { align-items: start; display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-group { min-width: 0; }
+  .project-group-heading { align-items: center; border-bottom: 1px solid var(--border-default); display: flex; gap: .7rem; justify-content: space-between; margin-bottom: .7rem; padding-bottom: .55rem; }
+  .project-group-heading h3 { font-size: .92rem; line-height: 1.4; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .project-group-heading span { color: var(--text-secondary); font-size: .72rem; }
+  .project-entry-cards { display: grid; gap: .65rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); min-width: 0; }
+  :global(.project-entry-card) { align-content: start; background: var(--background-secondary); border: 1px solid var(--border-default); border-top: 3px solid var(--accent-primary); box-sizing: border-box; color: var(--text-primary); display: grid; gap: .35rem; grid-template-rows: auto 1fr auto; min-height: 8.4rem; min-width: 0; overflow-wrap: anywhere; padding: 1rem; text-decoration: none; }
+  :global(.project-entry-card:hover), :global(.project-entry-card:focus-visible) { border-color: var(--accent-primary); border-left-color: var(--border-default); transform: translateY(-1px); }
+  :global(.project-entry-card strong), :global(.project-entry-card small) { min-width: 0; overflow-wrap: anywhere; }
+  :global(.project-entry-card strong) { font-size: .95rem; line-height: 1.45; }
+  :global(.project-entry-card small) { font-size: .76rem; line-height: 1.5; }
+  :global(.project-entry-card span) { align-self: end; color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: .25rem; }
+  :global(.project-empty) { color: var(--text-secondary); font-size: .82rem; margin: .35rem 0; }
+  .home-grid { align-items: start; display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .available-projects { border: 1px solid var(--border-default); margin-top: 1rem; padding: 1rem; }
+  .available-projects .section-heading { margin-bottom: .8rem; }
+  .available-projects .section-heading p { color: var(--text-secondary); font-size: .78rem; line-height: 1.5; margin: .3rem 0 0; }
+  .available-projects[hidden] { display: none; }
+  :global(.project-entry-card.is-available) { border-left-color: var(--border-default); border-top-color: var(--border-default); }
+  .home-section { border: 1px solid var(--border-default); border-radius: .7rem; min-width: 0; padding: 1rem; }
+  .calendar-section { min-width: 0; }
+  .section-heading { align-items: start; border-bottom: 1px solid var(--border-default); display: flex; gap: .7rem; justify-content: space-between; margin-bottom: .7rem; padding-bottom: .65rem; }
+  .section-heading h2 { font-size: 1.1rem; margin: .2rem 0 0; }
+  .section-heading a { color: var(--accent-primary); font-size: .75rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
+  .cards { display: grid; gap: .7rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+  .card, .todo { box-sizing: border-box; min-width: 0; overflow-wrap: anywhere; }
+  .card { align-content: start; background: var(--background-secondary); border: 1px solid var(--border-default); display: grid; gap: .42rem; min-height: 8.5rem; padding: .85rem; }
+  .card b, .card small, .card a { min-width: 0; overflow-wrap: anywhere; }
+  .card b { line-height: 1.4; }
+  .card small { color: var(--text-secondary); line-height: 1.5; }
+  .card a { align-self: end; color: var(--accent-primary); font-size: .82rem; font-weight: 800; margin-top: .2rem; text-decoration: none; }
+  .todo { border-left: 0; margin: .45rem 0; }
+  .todo-kind { border:1px solid var(--accent-primary); border-radius:999px; color:var(--accent-primary); display:inline-block; font-size:.7em; margin-right:.4rem; padding:.12rem .38rem; vertical-align:.12em; }
+  .empty { color: var(--text-secondary); font-size: .82rem; }
+  .calendar-toolbar { align-items: center; display: flex; gap: .8rem; justify-content: space-between; margin: .15rem 0 .7rem; }
+  .calendar-heading { display: grid; gap: .1rem; min-width: 0; text-align: right; }
+  .calendar-heading strong { font-size: 1rem; }
+  .calendar-heading small { color: var(--text-secondary); font-size: .68rem; }
+  .calendar-filters { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: .7rem; }
+  .calendar-filter-label { color: var(--text-secondary); font-size: .7rem; font-weight: 800; margin-right: .1rem; }
+  .calendar-filters label { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: 999px; box-sizing: border-box; color: var(--text-secondary); cursor: pointer; display: inline-flex; font-size: .72rem; gap: .3rem; line-height: 1.25; max-width: 100%; min-height: 1.9rem; padding: .28rem .55rem; }
+  .calendar-filters label span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .calendar-filters input { accent-color: var(--accent-primary); flex: 0 0 auto; margin: 0; }
+  .calendar-agenda { display: grid; gap: .75rem; grid-template-columns: 1fr; margin-bottom: .75rem; }
+  .calendar-agenda[hidden] { display: none; }
+  .calendar-agenda-section { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .55rem; min-width: 0; padding: .8rem; }
+  .calendar-agenda-section h3 { color: var(--text-primary); font-size: .78rem; margin: 0 0 .55rem; }
+  .calendar-agenda-list { display: grid; gap: .4rem; }
+  .calendar-agenda-item { align-items: start; background: var(--background-primary); border-left: 1px solid var(--border-default); border-radius: .35rem; color: var(--text-primary); display: grid; gap: .6rem; grid-template-columns: 3.8rem minmax(0, 1fr); padding: .55rem .6rem; text-decoration: none; }
+  .calendar-agenda-item.is-personal { border-left-color: #a66a00; }
+  .calendar-agenda-item:hover { box-shadow: 0 2px 8px rgb(24 32 39 / .1); transform: translateY(-1px); }
+  .calendar-agenda-time { color: var(--accent-primary); font-size: .72rem; font-variant-numeric: tabular-nums; font-weight: 800; }
+  .calendar-agenda-item.is-personal .calendar-agenda-time { color: #a66a00; }
+  .calendar-agenda-copy { display: grid; gap: .12rem; min-width: 0; }
+  .calendar-agenda-copy b { font-size: .78rem; line-height: 1.4; overflow-wrap: anywhere; }
+  .calendar-agenda-copy small { color: var(--text-secondary); font-size: .67rem; line-height: 1.4; overflow-wrap: anywhere; }
+  .calendar-agenda-empty { color: var(--text-secondary); font-size: .75rem; margin: 0; }
+  @media (max-width: 800px) {
+    .portal { padding: 0 .8rem 3rem; }
+    .portal-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .portal-summary-item:nth-child(3) { border-left: 0; border-top: 1px solid var(--border-default); }
+    .portal-summary-item:nth-child(n + 4) { border-top: 1px solid var(--border-default); }
+    .project-entry { padding: .9rem; }
+    .project-entry-groups { grid-template-columns: 1fr; }
+    .project-entry-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
+    .home-grid { grid-template-columns: 1fr; }
+    .available-projects { padding: .9rem; }
+  }
+  @media (max-width: 520px) {
+    .portal-app-download { align-items: flex-start; flex-direction: column; }
+    .portal > header { align-items: start; flex-direction: column; }
+    .application-link { align-self: stretch; text-align: center; }
+  }
+  @media (max-width: 520px) {
+    .project-entry-cards { grid-template-columns: 1fr; }
+    .calendar-toolbar { align-items: flex-start; flex-wrap: wrap; }
+    .calendar-heading { order: -1; text-align: left; width: calc(100% - 1rem); }
+    .calendar-agenda { grid-template-columns: 1fr; }
+    .calendar-filter-label { flex-basis: 100%; }
+  }
+</style>
+<style is:global>
+  /* Dynamically-rendered tasks need explicit global rules: unlike static Astro markup,
+     innerHTML nodes do not receive the page's scope attribute. */
+  .portal .todo-list {
+    display: grid;
+    gap: .65rem;
+  }
+  .portal .todo-section-note {
+    color: var(--text-secondary);
+    display: block;
+    font-size: .72rem;
+    line-height: 1.4;
+    margin-top: .18rem;
+  }
+  .portal .todo-card {
+    align-items: stretch;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-left: 1px solid var(--border-default);
+    border-radius: .55rem;
+    color: var(--text-primary);
+    display: grid;
+    gap: .7rem;
+    grid-template-columns: 2.05rem minmax(0, 1fr) auto;
+    min-width: 0;
+    padding: .8rem .75rem;
+    text-decoration: none;
+    transition: background .14s ease, border-color .14s ease, transform .14s ease;
+  }
+  .portal .todo-card:hover,
+  .portal .todo-card:focus-visible {
+    background: var(--background-inset);
+    border-color: var(--accent-primary);
+    border-left-color: var(--border-default);
+    transform: translateY(-1px);
+  }
+  .portal .todo-card.status-doing,
+  .portal .todo-card.status-done { border-left-color: var(--border-default); }
+  .portal .todo-icon {
+    align-items: center;
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 38%, var(--border-default));
+    border-radius: .45rem;
+    color: var(--accent-primary);
+    display: inline-flex;
+    font-size: .9rem;
+    font-weight: 900;
+    height: 2rem;
+    justify-content: center;
+    line-height: 1;
+    width: 2rem;
+  }
+  .portal .status-doing .todo-icon { background: color-mix(in srgb, #d4861f 14%, transparent); border-color: color-mix(in srgb, #d4861f 40%, var(--border-default)); color: #d4861f; }
+  .portal .status-done .todo-icon { background: color-mix(in srgb, var(--success) 14%, transparent); border-color: color-mix(in srgb, var(--success) 40%, var(--border-default)); color: var(--success); }
+  .portal .todo-card-body {
+    display: grid;
+    gap: .22rem;
+    min-width: 0;
+  }
+  .portal .todo-card-top {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+  }
+  .portal .todo-kind,
+  .portal .todo-status {
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: .67rem;
+    line-height: 1.2;
+    padding: .18rem .42rem;
+  }
+  .portal .todo-kind { color: var(--text-secondary); }
+  .portal .todo-status { background: color-mix(in srgb, var(--accent-primary) 10%, transparent); border-color: color-mix(in srgb, var(--accent-primary) 34%, var(--border-default)); color: var(--accent-primary); font-weight: 800; }
+  .portal .status-doing .todo-status { background: color-mix(in srgb, #d4861f 10%, transparent); border-color: color-mix(in srgb, #d4861f 34%, var(--border-default)); color: #b56b10; }
+  .portal .status-done .todo-status { background: color-mix(in srgb, var(--success) 10%, transparent); border-color: color-mix(in srgb, var(--success) 34%, var(--border-default)); color: var(--success); }
+  .portal .todo-card strong { font-size: .9rem; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+  .portal .todo-context,
+  .portal .todo-details,
+  .portal .todo-deadline { color: var(--text-secondary); font-size: .74rem; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+  .portal .todo-details { color: var(--text-muted); }
+  .portal .todo-deadline { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .portal .todo-arrow { align-self: center; color: var(--accent-primary); font-size: 1rem; font-weight: 800; padding-inline: .15rem; }
+  .portal .todo-empty {
+    align-items: center;
+    background: var(--background-secondary);
+    border: 1px dashed var(--border-default);
+    border-radius: .55rem;
+    display: grid;
+    gap: .35rem;
+    justify-items: center;
+    padding: 1.1rem .8rem;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .portal .todo-empty::before {
+    align-items: center;
+    background: color-mix(in srgb, var(--success) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--success) 35%, var(--border-default));
+    border-radius: 50%;
+    color: var(--success);
+    display: inline-flex;
+    font-weight: 900;
+    height: 1.9rem;
+    justify-content: center;
+    content: "✓";
+    width: 1.9rem;
+  }
+  .portal .todo-empty p { color: var(--text-secondary); font-size: .78rem; margin: 0; }
+  @media (max-width: 560px) {
+    .portal .todo-card { grid-template-columns: 2rem minmax(0, 1fr) auto; padding: .7rem .65rem; }
+    .portal .todo-card strong { font-size: .84rem; }
+  }
+</style>
+<style is:global>
+  /* JR東日本の検索・運行情報のように、日付・件数・表示対象を段階的に見せる。 */
+  .portal .calendar-section { overflow: hidden; }
+  .portal .calendar-toolbar {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: .55rem;
+    margin: .15rem 0 .7rem;
+    padding: .7rem .8rem;
+  }
+  .portal .calendar-heading { text-align: left; }
+  .portal .calendar-heading strong { font-size: 1.02rem; }
+  .portal .calendar-heading small { color: var(--text-secondary); font-size: .7rem; }
+  .portal .calendar-filters {
+    border: 0;
+    display: grid;
+    gap: .5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0 0 .8rem;
+    min-inline-size: 0;
+    padding: 0;
+  }
+  .portal .calendar-filters legend {
+    color: var(--text-secondary);
+    font-size: .7rem;
+    font-weight: 800;
+    grid-column: 1 / -1;
+    margin-bottom: -.05rem;
+    padding: 0;
+  }
+  .portal .calendar-filter-option {
+    align-items: center;
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: .45rem;
+    box-sizing: border-box;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: grid;
+    gap: .5rem;
+    grid-template-columns: 1.05rem minmax(0, 1fr);
+    min-height: 3.2rem;
+    padding: .5rem .6rem;
+    position: relative;
+    transition: background .14s ease, border-color .14s ease, color .14s ease;
+  }
+  .portal .calendar-filter-option:hover,
+  .portal .calendar-filter-option:has(input:focus-visible) {
+    border-color: var(--accent-primary);
+  }
+  .portal .calendar-filter-option:has(input:checked) {
+    background: color-mix(in srgb, var(--accent-primary) 9%, var(--background-primary));
+    border-color: color-mix(in srgb, var(--accent-primary) 65%, var(--border-default));
+    color: var(--text-primary);
+  }
+  .portal .calendar-filter-option input {
+    block-size: 100%;
+    clip: auto;
+    clip-path: none;
+    cursor: pointer;
+    inline-size: 100%;
+    inset: 0;
+    opacity: 0;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    z-index: 1;
+  }
+  .portal .calendar-filter-mark {
+    align-items: center;
+    border: 1px solid var(--border-strong);
+    border-radius: .25rem;
+    display: inline-flex;
+    height: 1rem;
+    justify-content: center;
+    pointer-events: none;
+    width: 1rem;
+  }
+  .portal .calendar-filter-option:has(input:checked) .calendar-filter-mark {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: var(--on-accent);
+  }
+  .portal .calendar-filter-option:has(input:checked) .calendar-filter-mark::after {
+    content: "✓";
+    font-size: .68rem;
+    font-weight: 900;
+    line-height: 1;
+  }
+  .portal .calendar-filter-copy { display: grid; gap: .08rem; min-width: 0; }
+  .portal .calendar-filter-copy b { font-size: .74rem; line-height: 1.35; overflow-wrap: anywhere; }
+  .portal .calendar-filter-copy small { color: var(--text-muted); font-size: .65rem; line-height: 1.3; overflow-wrap: anywhere; }
+  .portal .calendar-agenda-section {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: .55rem;
+    padding: .75rem;
+  }
+  .portal .calendar-agenda-heading {
+    align-items: center;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    gap: .5rem;
+    justify-content: space-between;
+    margin-bottom: .55rem;
+    padding-bottom: .5rem;
+  }
+  .portal .calendar-agenda-heading h3 { margin: 0; }
+  .portal .calendar-agenda-heading > span {
+    color: var(--text-secondary);
+    font-size: .68rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .portal .calendar-agenda-list { display: grid; gap: .45rem; }
+  .portal .calendar-agenda-item {
+    align-items: start;
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-left: 1px solid var(--border-default);
+    border-radius: .4rem;
+    display: grid;
+    gap: .6rem;
+    grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+    padding: .6rem .65rem;
+    transition: background .14s ease, border-color .14s ease, transform .14s ease;
+  }
+  .portal .calendar-agenda-item.is-personal { border-left-color: var(--border-default); }
+  .portal .calendar-agenda-item:hover,
+  .portal .calendar-agenda-item:focus-visible { background: var(--background-inset); border-color: var(--accent-primary); border-left-color: var(--border-default); box-shadow: none; transform: translateY(-1px); }
+  .portal .calendar-agenda-time,
+  .portal .calendar-agenda-item.is-personal .calendar-agenda-time { color: var(--accent-primary); font-size: .74rem; padding-top: .08rem; }
+  .portal .calendar-agenda-copy { display: grid; gap: .2rem; min-width: 0; }
+  .portal .calendar-agenda-top { align-items: baseline; display: flex; flex-wrap: wrap; gap: .45rem; min-width: 0; }
+  .portal .calendar-agenda-copy b { font-size: .78rem; }
+  .portal .calendar-agenda-copy em {
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 40%, var(--border-default));
+    border-radius: .25rem;
+    color: var(--accent-primary);
+    font-size: .61rem;
+    font-style: normal;
+    line-height: 1.2;
+    padding: .12rem .3rem;
+    white-space: nowrap;
+  }
+  .portal .calendar-agenda-copy small { font-size: .67rem; }
+  .portal .calendar-agenda-arrow { align-self: center; color: var(--accent-primary); font-size: .95rem; font-weight: 800; }
+  .portal .calendar-agenda-empty {
+    background: var(--background-primary);
+    border: 1px dashed var(--border-default);
+    border-radius: .4rem;
+    margin: 0;
+    padding: .85rem .7rem;
+    text-align: center;
+  }
+  @media (max-width: 560px) {
+    .portal .calendar-filters { grid-template-columns: 1fr; }
+    .portal .calendar-filter-option { min-height: 2.85rem; }
+    .portal .calendar-agenda-item { grid-template-columns: 3.1rem minmax(0, 1fr) auto; }
+  }
+</style>
+<style>
+  /* Preserve the portal's existing typography and palette; refine only spacing and grouping. */
+  .portal-xai > header { padding-block: 2.25rem 1.45rem; }
+  .portal-xai .portal-summary {
+    background: transparent;
+    border: 0;
+    gap: .7rem;
+    margin: 1rem 0 1.5rem;
+    overflow: visible;
+  }
+  .portal-xai .portal-summary-item {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: .6rem;
+    padding: .8rem .85rem;
+    transition: background .14s ease, border-color .14s ease, transform .14s ease;
+  }
+  .portal-xai .portal-summary-item:first-child { border-left: 1px solid var(--border-default); }
+  .portal-xai .portal-summary-item--action:hover,
+  .portal-xai .portal-summary-item--action:focus-visible {
+    border-color: var(--accent-primary);
+    transform: translateY(-1px);
+  }
+  .portal-xai .project-entry { border-radius: .65rem; padding: 1.35rem; }
+  .portal-xai .project-entry-cards :global(.project-entry-card) { border-radius: .55rem; }
+  .portal-xai .home-section,
+  .portal-xai .available-projects { border-radius: .65rem; }
+  .portal-xai .application-link,
+  .portal-xai .portal-app-download a { border-radius: 999px; }
+</style>
+<style is:global>
+  body:has(.portal-xai) .admin-breadcrumbs[hidden] { display: none !important; }
+</style>
+<script>
+  import { createAdminLoadRetry } from '../../scripts/admin-load-retry';
+  import { taskDeadlineEpoch } from '../../lib/admin-deadline-summary';
+  import { portalUnreadSummary } from '../../lib/admin-notification-features';
+  import { formatTaskDeadline } from '../../lib/task-deadline';
+  type PortalProject = { id: string; slug?: string; name: string; description?: string | null; role?: string };
+  type PortalTodo = { id?: string; project_id: string; project_name?: string; subject?: string | null; task_kind?: string; title: string; details?: string | null; status: string; due_at?: string | null; due_timezone?: string | null };
+  type PortalCalendarEvent = { id: string; kind: 'organization' | 'personal'; title: string; details?: string | null; startsAt: string; endsAt?: string | null; timezone: string; projectName: string };
+  type PortalNotification = { kind?: string; read?: boolean };
+  type PortalData = { projects?: PortalProject[]; availableProjects?: PortalProject[]; todos?: PortalTodo[]; taskSummary?: { openCount?: number; dueToday?: number; dueSoon?: number }; calendar?: { rangeStart?: string; rangeEnd?: string; events?: PortalCalendarEvent[] }; notifications?: PortalNotification[]; notificationsTruncated?: boolean; notificationsUnavailable?: boolean; unreadNotificationsCount?: number | null; pendingApprovals?: number; error?: string };
+  const initializePortal = () => {
+    const root = document.querySelector<HTMLElement>('[data-portal]');
+    if (!root || root.dataset.initialized === 'true') return;
+    root.dataset.initialized = 'true';
+    const calendarAgenda = root.querySelector<HTMLElement>('[data-calendar-agenda]')!;
+    const calendarTitle = root.querySelector<HTMLElement>('[data-calendar-title]')!;
+    const calendarRange = root.querySelector<HTMLElement>('[data-calendar-range]')!;
+    const timezoneNote = root.querySelector<HTMLElement>('[data-calendar-timezone-note]')!;
+    const todosView = root.querySelector<HTMLElement>('[data-todos]')!;
+    const todoSummary = root.querySelector<HTMLElement>('[data-todo-summary]')!;
+    const myIntakeSection = root.querySelector<HTMLElement>('[data-my-intake]')!;
+    const myIntakeSummary = root.querySelector<HTMLElement>('[data-my-intake-summary]')!;
+    const myIntakeEntries = root.querySelector<HTMLElement>('[data-my-intake-entries]')!;
+    const myIntakeRetry = root.querySelector<HTMLButtonElement>('[data-my-intake-retry]')!;
+    const summary = root.querySelector<HTMLElement>('[data-portal-summary]')!;
+    const portalError = root.querySelector<HTMLElement>('[data-portal-error]')!;
+    const portalErrorMessage = root.querySelector<HTMLElement>('[data-portal-error-message]')!;
+    const portalRetry = root.querySelector<HTMLButtonElement>('[data-portal-retry]')!;
+    const managedProjectsView = root.querySelector<HTMLElement>('[data-project-group="managed"]')!;
+    const memberProjectsView = root.querySelector<HTMLElement>('[data-project-group="member"]')!;
+    const availableProjectsView = root.querySelector<HTMLElement>('[data-project-group="available"]')!;
+    const availableProjectsSection = root.querySelector<HTMLElement>('[data-available-projects]')!;
+    const managedProjectCount = root.querySelector<HTMLElement>('[data-project-count="managed"]')!;
+    const memberProjectCount = root.querySelector<HTMLElement>('[data-project-count="member"]')!;
+    const sourceInputs = [...root.querySelectorAll<HTMLInputElement>('[data-calendar-source]')];
+    const lifecycle = new AbortController();
+    let retry: ReturnType<typeof createAdminLoadRetry> | null = null;
+    document.addEventListener('astro:before-swap', () => lifecycle.abort(), { once: true, signal: lifecycle.signal });
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
+    type MyIntakeEntry = { project_name:string; contact_status:string; responsible_name?:string; consultation_name?:string; first_task_id?:string|null; first_task_title?:string; first_task_type?:string; first_task_status?:string|null; follow_up_at?:string|null; follow_up_completed_at?:string|null };
+    const renderMyIntake = (entries: MyIntakeEntry[]) => {
+      myIntakeRetry.hidden = true;
+      myIntakeSection.hidden = entries.length === 0;
+      if (!entries.length) return;
+      myIntakeSummary.textContent = '運営と共有している連絡・初回タスク・次回フォローの記録です。';
+      myIntakeEntries.innerHTML = entries.map((entry) => {
+        const task = entry.first_task_title ? `<li>${entry.first_task_type === 'operator' ? '参加前の運営準備' : '初回の小さなタスク'}：${escapeHtml(entry.first_task_title)}${entry.first_task_id && entry.first_task_type !== 'operator' ? ` <a href="/admin/task-detail/?task=${encodeURIComponent(entry.first_task_id)}">タスクを開く →</a>` : ''}</li>` : '';
+        const followup = entry.follow_up_completed_at ? `次回フォロー：完了（${escapeHtml(formatDate(entry.follow_up_completed_at))}）` : entry.follow_up_at ? `次回フォロー：${escapeHtml(formatDate(entry.follow_up_at))}` : '次回フォロー：未設定';
+        const contact = entry.contact_status === 'replied' ? '返信あり' : entry.contact_status === 'contacted' ? '連絡済み' : '連絡前';
+        return `<article><strong>${escapeHtml(entry.project_name)}</strong><ul><li>連絡状況：${contact}</li><li>担当運営者：${escapeHtml(entry.responsible_name || '未設定')}</li><li>相談先：${escapeHtml(entry.consultation_name || '未設定')}</li><li>${followup}</li>${task}</ul></article>`;
+      }).join('');
+    };
+    type PortalLanguage = 'ja' | 'en';
+    const getLanguage = (): PortalLanguage => {
+      try {
+        const preferences = JSON.parse(localStorage.getItem('atlasez-prefs') ?? '{}') as { lang?: string };
+        if (preferences.lang === 'eng' || preferences.lang === 'en') return 'en';
+      } catch { /* fall back to the legacy language key */ }
+      return localStorage.getItem('atlasez-admin-language') === 'en' ? 'en' : 'ja';
+    };
+    const copy = {
+      ja: { noTodos: '未完了のタスクはありません。', open: '未着手', doing: '進行中', done: '完了', feedback: 'フィードバック依頼', task: 'タスク依頼', openCount: (count: number) => `${count}件を確認`, today: '今日の予定', noTodayEvents: '今日の予定はありません。', personal: '自分の期限', organization: '同時作業会・交流会', timezone: '表示タイムゾーン' },
+      en: { noTodos: 'There are no open tasks.', open: 'Open', doing: 'In progress', done: 'Done', feedback: 'Feedback request', task: 'Task request', openCount: (count: number) => `${count} to review`, today: "Today's schedule", noTodayEvents: 'There are no events today.', personal: 'My deadline', organization: 'Co-working & social event', timezone: 'Time zone' },
+    } as const;
+    let portalData: PortalData | null = null;
+    const timezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tokyo';
+    const dateParts = (value: Date | string, options: Intl.DateTimeFormatOptions = {}) => {
+      try {
+        const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone(), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', ...options }).formatToParts(new Date(value));
+        return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+      } catch { return {}; }
+    };
+    const dateKey = (value: string) => { const parts = dateParts(value); return `${parts.year ?? ''}-${parts.month ?? ''}-${parts.day ?? ''}`; };
+    const formatDate = (value: string) => new Intl.DateTimeFormat(getLanguage() === 'ja' ? 'ja-JP' : 'en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: timezone() }).format(new Date(value));
+    const eventDateKeys = (event: PortalCalendarEvent) => {
+      const start = new Date(event.startsAt);
+      const end = new Date(event.endsAt || event.startsAt);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [dateKey(event.startsAt)];
+      const startKey = dateKey(start.toISOString());
+      const endKey = dateKey(end.toISOString());
+      const [startYear, startMonth, startDay] = startKey.split('-').map(Number);
+      const [endYear, endMonth, endDay] = endKey.split('-').map(Number);
+      const cursor = new Date(Date.UTC(startYear, startMonth - 1, startDay));
+      const finish = new Date(Date.UTC(endYear, endMonth - 1, endDay));
+      const keys: string[] = [];
+      for (let index = 0; cursor <= finish && index < 62; index += 1) {
+        keys.push(cursor.toISOString().slice(0, 10));
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+      return keys;
+    };
+    const enabledKinds = () => new Set(sourceInputs.filter((input) => input.checked).map((input) => input.dataset.calendarSource));
+    const visibleEvents = () => (portalData?.calendar?.events ?? []).filter((event) => enabledKinds().has(event.kind));
+    const eventSort = (left: PortalCalendarEvent, right: PortalCalendarEvent) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime();
+    const eventCard = (event: PortalCalendarEvent, language: PortalLanguage) => {
+      const parts = dateParts(event.startsAt);
+      const time = parts.hour && parts.minute ? `${parts.hour}:${parts.minute}` : '—';
+      const kind = event.kind === 'personal' ? copy[language].personal : copy[language].organization;
+      const href = event.kind === 'organization' ? '/admin/member-calendar/' : '/admin/member-tasks/';
+      return `<a class="calendar-agenda-item${event.kind === 'personal' ? ' is-personal' : ''}" href="${href}"><span class="calendar-agenda-time">${escapeHtml(time)}</span><span class="calendar-agenda-copy"><span class="calendar-agenda-top"><b>${escapeHtml(event.title)}</b><em>${escapeHtml(kind)}</em></span><small>${escapeHtml(event.projectName)} ・ ${escapeHtml(formatDate(event.startsAt))}</small></span><span class="calendar-agenda-arrow" aria-hidden="true">→</span></a>`;
+    };
+    const renderAgenda = (events: PortalCalendarEvent[], language: PortalLanguage) => {
+      const today = dateKey(new Date().toISOString());
+      const todayEvents = events.filter((event) => eventDateKeys(event).includes(today)).sort(eventSort);
+      calendarTitle.textContent = new Intl.DateTimeFormat(language === 'ja' ? 'ja-JP' : 'en-US', { dateStyle: 'full', timeZone: timezone() }).format(new Date());
+      calendarRange.textContent = `${todayEvents.length}${language === 'ja' ? '件' : ' events'}`;
+      calendarAgenda.innerHTML = `<section class="calendar-agenda-section"><div class="calendar-agenda-heading"><h3>${copy[language].today}</h3><span>${todayEvents.length}${language === 'ja' ? '件' : ' events'}</span></div><div class="calendar-agenda-list">${todayEvents.length ? todayEvents.map((event) => eventCard(event, language)).join('') : `<p class="calendar-agenda-empty">${copy[language].noTodayEvents}</p>`}</div></section>`;
+      calendarAgenda.hidden = false;
+    };
+    const renderCalendar = () => {
+      const language = getLanguage();
+      const events = visibleEvents();
+      timezoneNote.textContent = `${copy[language].timezone}: ${timezone()}`;
+      renderAgenda(events, language);
+    };
+    const projectHref = (project: PortalProject) => {
+      const slug = project.slug ?? project.id;
+      if (slug === 'atlas') return '/admin/atlas/';
+      if (slug === 'secretariat') return '/admin/secretariat/';
+      if (slug === 'seminar-platform' || slug === 'semi-platform') return '/admin/semi-platform/';
+      if (slug === 'student-council-exchange') return '/admin/student-council/';
+      if (slug === 'thinking-cafe') return '/admin/thinking-cafe/';
+      return `/admin/workspace/?project=${encodeURIComponent(project.id)}`;
+    };
+    const projectCard = (project: PortalProject, available = false) => {
+      const href = available ? `/apply/?project=${encodeURIComponent(project.slug ?? project.id)}` : projectHref(project);
+      const action = available ? (getLanguage() === 'ja' ? '参加を申し込む →' : 'Apply to join →') : '→';
+      return `<a class="project-entry-card${available ? ' is-available' : ''}" href="${href}"><strong>${escapeHtml(project.name)}</strong>${project.description ? `<small>${escapeHtml(project.description)}</small>` : ''}<span>${escapeHtml(action)}</span></a>`;
+    };
+    const renderProjectGroup = (container: HTMLElement, count: HTMLElement, projects: PortalProject[], language: PortalLanguage) => {
+      count.textContent = `${projects.length}${language === 'ja' ? '件' : projects.length === 1 ? ' project' : ' projects'}`;
+      container.classList.remove('loading-state');
+      container.innerHTML = projects.length ? projects.map((project) => projectCard(project)).join('') : `<p class="project-empty">${language === 'ja' ? '該当するプロジェクトはありません。' : 'No projects in this group.'}</p>`;
+    };
+    const renderProjects = (data: PortalData) => {
+      const language = getLanguage();
+      const projects = data.projects ?? [];
+      renderProjectGroup(managedProjectsView, managedProjectCount, projects.filter((project) => project.role === 'manager'), language);
+      renderProjectGroup(memberProjectsView, memberProjectCount, projects.filter((project) => project.role !== 'manager'), language);
+      const available = data.availableProjects ?? [];
+      availableProjectsSection.hidden = available.length === 0;
+      availableProjectsView.innerHTML = available.map((project) => projectCard(project, true)).join('');
+    };
+    const renderTodos = (data: PortalData) => {
+      const language = getLanguage();
+      const todos = data.todos ?? [];
+      todosView.classList.remove('loading-state');
+      const openCount = Number(data.taskSummary?.openCount);
+      todoSummary.textContent = copy[language].openCount(Number.isFinite(openCount) ? Math.max(0, Math.trunc(openCount)) : todos.length);
+      if (!todos.length) {
+        todosView.innerHTML = `<div class="todo-empty"><p>${copy[language].noTodos}</p></div>`;
+        return;
+      }
+      const statusLabel = (status: string) => status === 'done' ? copy[language].done : status === 'doing' ? copy[language].doing : copy[language].open;
+      todosView.innerHTML = todos.map((todo) => {
+        const kind = todo.task_kind === 'feedback' ? copy[language].feedback : copy[language].task;
+        const status = todo.status === 'done' ? 'done' : todo.status === 'doing' ? 'doing' : 'open';
+        const context = [todo.project_name ?? todo.project_id, todo.subject].filter(Boolean).join(' / ');
+        const icon = todo.task_kind === 'feedback' ? '↗' : '✓';
+        const due = todo.due_at ? formatTaskDeadline(todo.due_at, todo.due_timezone || 'Asia/Tokyo') : '';
+        const href = todo.id ? `/admin/task-detail/?task=${encodeURIComponent(todo.id)}` : '/admin/member-tasks/';
+        return `<a class="todo todo-card status-${status}" href="${escapeHtml(href)}" aria-label="${escapeHtml(todo.title)}をタスク管理で開く"><span class="todo-icon" aria-hidden="true">${icon}</span><span class="todo-card-body"><span class="todo-card-top"><span class="todo-kind">${escapeHtml(kind)}</span><span class="todo-status">${escapeHtml(statusLabel(todo.status))}</span></span><strong>${escapeHtml(todo.title)}</strong>${context ? `<span class="todo-context">${escapeHtml(context)}</span>` : ''}${todo.details ? `<span class="todo-details">${escapeHtml(todo.details)}</span>` : ''}${due ? `<span class="todo-deadline">${language === 'ja' ? '期限' : 'Due'}: ${escapeHtml(due)}</span>` : ''}</span><span class="todo-arrow" aria-hidden="true">→</span></a>`;
+      }).join('');
+    };
+    const setSummary = (key: string, value: string | number, detail: string, state?: 'attention' | 'success') => {
+      const item = summary.querySelector<HTMLElement>(`[data-summary-value="${key}"]`)?.closest<HTMLElement>('.portal-summary-item');
+      const valueView = summary.querySelector<HTMLElement>(`[data-summary-value="${key}"]`);
+      const detailView = summary.querySelector<HTMLElement>(`[data-summary-detail="${key}"]`);
+      if (valueView) valueView.textContent = String(value);
+      if (detailView) detailView.textContent = detail;
+      if (item) {
+        if (state) item.dataset.summaryState = state;
+        else delete item.dataset.summaryState;
+      }
+    };
+    const renderSummary = (data: PortalData) => {
+      const now = Date.now();
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+      const dueDates = (data.todos ?? []).map((todo) => ({ todo, time: todo.due_at ? taskDeadlineEpoch(todo.due_at, todo.due_timezone || 'Asia/Tokyo') : NaN })).filter((item) => Number.isFinite(item.time));
+      const serverDueToday = Number(data.taskSummary?.dueToday);
+      const serverDueSoon = Number(data.taskSummary?.dueSoon);
+      const dueToday = Number.isFinite(serverDueToday) ? Math.max(0, Math.trunc(serverDueToday)) : dueDates.filter((item) => item.time <= todayEnd.getTime() && item.todo.status !== 'done').length;
+      const dueSoon = Number.isFinite(serverDueSoon) ? Math.max(0, Math.trunc(serverDueSoon)) : dueDates.filter((item) => item.time > todayEnd.getTime() && item.time <= now + 7 * 24 * 60 * 60 * 1000 && item.todo.status !== 'done').length;
+      setSummary('today', dueToday, dueToday ? `${dueToday}件の期限を確認` : '期限のあるタスクはありません', dueToday ? 'attention' : 'success');
+      setSummary('due-soon', dueSoon, dueSoon ? '7日以内に期限' : '7日以内の期限はありません', dueSoon ? 'attention' : 'success');
+      const unreadSummary = portalUnreadSummary({
+        unreadNotificationsCount: data.unreadNotificationsCount,
+        notifications: data.notifications ?? [],
+        notificationsTruncated: data.notificationsTruncated === true,
+        notificationsUnavailable: data.notificationsUnavailable === true,
+      });
+      // 承認待ちは通知の残存数ではなく、承認ページと同じ pending 状態の申請数を使う。
+      // 通知は既読・処理済みになっても履歴として残るため、ここで数えると実態とずれる。
+      const approvalCount = Number(data.pendingApprovals ?? 0);
+      const approvals = Number.isFinite(approvalCount) ? Math.max(0, Math.trunc(approvalCount)) : 0;
+      setSummary('unread', unreadSummary.value, unreadSummary.detail, unreadSummary.state);
+      setSummary('approvals', approvals, approvals ? '確認が必要な項目' : '承認待ちはありません', approvals ? 'attention' : 'success');
+      const next = (data.calendar?.events ?? []).filter((event) => Number.isFinite(Date.parse(event.startsAt)) && Date.parse(event.startsAt) >= now).sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt))[0];
+      if (next) {
+        const parts = dateParts(next.startsAt);
+        setSummary('next', parts.hour && parts.minute ? `${parts.hour}:${parts.minute}` : '予定', next.title);
+      } else {
+        setSummary('next', '—', '予定はありません');
+      }
+    };
+    const renderPortal = (data: PortalData) => { renderProjects(data); renderCalendar(); renderTodos(data); renderSummary(data); };
+    sourceInputs.forEach((input) => input.addEventListener('change', renderCalendar, { signal: lifecycle.signal }));
+    summary.querySelector<HTMLButtonElement>('[data-summary-notifications]')?.addEventListener('click', () => {
+      const notificationButton = document.querySelector<HTMLButtonElement>('[data-admin-notifications]');
+      notificationButton?.click();
+    }, { signal: lifecycle.signal });
+    window.addEventListener('atlasez-lang-change', () => { if (portalData) renderPortal(portalData); }, { signal: lifecycle.signal });
+    const setLoadingState = () => {
+      portalError.hidden = true;
+      portalRetry.disabled = false;
+      portalRetry.textContent = '再試行';
+      managedProjectsView.classList.add('loading-state');
+      memberProjectsView.classList.add('loading-state');
+      managedProjectsView.innerHTML = '<p class="loading-state">読み込み中…</p>';
+      memberProjectsView.innerHTML = '<p class="loading-state">読み込み中…</p>';
+      availableProjectsSection.hidden = true;
+      calendarAgenda.hidden = false;
+      calendarAgenda.innerHTML = '<p class="loading-state">読み込み中…</p>';
+      todosView.classList.add('loading-state');
+      todosView.innerHTML = '<p class="loading-state">読み込み中…</p>';
+    };
+    const setLoadError = (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Homeを読み込めませんでした。';
+      portalErrorMessage.textContent = message;
+      portalError.hidden = false;
+      portalRetry.disabled = false;
+      portalRetry.textContent = '再試行';
+      managedProjectsView.classList.remove('loading-state');
+      memberProjectsView.classList.remove('loading-state');
+      managedProjectsView.innerHTML = '<p class="project-empty">データを読み込めませんでした。</p>';
+      memberProjectsView.innerHTML = '<p class="project-empty">データを読み込めませんでした。</p>';
+      availableProjectsSection.hidden = true;
+      calendarAgenda.hidden = false;
+      calendarAgenda.innerHTML = '<p class="calendar-agenda-empty">データを読み込めませんでした。</p>';
+      todosView.classList.remove('loading-state');
+      todosView.innerHTML = '<p class="empty">データを読み込めませんでした。</p>';
+    };
+    const loadMyIntake = async () => {
+      myIntakeRetry.disabled = true;
+      try {
+        const ownResponse = await fetch('/api/admin/my-intake', { credentials: 'same-origin', cache: 'no-store', signal: lifecycle.signal });
+        const ownData = ownResponse.headers.get('content-type')?.includes('application/json')
+          ? await ownResponse.json() as { entries?: MyIntakeEntry[] } : null;
+        if (!ownResponse.ok || !Array.isArray(ownData?.entries)) throw new Error('案内情報を読み込めませんでした。');
+        if (!lifecycle.signal.aborted) renderMyIntake(ownData.entries);
+      } catch {
+        if (!lifecycle.signal.aborted) {
+          myIntakeSection.hidden = false;
+          myIntakeSummary.textContent = '参加後フォローを読み込めませんでした。再読み込みしてください。';
+          myIntakeEntries.replaceChildren();
+          myIntakeRetry.hidden = false;
+        }
+      } finally { if (!lifecycle.signal.aborted) myIntakeRetry.disabled = false; }
+    };
+    myIntakeRetry.addEventListener('click', () => void loadMyIntake());
+    const loadPortal = async () => {
+      if (lifecycle.signal.aborted) return;
+      retry?.begin();
+      setLoadingState();
+      portalRetry.disabled = true;
+      portalRetry.textContent = '再試行中…';
+      try {
+        const params = new URLSearchParams({ timezone: timezone() });
+        const data = await fetch(`/api/admin/portal?${params.toString()}`, { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
+          const contentType = response.headers.get('content-type') ?? '';
+          const data = contentType.includes('application/json') ? await response.json() as PortalData : null;
+          if (!response.ok || !data) throw new Error(data?.error ?? '認証情報を確認できませんでした。');
+          return data;
+        });
+        if (lifecycle.signal.aborted) return;
+        portalData = data;
+        renderPortal(portalData);
+        await loadMyIntake();
+        portalError.hidden = true;
+        retry?.success();
+      } catch (error) {
+        if (!lifecycle.signal.aborted) {
+          setLoadError(error);
+          retry?.fail(error);
+        }
+      } finally {
+        if (!lifecycle.signal.aborted) {
+          portalRetry.disabled = false;
+          portalRetry.textContent = '再試行';
+        }
+      }
+    };
+    retry = createAdminLoadRetry(root, () => loadPortal(), 'ポータル情報を読み込めませんでした。');
+    void loadPortal();
+  };
+  document.addEventListener('astro:page-load', initializePortal);
+  initializePortal();
+</script>

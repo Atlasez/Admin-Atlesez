@@ -1,5 +1,7 @@
 # Cloudflare stale build incident
 
+> **履歴記録（2026-08-27）:** 事象と当時の再発防止案の記録です。現在のWorker/Version、Build接続状況、配信手順は[ADMIN本番デプロイ運用方針](../ADMIN_DEPLOYMENT_POLICY.md)、[2026-10-12実運用準備監査](../ADMIN_OPERATIONAL_READINESS_2026-10-12.md)、[Issue #509](https://github.com/Atlasez/Admin-Atlesez/issues/509)を基準に確認してください。
+
 ## 概要
 
 管理サイトのPRがGitHub `main`へMerge済みでも、`admin.atlasez.org`の配信成果物が古いSHAのまま残る事象を記録する。GitHubのMerge成功と本番反映成功を同一視しないための運用記録である。

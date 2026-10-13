@@ -1,5 +1,7 @@
 # 運営画面をGoogleログインへ移行する手順
 
+> **履歴記録:** Google OAuthへの移行は現行ADMINで完了しています。この旧移行手順はCloudflare Access、`ADMIN_AUTH_MODE`、本番Secret、migration、直接deployの変更を案内するため、実行しないでください。現在のログイン・権限・運営手順は[ADMIN Knowledge Base](ADMIN_KNOWLEDGE_BASE.md)、[メンバー受入手順](ADMIN_MEMBER_INTAKE.md)、[本番デプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)を参照してください。
+
 本番の管理WorkerはGoogle OAuthで認証します。Cloudflare Accessは入口に設定せず、Googleで確認したメールアドレスをD1の`report_admin_permissions`と照合します。
 
 ## Cloudflare Accessを維持したまま試す

@@ -3127,7 +3127,9 @@ test("IM-1: 認証付き画像を取得してPreviewへBlob表示する", async 
       ),
     });
   });
-  await page.goto("./admin/editor/?document=doc-1");
+  await page.goto("./admin/editor/?document=doc-1", {
+    waitUntil: "domcontentloaded",
+  });
 
   const previewImage = page
     .locator("[data-preview]")

@@ -1,5 +1,7 @@
 # ADMIN Workers Builds 再接続レビュー
 
+> **履歴記録（2026-09-30）:** この文書のIssue #407、SHA、Version、設定案は当時の状態です。現在の復旧状況と停止条件は[ADMIN本番デプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)、[2026-10-12実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)、[Issue #509](https://github.com/Atlasez/Admin-Atlesez/issues/509)を確認してください。この文書の設定案を現状確認なしに適用しないでください。
+
 ## 確認した状態
 
 2026-09-30に正本Cloudflare Accountの`atlasez-admin`設定画面を読み取り確認した。

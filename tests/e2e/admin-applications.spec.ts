@@ -166,6 +166,59 @@ test("B-1: 応募フロー・状況集計・検索と状態フィルターを表
   await expect(page.locator(".application-list")).toContainText("佐藤 花子");
 });
 
+test("応募メールの失敗理由を担当応募にだけ表示しメール内容は表示しない", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    await route.fulfill({
+      json:
+        url.pathname === "/api/admin/applications"
+          ? {
+              applications: [
+                {
+                  id: "application-with-failed-email",
+                  form_language: "ja",
+                  family_name: "検証",
+                  given_name: "応募者",
+                  email: "applicant@example.invalid",
+                  project_slug: "atlas",
+                  status: "new",
+                  email_deliveries: [
+                    {
+                      kind: "applicant_confirmation",
+                      total: 1,
+                      sent: 0,
+                      pending: 0,
+                      sending: 0,
+                      retry: 0,
+                      failed: 1,
+                      attemptCount: 5,
+                      nextAttemptAt: null,
+                      updatedAt: "2026-10-12T10:00:00.000Z",
+                      lastError: "provider_idempotency_window_expired",
+                    },
+                  ],
+                },
+              ],
+            }
+          : {},
+    });
+  });
+  await page.goto("./admin/applications/?project=atlas");
+  const panel = page.locator('[aria-label="応募関連メールの状態"]');
+  await expect(panel).toContainText("応募受付確認");
+  await expect(panel).toContainText("要確認");
+  await expect(panel).toContainText("自動再送を停止しました");
+  await expect(panel).toContainText("Resend受付 0 / 1 件");
+  await expect(panel).not.toContainText("PRIVATE_BODY");
+  await expect(panel).not.toContainText("PRIVATE_HTML");
+  const panelBox = await panel.boundingBox();
+  expect(panelBox).not.toBeNull();
+  expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(391);
+});
+
 test("応募管理の導線は現在のプロジェクトに引き継がれる", async ({ page }) => {
   await page.route("**/api/admin/auth-status", (route) =>
     route.fulfill({

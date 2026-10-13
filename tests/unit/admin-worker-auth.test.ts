@@ -84,6 +84,10 @@ const stageEnv = (
         return { results: [] as T[] };
       };
       statement.first = async <T>() => {
+        if (query.includes("admin_notification_global_cutoff"))
+          return query.includes("SELECT name FROM sqlite_master")
+            ? ({ name: "admin_notification_global_cutoff" } as T)
+            : ({ cleared_before: "1970-01-01T00:00:00.000Z" } as T);
         if (query.includes("admin_auth_sessions"))
           return { email: sessionEmail } as T;
         if (
@@ -2963,6 +2967,168 @@ describe("applicant stage server-side access", () => {
         "古いタスクリマインダーを準備中です。時間をおいてから一括既読を再試行してください。",
     });
     expect(writes).toBe(0);
+  });
+
+  it("hides notifications created before the shared global cutoff", async () => {
+    const memberEnvironment = stageEnv("accepted", false, true);
+    const notificationDb = new DatabaseSync(":memory:");
+    notificationDb.exec(`
+      CREATE TABLE editorial_documents (id TEXT PRIMARY KEY, title TEXT, created_by TEXT);
+      CREATE TABLE editorial_comments (
+        id TEXT PRIMARY KEY,
+        body TEXT,
+        parent_comment_id TEXT,
+        created_at TEXT,
+        document_id TEXT,
+        created_by TEXT
+      );
+      CREATE TABLE admin_notification_reads (
+        email TEXT,
+        notification_id TEXT,
+        read_at TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (email, notification_id)
+      );
+      INSERT INTO editorial_documents VALUES
+        ('document-old', 'Old article', 'applicant@example.com'),
+        ('document-new', 'New article', 'applicant@example.com');
+      INSERT INTO editorial_comments VALUES
+        ('comment-old123', 'Old comment', NULL, '2026-08-21T00:00:00.000Z', 'document-old', 'commenter@example.com'),
+        ('comment-new123', 'New comment', NULL, '2026-08-22T00:00:00.000Z', 'document-new', 'commenter@example.com');
+    `);
+    const cutoff = "2026-08-21T12:00:00.000Z";
+    const prepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      const statement = prepare(query);
+      if (
+        query.includes(
+          "SELECT cleared_before FROM admin_notification_global_cutoff",
+        )
+      ) {
+        statement.first = async <T>() => ({ cleared_before: cutoff }) as T;
+      }
+      if (query.includes("d.created_by = ? AND c.created_by != ?")) {
+        statement.all = async <T>() => ({
+          results: notificationDb
+            .prepare(query)
+            .all(
+              ...(statement.boundValues as (
+                string | number | bigint | null | Uint8Array
+              )[]),
+            ) as T[],
+        });
+      }
+      return statement;
+    };
+
+    const response = await worker.fetch(
+      loggedInRequest("/api/admin/notifications?limit=20"),
+      memberEnvironment as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      notifications: [
+        {
+          id: "comment-comment-new123",
+          title: "記事に新しいコメント：New article",
+        },
+      ],
+      unreadNotificationsCount: 1,
+    });
+  });
+
+  it("keeps a notification created at the global cutoff instant", async () => {
+    const memberEnvironment = stageEnv("accepted", false, true);
+    const notificationDb = new DatabaseSync(":memory:");
+    notificationDb.exec(`
+      CREATE TABLE editorial_documents (id TEXT PRIMARY KEY, title TEXT, created_by TEXT);
+      CREATE TABLE editorial_comments (
+        id TEXT PRIMARY KEY,
+        body TEXT,
+        parent_comment_id TEXT,
+        created_at TEXT,
+        document_id TEXT,
+        created_by TEXT
+      );
+      CREATE TABLE admin_notification_reads (
+        email TEXT,
+        notification_id TEXT,
+        read_at TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (email, notification_id)
+      );
+      INSERT INTO editorial_documents VALUES
+        ('document-before', 'Before article', 'applicant@example.com'),
+        ('document-boundary', 'Boundary article', 'applicant@example.com'),
+        ('document-after', 'After article', 'applicant@example.com');
+      INSERT INTO editorial_comments VALUES
+        ('comment-before1', 'One millisecond before', NULL, '2026-08-21T11:59:59.999Z', 'document-before', 'commenter@example.com'),
+        ('comment-boundary', 'At the cutoff', NULL, '2026-08-21T12:00:00.000Z', 'document-boundary', 'commenter@example.com'),
+        ('comment-after123', 'After the cutoff', NULL, '2026-08-21T12:00:00.001Z', 'document-after', 'commenter@example.com');
+    `);
+    const cutoff = "2026-08-21T12:00:00.000Z";
+    const prepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      const statement = prepare(query);
+      if (
+        query.includes(
+          "SELECT cleared_before FROM admin_notification_global_cutoff",
+        )
+      ) {
+        statement.first = async <T>() => ({ cleared_before: cutoff }) as T;
+      }
+      if (query.includes("d.created_by = ? AND c.created_by != ?")) {
+        statement.all = async <T>() => ({
+          results: notificationDb
+            .prepare(query)
+            .all(
+              ...(statement.boundValues as (
+                string | number | bigint | null | Uint8Array
+              )[]),
+            ) as T[],
+        });
+      }
+      return statement;
+    };
+
+    const response = await worker.fetch(
+      loggedInRequest("/api/admin/notifications?limit=20"),
+      memberEnvironment as never,
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      notifications: Array<{ id: string }>;
+      unreadNotificationsCount: number;
+    };
+    expect(body.notifications.map((item) => item.id)).toEqual([
+      "comment-comment-after123",
+      "comment-comment-boundary",
+    ]);
+    expect(body.unreadNotificationsCount).toBe(2);
+  });
+
+  it("fails closed until the global notification cutoff migration is applied", async () => {
+    const memberEnvironment = stageEnv("accepted", false, true);
+    const prepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      const statement = prepare(query);
+      if (
+        query.includes("SELECT name FROM sqlite_master") &&
+        query.includes("admin_notification_global_cutoff")
+      )
+        statement.first = async () => null;
+      return statement;
+    };
+
+    const response = await worker.fetch(
+      loggedInRequest("/api/admin/notifications"),
+      memberEnvironment as never,
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: expect.stringContaining("migration 0131"),
+    });
   });
 
   it("uses bounded notification pages and marks all unread rows beyond 500", async () => {

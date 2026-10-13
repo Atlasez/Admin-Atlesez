@@ -1,5 +1,30 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { createAdminTestEnvironment } from "../helpers/admin-test-environment";
+
+it("legacy concept endpoint cannot write concepts directly to the public main branch", async () => {
+  const { request, env } = createAdminTestEnvironment();
+  Object.assign(env, {
+    GITHUB_REPOSITORY: "Atlasez/Atlasez01",
+    GITHUB_PUBLISH_TOKEN: "isolated-test-token",
+  });
+
+  const response = await request(
+    "/api/admin/editor/concepts",
+    "global@atlasez.test",
+    {
+      id: "math.group-theory.group-center",
+      subject: "mathematics",
+      category: "group-theory",
+      nameJa: "群の中心",
+    },
+  );
+
+  expect(response.status).toBe(409);
+  await expect(response.json()).resolves.toMatchObject({
+    error: expect.stringContaining("通常の公開PR"),
+  });
+  expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+});
 
 it("プロフィール未入力の担当責任者の受入フォローはAPIと直接ページの認可が一致する", async () => {
   const { db, request } = createAdminTestEnvironment();

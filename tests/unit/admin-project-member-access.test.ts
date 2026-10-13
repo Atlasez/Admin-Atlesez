@@ -152,7 +152,7 @@ function fixture() {
       env as never,
     );
   };
-  return { db, member, application, request, now };
+  return { db, env, member, application, request, now };
 }
 
 it("プロジェクト責任者はAtlas権限なしで担当応募を審査・受入でき他プロジェクトは操作できない", async () => {
@@ -247,6 +247,74 @@ it("プロジェクト責任者はAtlas権限なしで担当応募を審査・�
   ).toBe(403);
 });
 
+it("応募一覧は担当範囲のメール状態だけを返し宛先・本文を含めない", async () => {
+  const { db, member, application, request, now } = fixture();
+  const manager = "cafe-manager@atlasez.test";
+  const localId = "33333333-3333-4333-8333-333333333333";
+  const outsideId = "44444444-4444-4444-8444-444444444444";
+  member(manager, "thinking-cafe", "manager", false);
+  application(localId, "thinking-cafe");
+  application(outsideId, "atlas");
+  const addDelivery = (id: string, applicationId: string, project: string) =>
+    db
+      .prepare(
+        `INSERT INTO atlasez_application_email_deliveries
+       (id,application_id,recipient_email,kind,subject,text_body,html_body,status,attempt_count,next_attempt_at,created_at,updated_at)
+       VALUES (?,?,?,'applicant_confirmation','PRIVATE_SUBJECT','PRIVATE_BODY','PRIVATE_HTML',?,5,?,?,?)`,
+      )
+      .run(
+        id,
+        applicationId,
+        `${project}-private-recipient@atlasez.test`,
+        project === "thinking-cafe" ? "failed" : "sent",
+        now,
+        now,
+        now,
+      );
+  addDelivery("delivery-local", localId, "thinking-cafe");
+  addDelivery("delivery-outside", outsideId, "atlas");
+  db.prepare(
+    "UPDATE atlasez_application_email_deliveries SET last_error='provider_idempotency_window_expired' WHERE id='delivery-local'",
+  ).run();
+
+  const response = await request(
+    "/api/admin/applications?project=thinking-cafe",
+    manager,
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  const body = (await response.json()) as {
+    applications: Array<{
+      id: string;
+      email_deliveries: Array<{
+        kind: string;
+        total: number;
+        failed: number;
+        attemptCount: number;
+        lastError: string | null;
+      }>;
+    }>;
+  };
+  expect(body.applications).toHaveLength(1);
+  expect(body.applications[0]).toMatchObject({
+    id: localId,
+    email_deliveries: [
+      {
+        kind: "applicant_confirmation",
+        total: 1,
+        failed: 1,
+        attemptCount: 5,
+        lastError: "provider_idempotency_window_expired",
+      },
+    ],
+  });
+  const serialized = JSON.stringify(body);
+  expect(serialized).not.toContain("delivery-outside");
+  expect(serialized).not.toContain("PRIVATE_SUBJECT");
+  expect(serialized).not.toContain("PRIVATE_BODY");
+  expect(serialized).not.toContain("PRIVATE_HTML");
+  expect(serialized).not.toContain("private-recipient");
+});
+
 it("受入済み応募の操作キー再送でもAtlas休止を迂回できない", async () => {
   const { db, application, request, now } = fixture();
   const id = "cccccccc-1111-4111-8111-111111111111";
@@ -296,6 +364,60 @@ it("受入済み応募の操作キー再送でもAtlas休止を迂回できな�
       )
       .get(id),
   ).toEqual({ count: 1 });
+});
+
+it("Discord同期例外のログに応募ID・宛先・provider例外を残さない", async () => {
+  const { db, env, application, request } = fixture();
+  const manager = "global@atlasez.test";
+  const id = "33333333-3333-4333-8333-333333333333";
+  const email = `${id}@atlasez.test`;
+  application(id, "atlas");
+  db.prepare(
+    "UPDATE atlasez_member_applications SET status='accepted' WHERE id=?",
+  ).run(id);
+  db.prepare(
+    "INSERT INTO atlasez_member_discord_accounts(email,discord_user_id,updated_at) VALUES (?,?,?)",
+  ).run(email, "isolated-discord-user", new Date().toISOString());
+  Object.assign(env, {
+    DISCORD_BOT_TOKEN: "isolated-bot-token",
+    DISCORD_GUILD_ID: "isolated-guild-id",
+  });
+  const providerError = new Error(
+    "provider response includes private token data",
+  );
+  vi.mocked(fetch)
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ name: "Isolated guild" }), { status: 200 }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ roles: [] }), { status: 200 }),
+    )
+    .mockResolvedValueOnce(new Response("[]", { status: 200 }));
+  const originalPrepare = env.REPORTS.prepare;
+  env.REPORTS.prepare = (query: string) => {
+    if (
+      query.includes(
+        "SELECT discord_role_id FROM atlasez_discord_role_mappings",
+      )
+    )
+      throw providerError;
+    return originalPrepare(query);
+  };
+  const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+
+  const response = await request(
+    `/api/admin/applications/${id}/discord-retry?project=atlas`,
+    manager,
+    "POST",
+    {},
+  );
+
+  expect(response.status).toBe(502);
+  const logged = JSON.stringify(errorLog.mock.calls);
+  expect(logged).not.toContain(id);
+  expect(logged).not.toContain(email);
+  expect(logged).not.toContain("private token data");
+  expect(logged).toContain("application Discord provisioning failed");
 });
 
 it("本人の自己紹介申請と担当責任者の承認はプロジェクト境界と送信元を守る", async () => {

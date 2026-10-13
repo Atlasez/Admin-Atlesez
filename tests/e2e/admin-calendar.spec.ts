@@ -72,6 +72,247 @@ test("管理タブはプロジェクト遷移後も管理トップへ直接遷�
   await expectProjectManageLink(page, "secretariat");
 });
 
+test("カレンダー設定は初期化中のクリックを取りこぼさない", async ({ page }) => {
+  await page.route("**/api/admin/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/auth-status")) {
+      await route.fulfill({
+        json: { email: "manager@example.com", isManager: true },
+      });
+      return;
+    }
+    if (pathname.endsWith("/profile")) {
+      await route.fulfill({ json: { profile: { display_name: "管理者" } } });
+      return;
+    }
+    if (pathname.endsWith("/notifications")) {
+      await route.fulfill({ json: { notifications: [] } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        scope: { isManager: true, email: "manager@example.com" },
+        project: { id: "secretariat", slug: "secretariat", name: "事務局" },
+        projects: [],
+        tasks: [],
+        events: [],
+        progress: [],
+        members: [],
+        availabilityBlocks: [],
+        availabilityRules: [],
+        pagination: { hasMore: false, limit: 50 },
+        eventPagination: { hasMore: false, limit: 50 },
+        progressPagination: { hasMore: false, limit: 50 },
+      },
+    });
+  });
+  await page.route("**/_astro/*.js", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
+
+  await page.goto("admin/calendar/?project=secretariat", {
+    waitUntil: "domcontentloaded",
+  });
+
+  const openSettings = page.locator("[data-open-calendar-settings]");
+  await expect(openSettings).toBeDisabled();
+  await expect(page.locator("[data-calendar-settings-status]")).toHaveText(
+    "カレンダーを準備しています…",
+  );
+  await openSettings.click();
+  await expect(page.locator("[data-calendar-settings-dialog]")).toBeVisible();
+  await expect(openSettings).toBeEnabled();
+  await expect(page.locator("[data-calendar-settings-status]")).toBeHidden();
+});
+
+test("予定追加の催し名入力にアクセシブルな名前がある", async ({ page }) => {
+  await page.route("**/api/admin/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/auth-status")) {
+      await route.fulfill({
+        json: { email: "manager@example.com", isManager: true },
+      });
+      return;
+    }
+    if (pathname.endsWith("/profile")) {
+      await route.fulfill({ json: { profile: { display_name: "管理者" } } });
+      return;
+    }
+    if (pathname.endsWith("/notifications")) {
+      await route.fulfill({ json: { notifications: [] } });
+      return;
+    }
+    if (pathname === "/api/admin/operations") {
+      await route.fulfill({
+        json: {
+          scope: { email: "manager@example.com", isManager: true },
+          project: { id: "atlas", slug: "atlas", name: "アトラス" },
+          members: [],
+          tasks: [],
+          events: [],
+          progress: [],
+          availabilityBlocks: [],
+          availabilityRules: [],
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: {} });
+  });
+
+  await page.goto("admin/calendar/?project=atlas");
+  await expect(page.locator("[data-event-create]")).toBeVisible();
+  const eventTitle = page.locator("[data-event-title]");
+  await expect(eventTitle).toHaveAttribute("aria-label", "催し名");
+  await expect(
+    page.getByRole("textbox", { name: "催し名", exact: true }),
+  ).toBeVisible();
+});
+
+test("カレンダーの日付は矢印キーで移動しTab stopを一つに保つ", async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date("2026-10-13T12:00:00Z") });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.route("**/api/admin/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/auth-status")) {
+      await route.fulfill({
+        json: { email: "manager@example.com", isManager: true },
+      });
+      return;
+    }
+    if (pathname.endsWith("/profile")) {
+      await route.fulfill({ json: { profile: { display_name: "管理者" } } });
+      return;
+    }
+    if (pathname.endsWith("/notifications")) {
+      await route.fulfill({ json: { notifications: [] } });
+      return;
+    }
+    if (pathname === "/api/admin/operations") {
+      await route.fulfill({
+        json: {
+          scope: { email: "manager@example.com", isManager: true },
+          project: { id: "atlas", slug: "atlas", name: "アトラス" },
+          members: [],
+          tasks: [],
+          events: [],
+          progress: [],
+          availabilityBlocks: [],
+          availabilityRules: [],
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: {} });
+  });
+
+  await page.goto("admin/calendar/?project=atlas");
+  const dateButtons = page.locator("[data-calendar-select]");
+  const firstDate = page.locator(
+    '[data-calendar-date="2026-10-01"] [data-calendar-select]',
+  );
+  const secondDate = page.locator(
+    '[data-calendar-date="2026-10-02"] [data-calendar-select]',
+  );
+  await expect(dateButtons).toHaveCount(31);
+  const dateTargets = await dateButtons.evaluateAll((buttons) =>
+    buttons.map((button) => {
+      const rect = button.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    }),
+  );
+  expect(
+    Math.min(...dateTargets.map((target) => target.width)),
+  ).toBeGreaterThanOrEqual(38);
+  expect(
+    Math.min(...dateTargets.map((target) => target.height)),
+  ).toBeGreaterThanOrEqual(38);
+  const monthNavigationTargets = await page
+    .locator("[data-calendar-prev], [data-calendar-next]")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return { width: rect.width, height: rect.height };
+      }),
+    );
+  expect(
+    Math.min(...monthNavigationTargets.map((target) => target.width)),
+  ).toBeGreaterThanOrEqual(40);
+  expect(
+    Math.min(...monthNavigationTargets.map((target) => target.height)),
+  ).toBeGreaterThanOrEqual(40);
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth <=
+        document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
+  await expect(firstDate).toHaveAttribute("tabindex", "0");
+  await expect(secondDate).toHaveAttribute("tabindex", "-1");
+  expect(
+    await dateButtons.evaluateAll(
+      (buttons) => buttons.filter((button) => button.tabIndex === 0).length,
+    ),
+  ).toBe(1);
+
+  await firstDate.focus();
+  await firstDate.press("ArrowRight");
+  await expect(secondDate).toBeFocused();
+  await expect(firstDate).toHaveAttribute("tabindex", "-1");
+  await expect(secondDate).toHaveAttribute("tabindex", "0");
+
+  await secondDate.press("ArrowDown");
+  const ninthDate = page.locator(
+    '[data-calendar-date="2026-10-09"] [data-calendar-select]',
+  );
+  await expect(ninthDate).toBeFocused();
+  await ninthDate.press("Home");
+  const fourthDate = page.locator(
+    '[data-calendar-date="2026-10-04"] [data-calendar-select]',
+  );
+  await expect(fourthDate).toBeFocused();
+  await fourthDate.press("End");
+  const tenthDate = page.locator(
+    '[data-calendar-date="2026-10-10"] [data-calendar-select]',
+  );
+  await expect(tenthDate).toBeFocused();
+
+  await firstDate.focus();
+  await firstDate.press("ArrowLeft");
+  await expect(firstDate).toBeFocused();
+  const eventTitle = page.locator("[data-event-title]");
+  await expect(eventTitle).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(eventTitle).toBeFocused();
+
+  const selectionSummary = page.locator("[data-calendar-selection-summary]");
+  const blockEditor = page.locator("[data-block-editor]");
+  await firstDate.focus();
+  await firstDate.press("Enter");
+  await page.clock.runFor(20);
+  await expect(firstDate).toBeFocused();
+  await expect(selectionSummary).toContainText("2026-10-01");
+  await expect(blockEditor).not.toHaveAttribute("open", "");
+
+  await firstDate.press("ArrowRight");
+  await secondDate.press("Enter");
+  await page.clock.runFor(20);
+  await expect(secondDate).toBeFocused();
+  await expect(blockEditor).toHaveAttribute("open", "");
+  await expect(selectionSummary).toContainText("2026-10-01〜2026-10-02");
+
+  const mondayBulkSelect = page.locator('[data-calendar-weekday="1"]');
+  await mondayBulkSelect.focus();
+  await mondayBulkSelect.press("Enter");
+  await page.clock.runFor(20);
+  await expect(mondayBulkSelect).toBeFocused();
+  await expect(selectionSummary).toContainText("毎週月曜日");
+});
+
 test("予定の取得に失敗してもカレンダーを表示する", async ({ page }) => {
   const now = new Date();
   const expectedDays = new Date(
@@ -546,6 +787,7 @@ for (const endpoint of ["operations", "member-calendar"]) {
     );
     // Select Tokyo explicitly so this assertion does not depend on the test runner's timezone.
     await page.locator("[data-open-calendar-settings]").click();
+    await expect(page.locator("[data-calendar-settings-dialog]")).toBeVisible();
     await page.locator("[data-calendar-timezone]").fill("Asia/Tokyo");
     await page.locator("[data-close-calendar-settings]").click();
     await expect(
@@ -564,6 +806,7 @@ for (const endpoint of ["operations", "member-calendar"]) {
       requests.some((url) => url.searchParams.get("eventCursor") === "50"),
     ).toBe(true);
     await page.locator("[data-open-calendar-settings]").click();
+    await expect(page.locator("[data-calendar-settings-dialog]")).toBeVisible();
     await page.locator("[data-calendar-timezone]").fill("America/New_York");
     await page.locator("[data-close-calendar-settings]").click();
     await expect(page.locator("[data-event-list] .item")).toHaveCount(70);

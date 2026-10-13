@@ -6,14 +6,16 @@
 
 期限超過は未完了・未アーカイブのタスクに限る。保存したdue_timezoneの現在の壁時計時刻と比較し、SQLで日時を解析できない期限や不正timezoneは超過として計上しない。新規タスクの入力検証は従来のまま維持する。
 
-## Migrationと適用順
+## Migrationの履歴と現在の変更手順
 
-`migrations/0120_publication_review_started_at.sql`は`editorial_documents.publication_review_started_at`を追加する。既存行の本文・status・権限を変更せず、旧審査の開始時刻はNULLのままにする。updated_atやcreated_atから推測して補完しない。
+`migrations/0120_publication_review_started_at.sql`は、統計機能を導入した時点で`editorial_documents.publication_review_started_at`を追加した。既存行の本文・status・権限は変更せず、旧審査の開始時刻はNULLのままとし、updated_atやcreated_atから推測して補完しない仕様だった。
 
 公開審査の開始と分野統括からプロジェクトリーダーへの移行で、現在の段階の開始時刻を保存する。完了・差し戻し時はNULLに戻す。本文保存ではこの時刻を変更しない。待ち時間未記録の件数は画面に明示する。
 
-本番適用はPRレビュー・CI成功後にD1バックアップを取り、0120を別手順で適用してから、GitHub Actionsのproduction Environment承認を経てmainから対応Workerを配信する。Deploy workflowはmigrationを実行しない。Agentは本番migrationをこの変更の検証中に実行しない。
+0120の当時の適用案では、PR・CI、D1バックアップ、migrationの別適用、production Environment承認、GitHub Actions経由の配信を記載していた。この案は履歴であり、現在のADMIN配信・migration手順として使用しない。2026-10-12の読み取り専用確認では固定D1に未適用migrationはなかった。最新状態は[実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)と対象main・固定D1のmigration一覧を作業時に照合する。
+
+現在のコード変更はPR・CI後にmainへ反映し、ADMINの通常配信は[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)に従うCloudflare Workers Buildsだけを使う。D1 migrationは通常Build/Deployと分け、バックアップ、共有D1を使う公開Worker・旧Workerへの互換性、隔離検証、明示した適用・復旧手順を確認する。[ADMIN D1のバックアップと復元](ADMIN_D1_RECOVERY.md)を参照し、production Environment承認やActions deployを現行手順として扱わない。
 
 ## 復旧
 
-問題があれば本番反映を停止し、Workerをレビュー済みのrevert commitへ通常経路で戻す。追加列は旧Workerから参照されないためDBに残し、逆migrationによるデータ削除は行わない。新しい審査開始時刻を消すための本番restoreは不要。画面/統計API/審査開始・移行・差し戻し・完了を確認する。
+問題があれば本番反映を停止し、修正またはrevertをPRでmainへ反映する。Workers Builds run・checkout SHA・固定Worker Version・公開build-infoを照合し、対象画面・統計API・審査開始・移行・差し戻し・完了を確認する。追加列は旧Workerから参照されないため保持し、逆migrationによるデータ削除や本番restoreを通常のコード復旧に使わない。配信停止条件と手順は[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)を参照する。

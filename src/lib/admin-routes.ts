@@ -42,6 +42,7 @@ const adminPageNames = [
   "update-history",
   "onboarding-demo",
   "ui-prototype",
+  "portal-prototype",
   "student-council",
   "thinking-cafe",
 ] as const;

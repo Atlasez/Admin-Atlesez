@@ -12,7 +12,7 @@ type SiteKey = "portal" | "atlas" | "semi-platform" | "student-council" | "think
 const siteForProject = (project: string | null): SiteKey => project === "secretariat" ? "secretariat" : project === "seminar-platform" ? "semi-platform" : project === "student-council-exchange" ? "student-council" : project === "thinking-cafe" ? "thinking-cafe" : project === "portal" ? "portal" : "atlas";
 const operationProject = ["secretariat", "seminar-platform", "student-council-exchange", "thinking-cafe"].includes(requestedProject ?? "") ? requestedProject! : "atlas";
 const querySite = siteForProject(requestedProject);
-const portalRoutes = new Set(["/admin/getting-started", "/admin/portal", "/admin/action-center", "/admin/notifications", "/admin/member-profile", "/admin/member-profile/edit", "/admin/member-tasks", "/admin/task-detail", "/admin/task-templates", "/admin/member-calendar"]);
+const portalRoutes = new Set(["/admin/getting-started", "/admin/portal", "/admin/portal-prototype", "/admin/action-center", "/admin/notifications", "/admin/member-profile", "/admin/member-profile/edit", "/admin/member-tasks", "/admin/task-detail", "/admin/task-templates", "/admin/member-calendar"]);
 const routeSite: SiteKey = portalRoutes.has(normalizedPath)
   ? "portal"
   : normalizedPath === "/admin/profile-requests" || normalizedPath === "/admin/secretariat"
@@ -28,7 +28,7 @@ const routeSite: SiteKey = portalRoutes.has(normalizedPath)
             : querySite;
 const routeCurrent = normalizedPath === "/admin/getting-started"
   ? "getting-started"
-  : normalizedPath === "/admin/portal"
+  : normalizedPath === "/admin/portal" || normalizedPath === "/admin/portal-prototype"
   ? "portal"
   : normalizedPath === "/admin/action-center"
     ? "action-center"
@@ -169,7 +169,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     <a class="admin-project-switcher-title" href={homePath} data-project-current-link data-admin-i18n data-admin-ja={brandLabel} data-admin-en={site === "portal" ? "Atlasez member site" : site === "secretariat" ? "Atlasez Secretariat" : site === "semi-platform" ? "Seminar platform" : site === "student-council" ? "Japan Student Council Association" : site === "thinking-cafe" ? "Thinking Cafe" : "Atlas learning site operations"}>{brandLabel}</a>
     </div>
   </div>
-  <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
+  <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-label="メニュー" aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
   <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
       <a class="admin-action-center-link" data-requires-admin href="/admin/action-center/" data-admin-page="action-center" data-admin-action-center-tab aria-current={current === "action-center" ? "page" : undefined} aria-label="要対応一覧（アクションセンター）" title="要対応一覧を開く"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>要対応</span></a>
       <a href="/admin/member-tasks/" data-admin-site="portal" data-admin-page="member-tasks" hidden={site !== "portal"} aria-current={current === "member-tasks" ? "page" : undefined}>タスク管理</a>
@@ -216,6 +216,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
 <nav class="admin-breadcrumbs" data-admin-breadcrumbs aria-label="パンくず" hidden={site === "portal"} transition:persist="admin-breadcrumbs"><a href="/admin/portal/">Atlasezメンバー用サイト</a><span aria-hidden="true">›</span>{projectHome.has(current) ? <span aria-current="page">{brandLabel}</span> : <><a href={homePath}>{brandLabel}</a><span aria-hidden="true">›</span><span aria-current="page">{pageLabel}</span></>}</nav>
 <script>
   import { navigate } from "astro:transitions/client";
+  import { formatNotificationTimestamp, notificationKindLabel, safeNotificationHref } from "../lib/admin-notification-features";
 
   (() => {
     const preferencesKey = 'atlasez-prefs';
@@ -255,9 +256,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     const readRouteState = (): RouteState => {
       const path = window.location.pathname.replace(/\/$/, '') || '/';
       const project = new URLSearchParams(window.location.search).get('project');
-      const site: RouteState['site'] = ['/admin/getting-started', '/admin/portal', '/admin/member-profile', '/admin/member-profile/edit', '/admin/member-tasks', '/admin/task-detail', '/admin/task-templates', '/admin/member-calendar'].includes(path) || project === 'portal' ? 'portal' : path === '/admin/secretariat' || path === '/admin/profile-requests' || project === 'secretariat' ? 'secretariat' : path === '/admin/semi-platform' || project === 'seminar-platform' ? 'semi-platform' : path === '/admin/student-council' || project === 'student-council-exchange' ? 'student-council' : path === '/admin/thinking-cafe' || project === 'thinking-cafe' ? 'thinking-cafe' : 'atlas';
+      const site: RouteState['site'] = ['/admin/getting-started', '/admin/portal', '/admin/portal-prototype', '/admin/member-profile', '/admin/member-profile/edit', '/admin/member-tasks', '/admin/task-detail', '/admin/task-templates', '/admin/member-calendar'].includes(path) || project === 'portal' ? 'portal' : path === '/admin/secretariat' || path === '/admin/profile-requests' || project === 'secretariat' ? 'secretariat' : path === '/admin/semi-platform' || project === 'seminar-platform' ? 'semi-platform' : path === '/admin/student-council' || project === 'student-council-exchange' ? 'student-council' : path === '/admin/thinking-cafe' || project === 'thinking-cafe' ? 'thinking-cafe' : 'atlas';
       const slug = slugForSite(site);
-      const current = path === '/admin/portal' ? 'portal' : path === '/admin/atlas' ? 'atlas' : path === '/admin/secretariat' ? 'secretariat' : path === '/admin/semi-platform' ? 'semi-platform' : path === '/admin/student-council' ? 'student-council' : path === '/admin/thinking-cafe' ? 'thinking-cafe' : path === '/admin/manage' ? 'management' : path.slice('/admin/'.length) || 'atlas';
+      const current = path === '/admin/portal' || path === '/admin/portal-prototype' ? 'portal' : path === '/admin/atlas' ? 'atlas' : path === '/admin/secretariat' ? 'secretariat' : path === '/admin/semi-platform' ? 'semi-platform' : path === '/admin/student-council' ? 'student-council' : path === '/admin/thinking-cafe' ? 'thinking-cafe' : path === '/admin/manage' ? 'management' : path.slice('/admin/'.length) || 'atlas';
       return { site, slug, current, home: homeForSite(site), label: labelForSite(site) };
     };
     const syncRouteChrome = () => {
@@ -396,8 +397,13 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const menuToggle = document.querySelector<HTMLButtonElement>('[data-admin-menu-toggle]');
       const primaryNav = document.querySelector<HTMLElement>('#admin-primary-nav');
       let notifications: Array<{ id: string; title: string; detail: string; href: string; kind?: string; updatedAt?: string; read?: boolean }> = [];
+      let notificationStatus = "";
       const escape = (value: string) => value.replace(/[&<>"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[character] ?? character);
-      const formatNotificationTime = (value?: string) => value ? new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '';
+      const syncNotificationButtonLabel = (open: boolean) => {
+        if (!notificationButton) return;
+        const action = open ? "通知を閉じる" : "通知を開く";
+        notificationButton.setAttribute("aria-label", notificationStatus ? `${action}。${notificationStatus}` : action);
+      };
       const profileCacheKey = 'atlasez-admin-profile-cache';
       type CachedProfile = { email?: string; display_name?: string; avatar_url?: string };
       type ProfileResponse = { profile?: { display_name?: string; avatar_url?: string }; profileChangeRequest?: { status?: string; proposed_display_name?: string } };
@@ -470,7 +476,10 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           if (!Array.isArray(data.notifications)) throw new Error('invalid notification response');
           notifications = data.notifications;
           const unreadCount = Math.max(0, Math.trunc(Number(data.unreadNotificationsCount ?? notifications.filter((item) => !item.read).length)));
-          if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : `${unreadCount}${data.notificationsTruncated && unreadCount ? "+" : ""}`; notificationCount.hidden = unreadCount === 0; }
+          const truncated = data.notificationsTruncated === true;
+          notificationStatus = unreadCount > 99 || (truncated && unreadCount > 0) ? `未読${Math.min(unreadCount, 99)}件以上` : unreadCount > 0 ? `未読${unreadCount}件` : truncated ? "未読数は確定できません" : "未読はありません";
+          syncNotificationButtonLabel(notificationButton?.getAttribute("aria-expanded") === "true");
+          if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : `${unreadCount}${truncated && unreadCount ? "+" : ""}`; notificationCount.hidden = unreadCount === 0; }
           if (markAllRead) markAllRead.hidden = unreadCount === 0 && data.notificationsTruncated !== true;
           if (markAllRead) markAllRead.disabled = data.legacyReminderNormalizationPending === true;
           if (legacyReminderStatus) {
@@ -478,10 +487,11 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
             legacyReminderStatus.hidden = data.legacyReminderNormalizationPending !== true;
           }
           if (legacyReminderFailed) legacyReminderFailed.hidden = data.legacyReminderNormalizationFailed !== true;
-          const kindLabel = (kind: string) => ({ comment: 'コメント', mention: 'メンション', review: 'フィードバック依頼', 'feedback-request': 'フィードバック依頼', 'task-request': 'タスク依頼', application: '応募', approved: 'フィードバック完了', published: '公開', 'publication-ready': '公開準備完了' } as Record<string, string>)[kind] ?? '記事';
-          notificationList.innerHTML = notifications.length ? notifications.map((item) => `<div class="admin-notification-item${item.read ? ' is-read' : ''}"><a href="${item.href}" data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a>${item.read ? '<span class="notification-read-label">既読</span>' : `<button type="button" data-read-notification="${escape(item.id)}">既読にする</button>`}</div>`).join('') : '<span class="admin-notification-empty">通知はまだありません。</span>';
+          notificationList.innerHTML = notifications.length ? notifications.map((item) => `<div class="admin-notification-item${item.read ? ' is-read' : ''}"><a href="${escape(safeNotificationHref(item.href, location.origin))}" data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(notificationKindLabel(item.kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTimestamp(item.updatedAt))}</time></a>${item.read ? '<span class="notification-read-label">既読</span>' : `<button type="button" data-read-notification="${escape(item.id)}">既読にする</button>`}</div>`).join('') : '<span class="admin-notification-empty">通知はまだありません。</span>';
         } catch {
           notifications = [];
+          notificationStatus = "通知を取得できませんでした";
+          syncNotificationButtonLabel(notificationButton?.getAttribute("aria-expanded") === "true");
           if (notificationCount) notificationCount.hidden = true;
           if (markAllRead) markAllRead.hidden = true;
           notificationList.innerHTML = '<span class="admin-notification-empty" role="status">通知を取得できませんでした。時間をおいて再度お試しください。</span>';
@@ -492,7 +502,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         const wasOpen = !notificationPanel.hidden;
         notificationPanel.hidden = !open;
         notificationButton.setAttribute('aria-expanded', String(open));
-        notificationButton.setAttribute('aria-label', open ? '通知を閉じる' : '通知を開く');
+        syncNotificationButtonLabel(open);
         if (!open && wasOpen && restoreFocus) notificationButton.focus();
       };
       notificationButton?.addEventListener('click', () => { setNotificationPanelOpen(Boolean(notificationPanel?.hidden)); });
@@ -945,5 +955,60 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     .admin-nav[data-admin-nav][data-current-site] nav > .admin-action-center-link { border-width: 1px !important; margin: .1rem 0; min-height: 2.4rem; }
     .admin-action-center-utility-link { display: inline-flex; }
   }
-  @media (max-width: 620px) { .admin-action-center-utility-link { padding-inline: .45rem; } .admin-action-center-utility-link span { display: none; } }
+  @media (max-width: 620px) {
+    .admin-action-center-utility-link { padding-inline: .45rem; }
+    .admin-action-center-utility-link span { display: none; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-nav-brand-logo {
+      align-items: center;
+      box-sizing: border-box;
+      display: flex;
+      flex: 0 0 44px;
+      height: 44px;
+      justify-content: center;
+      width: 44px;
+    }
+    .admin-nav[data-admin-nav][data-current-site] .admin-project-switcher-title {
+      align-items: center;
+      display: flex;
+      min-height: 44px;
+    }
+    .admin-nav[data-admin-nav][data-current-site] .admin-menu-toggle {
+      box-sizing: border-box;
+      flex: 0 0 44px;
+      height: 44px;
+      justify-content: center;
+      min-height: 44px;
+      min-width: 44px;
+      padding-inline: 0;
+      width: 44px;
+    }
+    .admin-nav[data-admin-nav][data-current-site] .admin-action-center-utility-link,
+    .admin-nav[data-admin-nav][data-current-site] .admin-command-button,
+    .admin-nav[data-admin-nav][data-current-site] .admin-notifications,
+    .admin-nav[data-admin-nav][data-current-site] .admin-account-profile {
+      box-sizing: border-box;
+      flex: 0 0 44px;
+      height: 44px;
+      justify-content: center;
+      min-height: 44px;
+      min-width: 44px;
+      width: 44px;
+    }
+    .admin-nav[data-admin-nav][data-current-site] .admin-logout {
+      box-sizing: border-box;
+      min-height: 44px;
+      padding: .4rem .55rem;
+    }
+    .admin-nav[data-admin-nav][data-current-site] nav > a,
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu summary {
+      box-sizing: border-box;
+      min-height: 44px !important;
+    }
+    .admin-nav[data-admin-nav][data-current-site] nav > .admin-action-center-link {
+      min-height: 44px !important;
+    }
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu summary {
+      height: 44px;
+    }
+  }
 </style>

@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Resolve expected main SHA
@@ -34,7 +34,7 @@ jobs:
           echo "expected main SHA: $sha"
 
       - name: Checkout expected main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ steps.main.outputs.sha }}
           fetch-depth: 0

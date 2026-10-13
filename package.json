@@ -8,7 +8,7 @@
     "dev": "astro dev",
     "dev:reports": "npx --yes wrangler dev --config wrangler.local.jsonc --local --port 8787",
     "dev:admin": "npx --yes wrangler dev --config wrangler.admin.local.jsonc --local --port 8787",
-    "deploy:admin:collaboration": "wrangler deploy --config wrangler.editorial-collaboration.jsonc",
+    "dry-run:admin:collaboration": "wrangler deploy --dry-run --config wrangler.editorial-collaboration.jsonc",
     "verify:deploy-config": "node scripts/verify-deployment-config.mjs",
     "verify:deploy-cli": "wrangler --version",
     "deploy:public": "npm run verify:deploy-config && SITE_URL=https://atlasez.org BASE_PATH=/ npm run build && wrangler deploy --config wrangler.jsonc --keep-vars",
@@ -18,7 +18,7 @@
     "update:institutions": "node scripts/build-institution-directory.mjs",
     "build": "node scripts/write-build-info.mjs && astro build && npm run search:index && node scripts/build-xai-prototype.mjs",
     "build:admin:dmg": "bash scripts/build-admin-dmg.sh",
-    "build:ci": "node scripts/write-build-info.mjs && astro build",
+    "build:ci": "node scripts/write-build-info.mjs && astro build && ATLASEZ_BUILD_TARGET=admin node scripts/build-xai-prototype.mjs",
     "verify:build-info": "node scripts/verify-build-info.mjs",
     "verify:live-admin-production": "node scripts/verify-live-admin-production.mjs",
     "audit:cloudflare-deployments": "node scripts/record-cloudflare-deployments.mjs",
@@ -49,7 +49,7 @@
     "cytoscape": "^3.30.0",
     "date-holidays": "^3.35.0",
     "hast-util-from-html": "^2.0.3",
-    "katex": "^0.16.0",
+    "katex": "0.18.10",
     "node-tikzjax": "^1.0.5",
     "rehype-katex": "^7.0.0",
     "remark-math": "^6.0.0",
@@ -67,6 +67,9 @@
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.10",
-    "wrangler": "4.142.0"
+    "wrangler": "4.149.0"
+  },
+  "overrides": {
+    "katex": "$katex"
   }
 }

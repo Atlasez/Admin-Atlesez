@@ -1,6 +1,8 @@
 # Workers Builds接続復旧の追加検討
 
-追跡: [Issue #407](https://github.com/Atlasez/Admin-Atlesez/issues/407)。固定値・停止条件は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)を正本とする。これは追加案のレビュー資料であり、Cloudflare設定の適用記録ではない。
+> **履歴記録（2026-10-02）:** このtoken調査とIssue #407の状態は過去の記録です。現在の復旧状況・正しいBuild tokenの識別・停止条件は[ADMIN本番デプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)、[2026-10-12実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)、[Issue #509](https://github.com/Atlasez/Admin-Atlesez/issues/509)を確認してください。過去のtoken名・権限案を変更や再調査へ使わないでください。この文書はCloudflare設定の適用記録ではありません。
+
+追跡: 旧Issue [#407](https://github.com/Atlasez/Admin-Atlesez/issues/407)。
 
 ## 確認できたこと
 

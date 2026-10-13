@@ -18,23 +18,27 @@ migration `0124_editorial_document_creator_kind.sql`は、カタログ取り込�
 
 preflightは未追加のcreator_kind列があれば0124をsimulateし、0125もsimulateする。0124適用済みDBでは0125だけをsimulateする。旧3件が存在すればmetadataを照合し、未補正の記事は本文hashも一致させる。配信後の監査は3件のmetadataを照合してorganizationを確認するが、その後の本文編集・分類変更を妨げない。
 
-## 本番適用の順序
+## 0124/0125適用時の手順記録（履歴）
 
-1. PRでコード・migration・対象条件・検証結果をレビューし、CI成功後にmainへマージする。
-2. main CIと通常のADMIN deploy検証jobが成功したことを確認する。production Environment承認はmigration完了後に行う。
-3. 固定Account `812021e62fa20465950b61be55dfe064`、D1 `atlasez-reports`、`wrangler.admin.jsonc`を指定し、所有者限定のリポジトリ外ディレクトリへ直前のD1 SQL exportを取得する。exportはchmod600とし、内容をログ・Issue・GitHubへ載せない。
-4. `node scripts/verify-d1-export.mjs /absolute/private/export.sql`で復元・整合性を検証し、`node scripts/verify-editorial-creator-backfill.mjs /absolute/private/export.sql`で全候補の完全hash一致、全既存列・カタログ不変性を検証する。
-5. cleanなレビュー済みmain checkoutで、固定Accountとconfigを指定して`wrangler d1 migrations list`を確認する。未適用migrationが適用回のレビュー済み一覧と完全一致すること、直前の読み取りで候補ID集合が検証exportと一致することを確認し、対象のmigrationだけを適用する。0124・0125はそれぞれ別PRでレビューした。想定外の候補・migration・不整合があれば停止してIssueへ記録する。
-6. 適用後も非公開exportを取り、既存原稿の全列（追加したcreator_kind以外）・カタログ・件数が変わらないこととDB整合性を照合する。旧Workerは追加列と共存する。
-7. production Environmentを承認し、通常のGitHub Actions経路で新Workerを配信する。main SHA・Worker Version・100%配信・本番build-info・認証済みChromeの表示を確認する。
-8. 配信後にも新しい非公開exportを取得し、`node scripts/verify-editorial-creator-backfill.mjs /absolute/private/after-deploy.sql --verify-applied`で全候補の完全hashと組織主体を検証する。移行後から旧Workerの配信終了までに新規取り込みがあれば個人の既定値で作られる可能性がある。組織でない確定候補が残る場合は完了扱いにせず、そのsnapshotで確定したIDだけを補正する追補migrationを別PRでレビューし、適用後に再監査する。取り込みや編集を行う利用者がいないという推測では省略しない。
+以下は、このデータmigrationを計画した時点の適用条件・検証内容を残す履歴であり、現在のmigration実行手順や適用許可ではない。2026-10-12の固定D1に対する読み取り専用migration listでは未適用なしと記録されている。現在の状態は作業時に[実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)と固定D1のmigration listを再確認する。0124/0125を再適用しない。
 
-適用するのはレビュー済みmigrationであり、記事ごとの未レビューの直接更新は行わない。通常deploy workflowへ自動migrationを追加しない。
+当時の手順記録には、次の安全確認が含まれていた。
+
+1. コード・migration・対象条件・検証結果をPRとCIで確認してmainへ反映する。
+2. 旧記録ではActionsのdeploy検証とGitHub `production` Environment承認を前提にしていた。この配信経路は現在の通常配信経路ではない。ADMINの現行通常配信は[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)に従い、mainをProduction branchとしたCloudflare Workers Buildsだけを使う。
+3. 固定Account・D1を指定し、所有者限定のリポジトリ外ディレクトリへD1 SQL exportを保存する。exportはchmod 600とし、内容をログ・Issue・GitHubへ載せない。
+4. `scripts/verify-d1-export.mjs`で復元・整合性を検証し、`scripts/verify-editorial-creator-backfill.mjs`で候補の完全hash一致、既存列・カタログ不変性を検証する。
+5. 適用時点のmainと固定D1でmigration listを確認し、未適用一覧・候補ID集合がレビュー済みの期待値と一致する場合に対象migrationだけを適用する。0124・0125は別PRで扱う記録になっている。想定外の候補・migration・不整合があれば停止する。
+6. 適用後の非公開exportで既存原稿の列・カタログ・件数とDB整合性を照合し、追加列が旧Workerと共存することを確認する。
+7. 旧記録のproduction Environment承認・Actions配信は現行手順として使用しない。コード反映、Workers Builds run・checkout SHA・固定Worker Version・100%配信・公開build-info・認証済みChromeの照合は、現行ポリシーに従う。
+8. 配信後の非公開exportを`node scripts/verify-editorial-creator-backfill.mjs /absolute/private/after-deploy.sql --verify-applied`で検証する計画が記録されていた。組織主体でない確定候補が残る場合は完了扱いにせず、snapshotで確定したIDだけを対象とする補正migrationを別PRで扱う。
+
+通常のBuild/Deployへmigrationを含めない。将来のD1変更はバックアップ・隔離検証・共有D1と旧Workerへの互換性・明示した適用／復旧手順を別途用意し、[ADMIN D1のバックアップと復元](ADMIN_D1_RECOVERY.md)に従う。記事ごとの未レビュー直接更新は行わない。
 
 ## 復旧
 
-問題があれば本番反映を停止する。コードは修正・revert PRを同じ通常経路で反映し、互換性のある追加列は残す。作成主体のデータを戻す必要がある場合は、適用直前exportで完全hashを検証したIDだけを対象に`creator_kind`を戻す別のレビュー済みmigrationを用意する。以後に取り込んだ記事や編集を消さない。データベース全体の復元や列の削除を通常の復旧に使わない。
+問題があれば本番反映を停止する。コードは修正・revertをPRでmainへ反映し、[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)に定めるWorkers Buildsで照合する。互換性のある追加列は残す。作成主体のデータを戻す必要がある場合は、適用直前exportで完全hashを検証したIDだけを対象に`creator_kind`を戻す別migrationをPRでレビューする。以後に取り込んだ記事や編集を消さず、データベース全体の復元や列の削除を通常の復旧に使わない。
 
-## 0125追補の適用
+## 0125追補の履歴
 
-0125は上記3件だけを補正するデータmigrationで、WorkerコードやCloudflare設定を変更しない。別PRのレビュー・CI成功後にmainへマージし、main CI・deploy verify成功、直前backup/preflight成功、pendingが0125だけであることを確認してclean reviewed mainから適用する。前後exportで全既存document列（creator_kind除く）・catalog不変とFK/integrityを照合する。全164取り込み候補のmetadata/fullhash・organizationを監査し、個人原稿28件を維持する。production Environment承認後に通常配信とSHA/100%/Chromeを再確認する。0125の復旧は公開manifestの3IDに限定したcreator_kind補正のレビュー済みmigrationとし、全DB復元はしない。
+0125は上記3件だけを補正するデータmigrationで、WorkerコードやCloudflare設定は変更しない。旧記録では、別PRのCI、直前backup/preflight、pending一覧、前後exportの全既存列・catalog・FK/integrity、全164候補のmetadata/fullhash/organization、個人原稿28件の維持を確認する計画だった。記録内のproduction Environment承認とActions配信は現行の通常経路ではなく、現在の操作指示ではない。0125は2026-10-12の固定D1 migration listで未適用なしと確認されている。再適用・直接更新をせず、今後の変更は現行の[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)と[実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)を参照する。
