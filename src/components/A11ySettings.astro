@@ -15,7 +15,7 @@ interface Props {
    * ヘッダーの「表示設定」ポップオーバー（SettingsMenu）から使う。
    */
   bare?: boolean;
-  /** 運営ヘッダーだけ。要対応ダイアログの透過を切り替える。 */
+  /** 運営ヘッダーのみ。要対応・操作検索・表示設定の透け感を共通で調整する。 */
   showGlass?: boolean;
 }
 const { locale = "ja", bare = false, showGlass = false } = Astro.props;
@@ -42,7 +42,7 @@ const L =
         gothic: "標準ゴシック",
         readable: "可読性重視",
         reset: "初期設定に戻す",
-        glass: "要対応の透け感",
+        glass: "ポップアップの透け感",
         glassStrong: "強い（よく透ける）",
         glassWeak: "弱い（不透明）",
       }
@@ -67,7 +67,7 @@ const L =
         gothic: "Default",
         readable: "Readable",
         reset: "Reset to defaults",
-        glass: "Action dialog transparency",
+        glass: "Popup transparency",
         glassStrong: "Strong (see-through)",
         glassWeak: "Weak (opaque)",
       };
@@ -190,9 +190,9 @@ const groups = [
           <legend>{L.glass}</legend>
           <div class="a11y-glass-control">
             <div class="a11y-glass-hints">
-              <span>{L.glassStrong}</span>
-              <output for="a11y-glass-bare" data-glass-value>40%</output>
               <span>{L.glassWeak}</span>
+              <output for="a11y-glass-bare" data-glass-value>40%</output>
+              <span>{L.glassStrong}</span>
             </div>
             <input
               id="a11y-glass-bare"
@@ -203,7 +203,7 @@ const groups = [
               min="0"
               max="100"
               step="1"
-              value="60"
+              value="40"
               aria-label={L.glass}
               aria-valuetext="40%"
             />
@@ -262,7 +262,7 @@ const groups = [
               <div class="a11y-glass-hints">
                 <span>{L.glassStrong}</span>
                 <output for="a11y-glass" data-glass-value>40%</output>
-                <span>{L.glassWeak}</span>
+                <span>{L.glassStrong}</span>
               </div>
               <input
                 id="a11y-glass"
@@ -273,7 +273,7 @@ const groups = [
                 min="0"
                 max="100"
                 step="1"
-                value="60"
+                value="40"
                 aria-label={L.glass}
                 aria-valuetext="40%"
               />
@@ -398,8 +398,25 @@ const groups = [
     height: 2rem;
     min-height: 2rem;
     margin: 0;
-    accent-color: var(--accent-primary);
+    appearance: none;
+    -webkit-appearance: none;
+    background: linear-gradient(to right, var(--accent-primary) var(--glass-progress, 40%), var(--border-strong) var(--glass-progress, 40%));
+    background-size: calc(100% - 18px) 6px;
+    background-position: center;
+    background-repeat: no-repeat;
     cursor: pointer;
+  }
+  .a11y-glass-control input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: transparent; }
+  .a11y-glass-control input[type="range"]::-moz-range-track { height: 6px; background: transparent; }
+  .a11y-glass-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+    margin-top: -6px; background: var(--accent-primary); border: 2px solid var(--background-primary);
+    border-radius: 50%; box-shadow: 0 0 0 1px var(--border-strong);
+  }
+  .a11y-glass-control input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; background: var(--accent-primary);
+    border: 2px solid var(--background-primary); border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--border-strong);
   }
   .a11y-glass-control input[type="range"]:focus-visible {
     outline: 2px solid var(--focus-ring);
@@ -543,14 +560,15 @@ const groups = [
       const glassOutput = form.querySelector<HTMLOutputElement>("[data-glass-value]");
       const syncGlassValue = () => {
         if (!glassRange) return;
-        const seeThrough = 100 - Number(glassRange.value);
+        const seeThrough = Number(glassRange.value);
         if (glassOutput) glassOutput.textContent = `${seeThrough}%`;
+        glassRange.style.setProperty("--glass-progress", `${seeThrough}%`);
         glassRange.setAttribute(
           "aria-valuetext",
           `${glassRange.dataset.glassValueLabel ?? "Transparency"} ${seeThrough}%`,
         );
       };
-      if (glassRange) glassRange.value = String(getGlassOpacity(prefs.glass));
+      if (glassRange) glassRange.value = String(100 - getGlassOpacity(prefs.glass));
       syncGlassValue();
       const syncBackgroundChoice = () => {
         const value = document.documentElement.dataset.prefMode === "black"
@@ -563,7 +581,7 @@ const groups = [
       };
       window.addEventListener("atlasez-theme-change", syncBackgroundChoice);
       window.addEventListener("atlasez-glass-change", () => {
-        if (glassRange) glassRange.value = String(getGlassOpacity(loadPrefs().glass));
+        if (glassRange) glassRange.value = String(100 - getGlassOpacity(loadPrefs().glass));
         syncGlassValue();
       });
       const savePrefs = (notify: boolean) => {
@@ -579,7 +597,7 @@ const groups = [
         for (const [k, v] of data.entries()) {
           if (typeof v !== "string" || v === "default") continue;
           if (k === "glass") {
-            const opacity = Number(v);
+            const opacity = 100 - Number(v);
             if (Number.isInteger(opacity) && opacity >= 0 && opacity <= 100 && opacity !== 60) {
               next.glass = `${opacity}%`;
             }
@@ -630,11 +648,12 @@ const groups = [
               sel.selectedIndex = 0;
               if (sel.name === "lang") updateLanguageOptionLabels(sel);
             });
-          if (glassRange) glassRange.value = "60";
+          if (glassRange) glassRange.value = "40";
           syncGlassValue();
           apply({});
           window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
           window.dispatchEvent(new CustomEvent("atlasez-lang-change"));
+          window.dispatchEvent(new CustomEvent("atlasez-glass-change"));
         });
     },
   );

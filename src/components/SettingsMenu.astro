@@ -21,7 +21,7 @@ const close = locale === "ja" ? "閉じる" : "Close";
   <summary>
     <span class="settings-text">{title}</span>
   </summary>
-  <div class="settings-panel">
+  <div class:list={["settings-panel", { "settings-panel--glass": showGlass }]}>
     {/*
       明暗の切り替えは A11ySettings の「背景」（白／低刺激色／暗色／ブラック）と
       重なるので置かない。設定の入口をひとつに絞る。
@@ -92,6 +92,40 @@ const close = locale === "ja" ? "閉じる" : "Close";
     border-radius: var(--radius);
     background: var(--background-primary);
     box-shadow: 0 6px 24px rgb(0 0 0 / 18%);
+  }
+  /*
+   * ADMINのAaポップアップにも、要対応・操作検索と同じ設定値を適用する。
+   * 透明度は表示設定の単一スライダーから変更され、開いている間も即時反映。
+   * 公開サイトなど showGlass=false の表示設定は従来の不透明なまま。
+   */
+  .settings-panel--glass {
+    background-color: color-mix(
+      in srgb,
+      var(--background-primary) var(--command-glass-opacity),
+      transparent
+    );
+    border-color: color-mix(in srgb, var(--text-primary) 18%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--text-primary) 22%, transparent),
+      0 6px 24px rgb(0 0 0 / 18%);
+    -webkit-backdrop-filter: blur(var(--command-glass-blur)) saturate(1.1);
+    backdrop-filter: blur(var(--command-glass-blur)) saturate(1.1);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .settings-panel--glass {
+      background-color: var(--background-primary);
+      border-color: var(--border-strong);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .settings-panel--glass {
+      background-color: var(--background-primary);
+      border-color: var(--border-strong);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
   }
   .settings-close {
     display: none;
