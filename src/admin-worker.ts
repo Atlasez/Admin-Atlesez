@@ -23,7 +23,11 @@ import {
 } from "./lib/editorial-media";
 
 import { memberTaskFilters } from "./lib/member-task-filters";
-import { isAdminPagePath } from "./lib/admin-routes";
+import {
+  globalAdminPrototypePaths,
+  isAdminPagePath,
+} from "./lib/admin-routes";
+import { applicationAcceptanceEmail } from "./lib/application-acceptance-email";
 import {
   canAccess,
   getUserStage,
@@ -38,6 +42,11 @@ import {
 } from "./lib/date-time";
 import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
 import { dispatchApplicationEmails } from "./lib/application-email-delivery";
+import {
+  deliverDiscordNotifications,
+  deliverProgressDiscordNotification,
+  dispatchDueDiscordNotifications,
+} from "./lib/discord-notifications";
 import { purgeExpiredPersonalData } from "./lib/personal-data-retention";
 import { normalizeArticleReferences } from "./lib/article-references.mjs";
 import { tikzPackageHelp } from "./lib/tikz-policy.mjs";
@@ -3763,6 +3772,8 @@ async function createReportAdminPermission(
     return json({ error: "メールアドレスと担当分野を確認してください。" }, 400);
   const archivedError = await archivedMemberError(env, email);
   if (archivedError) return archivedError;
+  const introError = await firstPermissionIntroError(env, email);
+  if (introError) return introError;
   const normalizedSubjects = subjects.includes("*") ? ["*"] : subjects;
   const state = await loadDiscordProvisioningState(env, email);
   const provisioning = await provisionApplicationDiscordRoles(
@@ -3811,6 +3822,10 @@ async function updateReportAdminPermissions(
   const archivedError = await archivedMemberError(env, email);
   if (archivedError) return archivedError;
   const normalizedSubjects = subjects.includes("*") ? ["*"] : subjects;
+  if (normalizedSubjects.length) {
+    const introError = await firstPermissionIntroError(env, email);
+    if (introError) return introError;
+  }
   const existingGlobal = await env.REPORTS.prepare(
     "SELECT 1 AS found FROM report_admin_permissions WHERE email=? AND subject='*' LIMIT 1",
   )
@@ -4017,6 +4032,40 @@ function parseMemberLifecycleSnapshot(value: unknown): MemberLifecycleSnapshot |
     isNonEmptyString(entry.assigned_at) && isNonEmptyString(entry.assigned_by)
   )) return null;
   return value as MemberLifecycleSnapshot;
+}
+
+/** 最初の運営権限は、自己紹介2画面が保存されるまで付与しない。既存権限の更新は止めない。 */
+async function firstPermissionIntroError(
+  env: Env,
+  email: string,
+): Promise<Response | null> {
+  const existing = await env.REPORTS.prepare(
+    "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email)=lower(?) LIMIT 1",
+  )
+    .bind(email)
+    .first<{ found: number }>();
+  if (existing?.found) return null;
+  const profile = await env.REPORTS.prepare(
+    "SELECT bio FROM editorial_member_profiles WHERE lower(email)=lower(?)",
+  )
+    .bind(email)
+    .first<{ bio: string | null }>();
+  const projectProfile = await env.REPORTS.prepare(
+    `SELECT 1 AS found FROM editorial_project_member_profiles
+     WHERE lower(email)=lower(?) AND length(trim(COALESCE(internal_bio, ''))) > 0
+     LIMIT 1`,
+  )
+    .bind(email)
+    .first<{ found: number }>();
+  if (profile?.bio?.trim() && projectProfile?.found) return null;
+  return json(
+    {
+      error:
+        "運営外の自己紹介とプロジェクト内自己紹介が保存されるまで、最初の運営権限は付与できません。本人に /onboarding/ の入力を完了してもらってください。",
+      code: "INTRO_INCOMPLETE",
+    },
+    409,
+  );
 }
 
 async function archivedMemberError(env: Env, email: string): Promise<Response | null> {
@@ -8090,19 +8139,28 @@ async function getProjectProfileReviewerScope(
   return getProjectReviewerScope(request, env, requestedProject);
 }
 
-async function postDiscordWebhook(url: string | undefined, content: string) {
-  if (!url) return;
+async function notifyAtlasDiscordWebhook(
+  env: Env,
+  input: { dedupeKey: string; kind: string; content: string },
+) {
+  if (!env.DISCORD_ATLAS_WEBHOOK_URL?.trim()) return;
   try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        content: content.slice(0, 1_900),
-        allowed_mentions: { parse: [] },
-      }),
-    });
+    await deliverDiscordNotifications(env, [
+      {
+        dedupeKey: input.dedupeKey,
+        kind: input.kind,
+        destinationKind: "webhook",
+        destinationRef: "DISCORD_ATLAS_WEBHOOK_URL",
+        content: input.content,
+      },
+    ]);
   } catch {
-    /* 通知失敗は本文保存を妨げない。 */
+    console.error(
+      JSON.stringify({
+        event: "discord_notification_enqueue_failed",
+        kind: input.kind,
+      }),
+    );
   }
 }
 
@@ -8222,31 +8280,11 @@ async function queueApplicationAcceptanceEmail(
   const projectLabel =
     APPLICATION_FORM_LABELS[application.projectSlug] ?? application.projectSlug;
   const english = application.formLanguage === "en";
-  const subject = english
-    ? `Atlasez | Your application to ${projectLabel} was accepted`
-    : `Atlasez｜${projectLabel}への参加が承認されました`;
-  const textBody = english
-    ? [
-        "This is Atlasez management.",
-        "",
-        `Your application to ${projectLabel} has been accepted.`,
-        "Please sign in to the Atlasez management site and follow the onboarding instructions.",
-        "If you have not connected Discord yet, open the application status page and choose ‘Connect Discord’ once.",
-        "",
-        "Application status: https://admin.atlasez.org/applicant/",
-      ].join("\n")
-    : [
-        "Atlasez運営です。",
-        "",
-        `${projectLabel}への参加が承認されました。`,
-        "管理サイトへログインし、オンボーディングの案内に沿って参加手続きを進めてください。",
-        "Discord連携がまだの場合は、応募状況ページから「Discordと連携」を1回実行してください。",
-        "",
-        "応募状況：https://admin.atlasez.org/applicant/",
-      ].join("\n");
-  const htmlBody = english
-    ? `<h2>Application accepted</h2><p>Your application to ${emailSafe(projectLabel)} has been accepted.</p><p>Please sign in and follow the onboarding instructions. If Discord is not connected yet, choose “Connect Discord” once on the application status page.</p><p><a href="https://admin.atlasez.org/applicant/">Open application status</a></p>`
-    : `<h2>参加が承認されました</h2><p>${emailSafe(projectLabel)}への参加が承認されました。</p><p>管理サイトへログインし、オンボーディングの案内に沿って参加手続きを進めてください。Discord連携がまだの場合は、応募状況ページから「Discordと連携」を1回実行してください。</p><p><a href="https://admin.atlasez.org/applicant/">応募状況を開く</a></p>`;
+  const { subject, textBody, htmlBody } = applicationAcceptanceEmail(
+    projectLabel,
+    english,
+    emailSafe(projectLabel),
+  );
   await env.REPORTS.prepare(
     `INSERT OR IGNORE INTO atlasez_application_email_deliveries
      (id,application_id,recipient_email,kind,subject,text_body,html_body,status,attempt_count,next_attempt_at,created_at,updated_at)
@@ -8419,71 +8457,39 @@ async function createApplicationResponseTask(
 
 async function notifyProgressToDiscord(
   env: Env,
+  reportId: string,
   subject: string | null,
   body: string,
 ) {
-  const subjectLabel = subject ? `【${subject}】` : "【全体】";
-  const message = `📌 ${subjectLabel} 進捗報告\n${body}`;
-  await Promise.all([
-    postDiscordWebhook(env.DISCORD_PROGRESS_WEBHOOK_URL, message),
-    postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, message),
-    postDiscordChannel(env, env.DISCORD_PROGRESS_CHANNEL_ID, message),
-    postDiscordSubjectChannel(env, subject, message),
-  ]);
-}
-
-async function postDiscordSubjectChannel(
-  env: Env,
-  subject: string | null,
-  content: string,
-) {
-  if (!env.DISCORD_BOT_TOKEN || !subject) return;
-  const channel = await env.REPORTS.prepare(
-    "SELECT discord_channel_id FROM atlasez_discord_channel_mappings WHERE project_id = 'atlas' AND subject = ?",
-  )
-    .bind(subject)
-    .first<{ discord_channel_id: string }>();
-  if (!channel) return;
-  try {
-    await fetch(
-      `https://discord.com/api/v10/channels/${channel.discord_channel_id}/messages`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          content: content.slice(0, 1_900),
-          allowed_mentions: { parse: [] },
-        }),
-      },
-    );
-  } catch {
-    /* Discord設定が未完了でも進捗保存は継続する。 */
+  let subjectChannelId: string | null = null;
+  if (env.DISCORD_BOT_TOKEN?.trim() && subject) {
+    try {
+      const channel = await env.REPORTS.prepare(
+        "SELECT discord_channel_id FROM atlasez_discord_channel_mappings WHERE project_id = 'atlas' AND subject = ?",
+      )
+        .bind(subject)
+        .first<{ discord_channel_id: string }>();
+      subjectChannelId = channel?.discord_channel_id ?? null;
+    } catch {
+      subjectChannelId = null;
+    }
   }
-}
-
-async function postDiscordChannel(
-  env: Env,
-  channelId: string | undefined,
-  content: string,
-) {
-  if (!env.DISCORD_BOT_TOKEN || !channelId) return;
   try {
-    await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-      method: "POST",
-      headers: {
-        authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        content: content.slice(0, 1_900),
-        allowed_mentions: { parse: [] },
-      }),
+    const summary = await deliverProgressDiscordNotification(env, {
+      reportId,
+      subject,
+      body,
+      subjectChannelId,
     });
+    return summary.notified;
   } catch {
-    /* 通知失敗は進捗保存を妨げない。 */
+    console.error(
+      JSON.stringify({
+        event: "discord_progress_notify_failed",
+        category: "queue_or_send",
+      }),
+    );
+    return false;
   }
 }
 
@@ -13965,11 +13971,12 @@ async function createOperation(
   if (type === "progress") {
     const body = text(payload.body, MAX_OPERATION_TEXT_LENGTH);
     if (!body) return json({ error: "進捗内容を入力してください。" }, 400);
+    const reportId = crypto.randomUUID();
     await env.REPORTS.prepare(
       "INSERT INTO editorial_progress_reports (id,email,subject,document_id,body,created_at,project_id) VALUES (?,?,?,?,?,?,?)",
     )
       .bind(
-        crypto.randomUUID(),
+        reportId,
         scope.email,
         subject,
         text(payload.documentId, 64) || null,
@@ -13978,14 +13985,11 @@ async function createOperation(
         project.id,
       )
       .run();
-    if (project.slug === "atlas")
-      await notifyProgressToDiscord(env, subject, body);
-    return json({
-      ok: true,
-      discordNotified: Boolean(
-        env.DISCORD_ATLAS_WEBHOOK_URL || env.DISCORD_PROGRESS_WEBHOOK_URL,
-      ),
-    });
+    const discordNotified =
+      project.slug === "atlas"
+        ? await notifyProgressToDiscord(env, reportId, subject, body)
+        : false;
+    return json({ ok: true, discordNotified });
   }
   if (type === "task") {
     const title = text(payload.title, 200);
@@ -21099,10 +21103,11 @@ async function startPublicationReview(
   const recipients = stage === "subject-coordinator" ? coordinators : leaders;
   const recipientLabel =
     stage === "subject-coordinator" ? "分野統括" : "プロジェクトリーダー";
-  await postDiscordWebhook(
-    env.DISCORD_ATLAS_WEBHOOK_URL,
-    `公開審査依頼（${recipientLabel}）：${document.title}\n${document.subject} / ${documentId}`,
-  );
+  await notifyAtlasDiscordWebhook(env, {
+    dedupeKey: `publication-review:${documentId}:${round}:request:${stage}`,
+    kind: "publication-review",
+    content: `公開審査依頼（${recipientLabel}）：${document.title}\n${document.subject} / ${documentId}`,
+  });
   return json({ ok: true, status: "in-review", stage, round, recipients, recipientLabel });
 }
 
@@ -21164,7 +21169,11 @@ async function decidePublicationReview(
       "UPDATE editorial_documents SET status='in-review', publication_review_stage=NULL, publication_review_started_at=NULL, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
     ).bind(now, scope.email, documentId).run();
     await notifyEditorialDocumentChange(env, documentId);
-    await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査差し戻し：${document.title}\nフィードバック中へ戻しました。`);
+    await notifyAtlasDiscordWebhook(env, {
+      dedupeKey: `publication-review:${documentId}:${document.publication_review_round}:returned`,
+      kind: "publication-review",
+      content: `公開審査差し戻し：${document.title}\nフィードバック中へ戻しました。`,
+    });
     return json({ ok: true, status: "in-review", stage: null, returnedToFeedback: true });
   }
   if (stage === "subject-coordinator" && leaders.length && !scope.isManager) {
@@ -21172,7 +21181,11 @@ async function decidePublicationReview(
       "UPDATE editorial_documents SET publication_review_stage='project-leader', publication_review_started_at=?, updated_at=?, updated_by=? WHERE id=?",
     ).bind(now, now, scope.email, documentId).run();
     await notifyEditorialDocumentChange(env, documentId);
-    await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査依頼（プロジェクトリーダー）：${document.title}`);
+    await notifyAtlasDiscordWebhook(env, {
+      dedupeKey: `publication-review:${documentId}:${document.publication_review_round}:leader-request`,
+      kind: "publication-review",
+      content: `公開審査依頼（プロジェクトリーダー）：${document.title}`,
+    });
     return json({ ok: true, status: "in-review", stage: "project-leader" });
   }
   await env.REPORTS.prepare(
@@ -23688,6 +23701,21 @@ async function handleAdminRequest(
     if (isResponse(scope)) return scope;
     return fetchAdminAsset(request, env);
   }
+  // Before/after ADMIN UI review. Isolated static files, same developer-mode
+  // gate as the other prototypes. Production pages do not use this output.
+  if (
+    url.pathname === "/admin/ui-review-prototype" ||
+    url.pathname.startsWith("/admin/ui-review-prototype/")
+  ) {
+    if (request.method !== "GET" && request.method !== "HEAD")
+      return new Response("Method not allowed", {
+        status: 405,
+        headers: { Allow: "GET, HEAD" },
+      });
+    const scope = await getPrototypeDeveloperScope(request, env);
+    if (isResponse(scope)) return scope;
+    return fetchAdminAsset(request, env);
+  }
   if (
     url.pathname === "/api/onboarding/atlas-writing-practice" &&
     request.method === "POST"
@@ -24385,6 +24413,7 @@ async function handleAdminRequest(
       "/admin/ui-prototype/learning-content/",
       "/admin/portal-prototype",
       "/admin/portal-prototype/",
+      ...globalAdminPrototypePaths,
     ]);
     if (managerPages.has(url.pathname)) {
       const managerScope =
@@ -24547,8 +24576,9 @@ export default {
       return;
     }
     if (cron === "*/5 * * * *") {
+      // 一つの定期処理が失敗しても、Discord再送を含む残りの処理は完了させる。
       ctx.waitUntil(
-        Promise.all([
+        Promise.allSettled([
           progressEditorialPublicationRuns(env),
           dispatchDueTaskReminders(env),
           dispatchTaskTemplates(env.REPORTS,primaryAdminEmail(env)),
@@ -24559,7 +24589,18 @@ export default {
           syncDiscordRolesToAdmin(env),
           dispatchScheduledEditorialPublications(env),
           archiveStaleAuditLogs(env),
-        ]),
+          dispatchDueDiscordNotifications(env),
+        ]).then((results) => {
+          const rejected = results.filter((result) => result.status === "rejected").length;
+          if (rejected)
+            console.error(
+              JSON.stringify({
+                event: "admin_cron_job_failed",
+                cron: "*/5 * * * *",
+                rejected,
+              }),
+            );
+        }),
       );
       return;
     }

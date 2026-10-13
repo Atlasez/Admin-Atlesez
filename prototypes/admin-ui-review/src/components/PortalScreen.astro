@@ -1,0 +1,158 @@
+---
+interface Props {
+  variant: "before" | "after";
+}
+
+const { variant } = Astro.props;
+const counts = [
+  { label: "今日の要対応", value: "0", detail: "期限のあるタスクを確認", zero: true },
+  { label: "期限が近いタスク", value: "0", detail: "7日以内の期限", zero: true },
+  { label: "未読通知", value: "0", detail: "通知を確認", zero: true },
+  { label: "承認待ち", value: "2", detail: "確認が必要な項目", zero: false },
+  { label: "次回予定", value: "10/18", detail: "同時作業会", zero: false },
+];
+---
+
+<main class="portal">
+  <header>
+    <h1>Atlasezメンバー用サイト</h1>
+    <a class="application-link" href="#apply">応募フォームへ →</a>
+  </header>
+
+  <aside class="welcome-entry" aria-label="初参加の方へ">
+    <div>
+      <strong>初参加の方へ</strong>
+      {variant === "before" && <p>プロフィール、相談先、最初の小タスクを確認しましょう。</p>}
+    </div>
+    <div class="welcome-links">
+      <a href="#start">参加後の案内 →</a>
+      <a href="#procedures">休止・退会・再開の手続き →</a>
+    </div>
+  </aside>
+
+  <section class="my-intake" aria-label="あなたの参加後フォロー">
+    <h2>あなたの参加後フォロー</h2>
+    <p>学習サイト「アトラス」 — 相談先: 山田。最初の小タスクが未完了です。</p>
+  </section>
+
+  <section class="portal-summary" aria-label="ポータルの概要">
+    {
+      counts.map((item) => (
+        <a class="portal-summary-item" href="#summary">
+          <span class="portal-summary-label">{item.label}</span>
+          <strong class:list={[item.zero && "is-zero"]} data-summary-value={item.label}>{item.value}</strong>
+          <small>{item.detail}</small>
+        </a>
+      ))
+    }
+  </section>
+
+  <section class="project-entry" aria-labelledby="projects-entry-heading">
+    <div class="project-entry-heading">
+      <h2 id="projects-entry-heading">参加中のプロジェクト</h2>
+      {variant === "before" && <p>あなたの権限に応じた参加中のプロジェクトです。</p>}
+    </div>
+    <div class="project-entry-groups">
+      <section class="project-group" aria-labelledby="managed-projects-heading">
+        <header class="project-group-heading">
+          <h3 id="managed-projects-heading">運営として参加中</h3>
+          <span>1</span>
+        </header>
+        <div class="project-entry-cards">
+          <a class="project-entry-card" href="#atlas">
+            <strong>学習サイト「アトラス」</strong>
+            <small>記事と運営タスク</small>
+            <span>開く</span>
+          </a>
+        </div>
+      </section>
+      <section class="project-group" aria-labelledby="member-projects-heading">
+        <header class="project-group-heading">
+          <h3 id="member-projects-heading">参加者として参加中</h3>
+          <span>0</span>
+        </header>
+        <p class="quiet-line">参加中のプロジェクトはありません</p>
+      </section>
+    </div>
+  </section>
+
+  <div class="home-grid">
+    <section class="home-section calendar-section">
+      <div class="section-heading">
+        <h2>同時作業会・交流会の日程</h2>
+        <a href="#calendar" aria-label="横断カレンダーを開く">→</a>
+      </div>
+      <div class="calendar-toolbar">
+        <div class="calendar-heading">
+          <strong>10月18日</strong>
+          <small>今日</small>
+        </div>
+      </div>
+      <fieldset class="calendar-filters">
+        <legend>表示する予定</legend>
+        <label class="calendar-filter-option">
+          <input type="checkbox" checked />
+          <span class="calendar-filter-copy">
+            <b>同時作業会・交流会</b>
+            {variant === "before" && <small>全体の予定</small>}
+          </span>
+        </label>
+        <label class="calendar-filter-option">
+          <input type="checkbox" />
+          <span class="calendar-filter-copy">
+            <b>自分の期限</b>
+            {variant === "before" && <small>担当タスクの期限</small>}
+          </span>
+        </label>
+      </fieldset>
+      <div class="calendar-agenda">
+        <section class="calendar-agenda-section">
+          <h3>今日</h3>
+          <a class="calendar-agenda-item" href="#event">
+            <span class="calendar-agenda-time">14:00</span>
+            <span class="calendar-agenda-copy"><b>同時作業会</b><small>学習サイト「アトラス」</small></span>
+          </a>
+        </section>
+        <section class="calendar-agenda-section">
+          <h3>明日</h3>
+          <p class="calendar-agenda-empty">予定はありません</p>
+        </section>
+      </div>
+    </section>
+    <section class="home-section">
+      <div class="section-heading">
+        <div>
+          <h2>自分の未完了タスク</h2>
+          <small>0件</small>
+        </div>
+        <a href="#tasks" aria-label="横断タスク管理を開く">→</a>
+      </div>
+      <div class="todo-list">
+        <div class="todo-empty">
+          <p>未完了のタスクはありません</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="available-projects" aria-labelledby="available-projects-heading">
+    <div class="section-heading">
+      <div>
+        <h2 id="available-projects-heading">未参加のプロジェクト</h2>
+        {variant === "before" && <p>参加したいプロジェクトを選んで応募できます。</p>}
+      </div>
+    </div>
+    <div class="project-entry-cards">
+      <a class="project-entry-card" href="#cafe">
+        <strong>考えるカフェ</strong>
+        <small>対話の企画と記録</small>
+        <span>詳細を見る</span>
+      </a>
+    </div>
+  </section>
+
+  <footer class="portal-app-download" aria-label="macOSアプリ">
+    <strong>Atlasez運営アプリ<span class="portal-app-test-label">テスト機能</span></strong>
+    <a href="#download">macOS版をダウンロード ↓</a>
+  </footer>
+</main>

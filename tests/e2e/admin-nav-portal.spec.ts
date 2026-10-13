@@ -328,6 +328,9 @@ test("Developer画面からXAIサイトとポータル案を開ける", async ({
   await expect(
     page.getByRole("link", { name: /ポータル UIプロトタイプ/ }),
   ).toHaveAttribute("href", "/admin/portal-prototype/");
+  await expect(
+    page.getByRole("link", { name: /運営UIレビュー/ }),
+  ).toHaveAttribute("href", "/admin/ui-review-prototype/");
 });
 
 test("通知panelをtoggle・外側・Escape・閉じるボタンで操作できる", async ({

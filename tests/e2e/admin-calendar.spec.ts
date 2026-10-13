@@ -1,6 +1,19 @@
 import { expect, test, type Page } from "@playwright/test";
 
+const siteForProject = (project: string) =>
+  project === "seminar-platform"
+    ? "semi-platform"
+    : project === "student-council-exchange"
+      ? "student-council"
+      : project;
+
 const expectProjectManageLink = async (page: Page, project: string) => {
+  // ポータルの slug も atlas なので、slug だけでは遷移完了を待てない。
+  // サイトが切り替わったあとにメニューを開く。
+  await expect(page.locator(".admin-nav")).toHaveAttribute(
+    "data-current-site",
+    siteForProject(project),
+  );
   await expect(page.locator(".admin-nav")).toHaveAttribute(
     "data-current-slug",
     project,

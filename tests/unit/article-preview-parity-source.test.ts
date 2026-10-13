@@ -42,4 +42,17 @@ describe("article preview parity source of truth", () => {
     expect(baseHead).toContain('import "../scripts/article-math-structure";');
     expect(previewScript).toContain('from "./article-math-structure"');
   });
+
+  it("keeps mathematics frame styles active after the editor adopts the published preview shell", async () => {
+    const editor = await readSource("src/pages/admin/editor.astro");
+
+    for (const selector of [
+      ".published-article-preview .defi",
+      ".published-article-preview .thm",
+      ".published-article-preview .thmtitle",
+      ".published-article-preview .proof-details",
+    ]) {
+      expect(editor).toContain(selector);
+    }
+  });
 });

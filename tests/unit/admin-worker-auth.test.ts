@@ -3483,6 +3483,43 @@ describe("applicant stage server-side access", () => {
     expect(practice.status).toBe(403);
   });
 
+  it("limits nested UI prototypes to full global admins", async () => {
+    const paths = [
+      "/admin/ui-prototype/editor-header/",
+      "/admin/ui-prototype/editor-header-admin",
+      "/admin/ui-prototype/editor-header-codex/",
+      "/admin/ui-prototype/editor-header-compare",
+      "/admin/ui-prototype/editor-header-focus/",
+      "/admin/ui-prototype/editor-header-jreast",
+      "/admin/ui-prototype/editor-toolbar/",
+      "/admin/ui-prototype/welcome-login/",
+      "/admin/ui-prototype/welcome-not-found/",
+      "/admin/ui-prototype/welcome-screens/",
+    ];
+    for (const path of paths) {
+      const subjectEditor = await worker.fetch(
+        loggedInRequest(path),
+        stageEnv("accepted", true) as never,
+      );
+      expect(subjectEditor.status, path).toBe(403);
+
+      const member = await worker.fetch(
+        loggedInRequest(path),
+        stageEnv("accepted", false, true) as never,
+      );
+      expect(member.status, path).toBe(302);
+      expect(member.headers.get("location")).toBe(
+        "https://admin.example/admin/portal/",
+      );
+
+      const globalAdmin = await worker.fetch(
+        loggedInRequest(path),
+        stageEnv("accepted", true, false, false, true) as never,
+      );
+      expect(globalAdmin.status, path).toBe(200);
+    }
+  });
+
   it("limits the onboarding demo to global internal-operations managers", async () => {
     const preview = await worker.fetch(
       loggedInRequest("/admin/onboarding-demo/"),

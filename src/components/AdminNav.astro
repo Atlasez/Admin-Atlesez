@@ -190,9 +190,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     <a class="admin-management-link" href={`/admin/manage/?project=${projectSlug}`} hidden={site === "portal"} data-admin-project-link="manage" data-admin-site={site} data-admin-page="management" aria-current={current === "management" ? "page" : undefined}>管理</a>
   </nav>
   <div class="admin-account" data-admin-account hidden>
-    <a class="admin-action-center-utility-link" href="/admin/action-center/" data-admin-action-center-utility aria-label="要対応一覧（アクションセンター）" title="要対応一覧を開く"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>要対応</span></a>
+    <a class="admin-action-center-utility-link" href="/admin/action-center/" data-requires-admin data-admin-action-center-utility aria-label="要対応一覧（アクションセンター）" title="要対応一覧を開く"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>要対応</span></a>
     <button type="button" class="admin-command-button" data-admin-command aria-haspopup="dialog" aria-controls="admin-command-dialog" aria-label="操作を検索（⌘K）" title="操作を検索（⌘K）"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.3 15.3 5.2 5.2"/></svg></button>
-    <SettingsMenu locale="ja" />
+    <SettingsMenu locale="ja" showGlass />
     <button type="button" class="admin-notifications" data-admin-notifications aria-expanded="false" aria-controls="admin-notification-panel" aria-haspopup="dialog" aria-label="通知を開く"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span data-admin-notification-count hidden>0</span></button>
     <div id="admin-notification-panel" class="admin-notification-panel" data-admin-notification-panel role="dialog" aria-labelledby="admin-notification-heading" hidden><div class="notification-panel-heading"><strong id="admin-notification-heading">通知</strong><button type="button" class="mark-all-read" data-mark-all-notifications-read>すべて既読</button><button type="button" data-close-notifications aria-label="通知を閉じる">×</button></div><p class="notification-panel-status" data-legacy-reminder-status role="status" hidden></p><p class="notification-panel-status" data-legacy-reminder-failed role="status" hidden>日時またはタイムゾーンが不正なリマインダーがあります。該当タスクを修正してください。他の通知は利用できます。</p><div data-admin-notification-list aria-live="polite"><span class="admin-notification-loading">通知を確認しています…</span></div><a class="notification-inbox-link" href="/admin/notifications/">通知一覧を見る <span aria-hidden="true">→</span></a></div>
     <a class="admin-account-profile" data-admin-account-profile href={site === "portal" ? "/admin/member-profile/" : `/admin/workspace/?project=${projectSlug}`} aria-label="マイページを開く">
@@ -203,7 +203,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       <button type="submit" class="admin-logout">ログアウト</button>
     </form>
   </div>
-  <dialog class="admin-command-dialog" id="admin-command-dialog" data-admin-command-dialog aria-labelledby="admin-command-heading">
+  <dialog class="admin-command-dialog" id="admin-command-dialog" data-admin-command-dialog data-command-mode="command" aria-labelledby="admin-command-heading">
     <form method="dialog" class="admin-command-inner">
       <div class="admin-command-head"><h2 id="admin-command-heading" data-admin-command-heading>操作を検索</h2><button type="submit" class="admin-command-close" aria-label="操作検索を閉じる">×</button></div>
       <label class="admin-command-search"><span aria-hidden="true">⌕</span><input type="search" data-admin-command-input placeholder="記事・タスク・操作を検索" autocomplete="off" /><kbd>Esc</kbd></label>
@@ -217,6 +217,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
 <script>
   import { navigate } from "astro:transitions/client";
   import { formatNotificationTimestamp, notificationKindLabel, safeNotificationHref } from "../lib/admin-notification-features";
+  import { fetchAdminAuthStatus } from "../scripts/admin-auth-status";
 
   (() => {
     const preferencesKey = 'atlasez-prefs';
@@ -324,30 +325,6 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         item.hidden = !(isManager || managerProjects.length > 0) || item.dataset.adminSite !== state.site;
       });
     };
-    type AuthStatus = { canAccessAdmin?: boolean; email?: string; isManager?: boolean; managerProjects?: string[]; error?: string };
-    type AuthStatusResult = { ok: boolean; status: number; contentType: string; data: AuthStatus };
-    let authStatusRequest: Promise<AuthStatusResult> | null = null;
-    let authStatusCache: { value: AuthStatusResult; expiresAt: number } | null = null;
-    const fetchAuthStatus = () => {
-      if (authStatusCache && authStatusCache.expiresAt > Date.now()) return Promise.resolve(authStatusCache.value);
-      if (!authStatusRequest) {
-        const request = fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' })
-          .then(async (response) => {
-            const contentType = response.headers.get('content-type') ?? '';
-            const data = contentType.includes('application/json') ? await response.json() as AuthStatus : {};
-            return { ok: response.ok, status: response.status, contentType, data };
-          })
-          .catch(() => ({ ok: false, status: 0, contentType: '', data: {} }));
-        authStatusRequest = request.then((result) => {
-          // Both the manager visibility and account widgets need the same
-          // response during startup. Keep it briefly without changing the
-          // existing no-store request or longer-term permission freshness.
-          if (result.ok || result.status === 401) authStatusCache = { value: result, expiresAt: Date.now() + 1_000 };
-          return result;
-        }).finally(() => { authStatusRequest = null; });
-      }
-      return authStatusRequest;
-    };
     const refreshManagerVisibility = async () => {
       // 遷移後も保持されるナビの権限表示を、毎回サーバーの最新状態へ戻す。
       // 取得に失敗したときは安全側（非表示）にし、次の再試行で復元する。
@@ -355,7 +332,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       document.documentElement.dataset.adminNavRequest = requestId;
       applyManagerVisibility(false);
       try {
-        const response = await fetchAuthStatus();
+        const response = await fetchAdminAuthStatus();
         if (requestId !== document.documentElement.dataset.adminNavRequest || !response.contentType.includes('application/json') || !response.ok) return;
         const status = response.data;
         if (requestId !== document.documentElement.dataset.adminNavRequest) return;
@@ -428,7 +405,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       if (cachedProfile) applyProfile(cachedProfile);
       const loadAccount = async () => {
         try {
-          const statusResponse = await fetchAuthStatus();
+          const statusResponse = await fetchAdminAuthStatus();
           if (statusResponse.status === 401) {
             const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
             window.location.assign(`/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`);
@@ -565,6 +542,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
 </style>
 <script>
   import { navigate } from "astro:transitions/client";
+  import { fetchAdminAuthStatus } from "../scripts/admin-auth-status";
 
   (() => {
     const initializeCommandCenter = () => {
@@ -580,7 +558,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       type CommandAction = { entityType: string; entityId: string; fromState: string; toState: string; label: string; expectedUpdatedAt?: string; approvalRequestType?: string };
       type Command = { label: string; detail: string; group: 'recent' | 'quick' | 'result' | 'action'; icon: string; href?: string; run?: () => void; keepDialogOpen?: boolean; kind?: string; status?: string; priority?: string; actions?: CommandAction[] };
       type ActionCenterResponse = { items?: Array<{ title?: string; detail?: string; href?: string; kind?: string; status?: string; priority?: string; actions?: CommandAction[] }>; counts?: { today?: number; dueSoon?: number; approvals?: number; assigned?: number }; error?: string };
-      const staticCommands: Command[] = [
+      const adminCommands: Command[] = [
         { label: "要対応", detail: "確認・実行が必要な項目", group: 'quick', icon: 'actions', href: "/admin/action-center/", keepDialogOpen: true, run: () => { void openActionCenter(); } },
         { label: "編集・フィードバック", detail: "記事とフィードバック", group: 'quick', icon: 'articles', href: "/admin/articles/" },
         { label: "タスク管理", detail: "担当タスクと期限", group: 'quick', icon: 'tasks', href: "/admin/operations/?project=atlas" },
@@ -588,6 +566,14 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         { label: "管理トップ", detail: "設定・権限・状態", group: 'quick', icon: 'manage', href: "/admin/manage/?project=atlas" },
         { label: "表示設定を開く", detail: "テーマ・文字サイズ", group: 'quick', icon: 'settings', run: () => document.querySelector<HTMLElement>("[data-settings-menu] summary")?.click() },
       ];
+      const memberCommands: Command[] = [
+        { label: "自分のタスク", detail: "担当タスクと期限", group: 'quick', icon: 'tasks', href: "/admin/member-tasks/" },
+        { label: "カレンダー", detail: "予定と締切", group: 'quick', icon: 'calendar', href: "/admin/member-calendar/" },
+        { label: "通知", detail: "自分への通知", group: 'quick', icon: 'actions', href: "/admin/notifications/" },
+        { label: "表示設定を開く", detail: "テーマ・文字サイズ", group: 'quick', icon: 'settings', run: () => document.querySelector<HTMLElement>("[data-settings-menu] summary")?.click() },
+      ];
+      let useAdminCommands = false;
+      const paletteCommands = () => useAdminCommands ? adminCommands : memberCommands;
       const actionKindLabels: Record<string, string> = { task: 'タスク', document: '記事', application: '応募', approval: '承認' };
       const actionPriorityLabels: Record<string, string> = { urgent: '今日対応', 'due-soon': '期限間近', new: '新着' };
       const actionStatusLabels: Record<string, string> = { open: '未着手', doing: '進行中', pending: '承認待ち' };
@@ -599,11 +585,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           return Array.isArray(value) ? value.filter((item): item is CommandHistory => Boolean(item && typeof item === "object" && typeof (item as CommandHistory).label === "string" && typeof (item as CommandHistory).count === "number" && typeof (item as CommandHistory).lastUsed === "number")).slice(0, 8) : [];
         } catch { return []; }
       };
-      const recentCommands = (): Command[] => readHistory().sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed)).slice(0, 5).map((item) => {
-        const quickCommand = staticCommands.find((command) => command.label === item.label && (!item.href || command.href === item.href));
+      const recentCommands = (): Command[] => readHistory().sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed)).slice(0, 5).flatMap((item) => {
+        const quickCommand = paletteCommands().find((command) => command.label === item.label && (!item.href || command.href === item.href));
+        if (item.href && !quickCommand) return [];
         const savedDetail = typeof item.detail === "string" ? item.detail.replace(/・\d+回$/, "") : "";
         const detail = quickCommand?.detail ?? (savedDetail || "最近使った操作");
-        return { label: item.label, detail: `${detail}・${item.count}回`, group: 'recent', icon: 'history', ...(item.href ? { href: item.href } : {}), ...(quickCommand?.run ? { run: quickCommand.run } : {}), ...(quickCommand?.keepDialogOpen ? { keepDialogOpen: true } : {}) };
+        return [{ label: item.label, detail: `${detail}・${item.count}回`, group: 'recent' as const, icon: 'history', ...(item.href ? { href: item.href } : {}), ...(quickCommand?.run ? { run: quickCommand.run } : {}), ...(quickCommand?.keepDialogOpen ? { keepDialogOpen: true } : {}) }];
       });
       const recordUsage = (command: Command) => {
         if (command.group === 'action') return;
@@ -617,16 +604,41 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       };
       const recordCurrentRoute = () => {
         if ((window.location.pathname.replace(/\/$/, '') || '/') !== '/admin/action-center') return;
-        const actionCenter = staticCommands.find((command) => command.href === '/admin/action-center/');
+        const actionCenter = adminCommands.find((command) => command.href === '/admin/action-center/');
         if (!actionCenter) return;
         const alreadyRecorded = readHistory().some((item) => item.href === actionCenter.href && Date.now() - item.lastUsed < 1500);
         if (!alreadyRecorded) recordUsage(actionCenter);
       };
-      let commands = [...staticCommands];
+      let commands = [...paletteCommands()];
       let actionCommands: Command[] = [];
       let actionFilter = 'all';
       let actionCounts: NonNullable<ActionCenterResponse['counts']> = {};
       let openMode: 'command' | 'action' = 'command';
+      const reducedTransparency = window.matchMedia('(prefers-reduced-transparency: reduce)');
+      const applyGlassFilter = () => {
+        if (reducedTransparency.matches) {
+          dialog.style.backdropFilter = '';
+          dialog.style.removeProperty('-webkit-backdrop-filter');
+          return;
+        }
+        const opacity = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--command-glass-opacity'));
+        const blur = Number.isFinite(opacity) ? Math.round(Math.max(0, Math.min(100, opacity)) * 0.1) : 6;
+        // Apply the filter directly: dynamically interpolated CSS blur alone is not reliable on this dialog.
+        const filter = blur > 0 ? `blur(${blur}px) saturate(1.1)` : 'none';
+        dialog.style.backdropFilter = filter;
+        dialog.style.setProperty('-webkit-backdrop-filter', filter);
+      };
+      const applyCommandMode = (mode: 'command' | 'action') => {
+        openMode = mode;
+        dialog.dataset.commandMode = mode;
+        
+        applyGlassFilter();
+      };
+      window.addEventListener('atlasez-glass-change', () => {
+        
+        applyGlassFilter();
+      });
+      reducedTransparency.addEventListener('change', () => applyCommandMode(openMode));
       let activeIndex = 0;
       let searchTimer: number | undefined;
       const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character] ?? character));
@@ -686,8 +698,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           render();
           return;
         }
-        if (query.length < 2) { commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); return; }
-        const local = staticCommands.filter((command) => `${command.label} ${command.detail}`.includes(query)).map((command) => ({ ...command, group: 'result' as const }));
+        if (query.length < 2) { commands = [...recentCommands(), ...paletteCommands().filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); return; }
+        const local = paletteCommands().filter((command) => `${command.label} ${command.detail}`.includes(query)).map((command) => ({ ...command, group: 'result' as const }));
+        if (!useAdminCommands) { commands = local; activeIndex = 0; render(); return; }
         try {
           const response = await fetch(`/api/admin/command-search?q=${encodeURIComponent(query)}`, { credentials: "same-origin", cache: "no-store" });
           const data = await response.json().catch(() => ({})) as { results?: Array<{ type?: string; title?: string; detail?: string; href?: string }> };
@@ -695,9 +708,19 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           commands = [...local, ...remote]; activeIndex = 0; render();
         } catch { commands = local; activeIndex = 0; render(); }
       };
-      const open = () => { openMode = 'command'; actionToolbar?.setAttribute('hidden', ''); if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); input.focus(); };
+      const open = () => { applyCommandMode('command'); actionToolbar?.setAttribute('hidden', ''); if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...recentCommands(), ...paletteCommands().filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); input.focus(); };
+      const applyCommandAudience = (admin: boolean) => {
+        if (admin === useAdminCommands) return;
+        useAdminCommands = admin;
+        if (dialog.open && openMode === 'command') open();
+      };
+      void fetchAdminAuthStatus().then((result) => {
+        if (!result.ok) return;
+        const status = result.data;
+        applyCommandAudience(status.canAccessAdmin === true || (status.canAccessAdmin !== false && status.isManager === true));
+      }).catch(() => undefined);
       async function openActionCenter() {
-        openMode = 'action';
+        applyCommandMode('action');
         actionFilter = 'all';
         actionCounts = {};
         actionToolbar?.removeAttribute('hidden');
@@ -736,7 +759,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       }
       button.addEventListener("click", open);
       actionCenterButtons.forEach((actionButton) => actionButton.addEventListener('click', (event) => { event.preventDefault(); void openActionCenter(); }));
-      dialog.addEventListener('close', () => { openMode = 'command'; actionToolbar?.setAttribute('hidden', ''); if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; });
+      dialog.addEventListener('close', () => { applyCommandMode('command'); actionToolbar?.setAttribute('hidden', ''); if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; });
       document.addEventListener('astro:page-load', recordCurrentRoute);
       recordCurrentRoute();
       input.addEventListener("input", () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(() => void search(), 120); });
@@ -783,29 +806,90 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-command-button kbd,.admin-command-hint kbd,.admin-command-search kbd { border:1px solid var(--border-default); border-radius:999px; color:var(--text-muted); font:inherit; font-size:.68rem; padding:.16rem .45rem; white-space:nowrap; }
   .admin-command-dialog { background:var(--background-secondary); border:1px solid var(--border-strong); border-radius:.75rem; box-shadow:0 1rem 3rem rgb(0 0 0 / .4); color:var(--text-primary); margin:auto; max-height:min(34rem,calc(100vh - 2rem)); padding:0; width:min(38rem,calc(100vw - 3rem)); }
   .admin-command-dialog::backdrop { background:rgb(0 0 0 / .62); backdrop-filter:blur(3px); }
+  .admin-command-dialog {
+    background-color: color-mix(in srgb, var(--background-secondary) var(--command-glass-opacity), transparent);
+    border-color: color-mix(in srgb, var(--text-primary) 18%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-primary) 22%, transparent), 0 1rem 3rem rgb(0 0 0 / .22);
+    backdrop-filter: blur(var(--command-glass-blur)) saturate(1.1);
+    -webkit-backdrop-filter: blur(var(--command-glass-blur)) saturate(1.1);
+  }
+  .admin-command-dialog::backdrop {
+    background-color: rgb(0 0 0 / calc(var(--command-glass-opacity) * .18));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .admin-command-dialog :is(.admin-command-inner, .admin-command-head, .admin-command-list, .admin-command-hint),
+  .admin-command-dialog :global(:is(.admin-command-section, .admin-command-options, .admin-command-item-main)) {
+    background-color: transparent;
+  }
+  .admin-command-dialog :global(.admin-command-action-item),
+  .admin-command-dialog :global(.admin-command-action-item:hover),
+  .admin-command-dialog :global(.admin-command-item.is-active),
+  .admin-command-dialog :global(.admin-command-empty) {
+    background-color: color-mix(in srgb, var(--background-primary) calc(var(--command-glass-opacity) * .8), transparent);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .admin-command-dialog {
+      background-color: var(--background-secondary);
+      border-color: var(--border-strong);
+      box-shadow: 0 1rem 3rem rgb(0 0 0 / .4);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .admin-command-dialog::backdrop {
+      background-color: rgb(0 0 0 / .62);
+    }
+    .admin-command-dialog :global(.admin-command-action-item),
+    .admin-command-dialog :global(.admin-command-empty) {
+      background-color: transparent;
+    }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .admin-command-dialog {
+      background-color: var(--background-secondary);
+      border-color: var(--border-strong);
+      box-shadow: 0 1rem 3rem rgb(0 0 0 / .4);
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+    .admin-command-dialog::backdrop {
+      background-color: rgb(0 0 0 / .62);
+    }
+    .admin-command-dialog :global(.admin-command-action-item),
+    .admin-command-dialog :global(.admin-command-empty) {
+      background-color: transparent;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .admin-command-dialog,
+    .admin-command-dialog::backdrop {
+      animation: none;
+      transition: none;
+    }
+  }
   .admin-command-inner { padding:.9rem 1rem .8rem; }
   .admin-command-head { align-items:center; display:flex; justify-content:space-between; }
   .admin-command-head h2 { font-size:1.25rem; margin:0; }
   .admin-command-close { background:transparent; border:0; border-radius:50%; color:var(--text-secondary); cursor:pointer; font-size:1.1rem; line-height:1; min-height:2rem; width:2rem; }
   .admin-command-close:hover,.admin-command-close:focus-visible { background:var(--background-primary); color:var(--text-primary); outline:2px solid var(--accent-primary); }
-  .admin-command-search { align-items:center; background:var(--background-primary); border:1px solid var(--border-default); border-radius:999px; display:flex; gap:.55rem; margin-top:.45rem; min-height:3rem; padding:0 .8rem; }
+  .admin-command-search { align-items:center; background:color-mix(in srgb,var(--background-primary) var(--command-glass-opacity),transparent); border:1px solid var(--border-default); border-radius:999px; display:flex; gap:.55rem; margin-top:.45rem; min-height:3rem; padding:0 .8rem; }
   .admin-command-search:focus-within { border-color:var(--accent-primary); box-shadow:0 0 0 2px color-mix(in srgb,var(--accent-primary) 22%,transparent); }
   .admin-command-search > span { color:var(--text-secondary); font-size:1.35rem; line-height:1; }
   .admin-command-search input { background:transparent; border:0; color:var(--text-primary); flex:1; font:inherit; font-size:.95rem; min-height:2.6rem; min-width:0; outline:0; }
   .admin-command-search input::placeholder { color:var(--text-secondary); opacity:1; }
   .admin-command-action-toolbar { align-items:center; display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.65rem; }
   .admin-command-action-toolbar[hidden] { display:none!important; }
-  .admin-command-action-filter,.admin-command-action-all { align-items:center; background:var(--background-primary); border:1px solid var(--border-default); border-radius:999px; color:var(--text-secondary); cursor:pointer; display:inline-flex; font:inherit; font-size:.68rem; font-weight:750; gap:.3rem; min-height:1.95rem; padding:.25rem .55rem; text-decoration:none; }
+  .admin-command-action-filter,.admin-command-action-all { align-items:center; background:color-mix(in srgb,var(--background-primary) var(--command-glass-opacity),transparent); border:1px solid var(--border-default); border-radius:999px; color:var(--text-secondary); cursor:pointer; display:inline-flex; font:inherit; font-size:.68rem; font-weight:750; gap:.3rem; min-height:1.95rem; padding:.25rem .55rem; text-decoration:none; }
   .admin-command-action-filter strong { color:var(--text-primary); font-size:.72rem; }
   .admin-command-action-filter:hover,.admin-command-action-filter.is-active,.admin-command-action-all:hover { border-color:var(--accent-primary); color:var(--accent-primary); }
-  .admin-command-action-filter.is-active { background:color-mix(in srgb,var(--accent-primary) 12%,var(--background-primary)); }
+  .admin-command-action-filter.is-active { background:color-mix(in srgb,var(--accent-primary) 12%,transparent); }
   .admin-command-action-all { margin-left:auto; }
   .admin-command-list { display:grid; gap:.4rem; margin-top:.55rem; max-height:min(22rem,calc(100vh - 12rem)); overflow:auto; padding:.05rem .2rem; scrollbar-gutter:stable; }
   :global(.admin-command-section) { display:grid; gap:.2rem; }
   :global(.admin-command-section h3) { color:var(--text-secondary); font-size:.85rem; font-weight:700; margin:0; padding:.1rem .75rem .2rem; }
   :global(.admin-command-options) { display:grid; gap:.12rem; }
   :global(.admin-command-item) { align-items:center; background:transparent; border:1px solid transparent; border-radius:.45rem; color:var(--text-primary); cursor:pointer; display:grid; gap:.5rem; grid-template-columns:1.7rem minmax(0,1fr) auto; min-height:2.4rem; padding:.25rem .55rem; text-align:left; width:100%; }
-  :global(.admin-command-item:hover),:global(.admin-command-item.is-active) { background:color-mix(in srgb,var(--text-primary) 8%,var(--background-secondary)); border-color:transparent; }
+  :global(.admin-command-item:hover),:global(.admin-command-item.is-active) { background:color-mix(in srgb,var(--text-primary) 8%,transparent); border-color:transparent; }
   :global(.admin-command-item:focus-visible) { outline:2px solid var(--accent-primary); outline-offset:1px; }
   :global(.admin-command-item-icon) { align-items:center; color:var(--text-secondary); display:inline-flex; font-size:1rem; height:1.5rem; justify-content:center; width:1.5rem; }
   :global(.admin-command-item-icon::before) { content:"↗"; }
@@ -824,10 +908,17 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   :global(.admin-command-item-main) { align-items:center; background:transparent; border:0; border-radius:.55rem; color:inherit; cursor:pointer; display:grid; gap:.75rem; grid-template-columns:2.2rem minmax(0,1fr) auto; min-width:0; padding:.35rem .4rem; text-align:left; }
   :global(.admin-command-item-main:hover),:global(.admin-command-item-main:focus-visible) { background:color-mix(in srgb,var(--text-primary) 7%,transparent); outline:2px solid var(--accent-primary); outline-offset:-2px; }
   :global(.admin-command-actions) { align-items:center; display:flex; flex-wrap:wrap; gap:.35rem; justify-content:flex-end; }
-  :global(.admin-command-action) { background:var(--background-primary); border:1px solid var(--border-default); border-radius:.45rem; color:var(--text-primary); cursor:pointer; font:inherit; font-size:.78rem; font-weight:700; min-height:2.15rem; padding:.35rem .65rem; white-space:nowrap; }
+  :global(.admin-command-action) { background:color-mix(in srgb,var(--background-primary) var(--command-glass-opacity),transparent); border:1px solid var(--border-default); border-radius:.45rem; color:var(--text-primary); cursor:pointer; font:inherit; font-size:.78rem; font-weight:700; min-height:2.15rem; padding:.35rem .65rem; white-space:nowrap; }
   :global(.admin-command-action:hover),:global(.admin-command-action:focus-visible) { border-color:var(--accent-primary); color:var(--accent-primary); outline:2px solid color-mix(in srgb,var(--accent-primary) 28%,transparent); outline-offset:1px; }
   :global(.admin-command-action:disabled) { cursor:wait; opacity:.6; }
   :global(.admin-command-empty) { color:var(--text-secondary); font-size:.9rem; margin:.5rem; padding:.8rem; }
+  .admin-command-glass-adjust { align-items:center; border-top:1px solid color-mix(in srgb,var(--text-primary) 18%,transparent); display:flex; font-size:.75rem; gap:.6rem; margin:.6rem .15rem 0; padding-top:.55rem; }
+  .admin-command-glass-adjust[hidden] { display:none!important; }
+  .admin-command-glass-adjust label { color:var(--text-primary); flex:0 0 auto; font-weight:700; }
+  .admin-command-glass-adjust input { accent-color:var(--accent-primary); cursor:pointer; flex:1; height:1.6rem; min-height:1.6rem; min-width:0; }
+  .admin-command-glass-adjust input:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+  .admin-command-glass-adjust input:disabled { cursor:not-allowed; opacity:.5; }
+  .admin-command-glass-adjust output { color:var(--text-primary); font-variant-numeric:tabular-nums; font-weight:700; min-width:2.5rem; text-align:right; }
   .admin-command-hint { align-items:center; color:var(--text-secondary); display:flex; font-size:.7rem; gap:.25rem; margin:.55rem .15rem 0; }
   .admin-command-hint kbd { margin-right:.1rem; }
   @media(max-width:980px) { .admin-command-button { grid-column:1/-1; grid-row:2; justify-self:end; } .admin-account { align-items:center; flex-wrap:wrap; } }

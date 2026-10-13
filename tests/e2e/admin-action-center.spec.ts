@@ -1,4 +1,83 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+function contrast(foreground: number[], background: number[]) {
+  const channel = (value: number) => {
+    const scaled = value / 255;
+    return scaled <= 0.04045
+      ? scaled / 12.92
+      : ((scaled + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (color: number[]) =>
+    0.2126 * channel(color[0]) +
+    0.7152 * channel(color[1]) +
+    0.0722 * channel(color[2]);
+  const lighter = Math.max(luminance(foreground), luminance(background));
+  const darker = Math.min(luminance(foreground), luminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function parseColor(value: string) {
+  const color = value.match(
+    /color\(srgb\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)(?:\s*\/\s*([0-9.]+))?\)/,
+  );
+  if (color) {
+    return {
+      rgb: [1, 2, 3].map((index) => Math.round(Number(color[index]) * 255)),
+      alpha: color[4] === undefined ? 1 : Number(color[4]),
+    };
+  }
+  const channels = value.match(/[\d.]+/g)?.map(Number) ?? [];
+  return {
+    rgb: channels.slice(0, 3),
+    alpha: channels.length > 3 ? channels[3] : 1,
+  };
+}
+
+async function readCommandPanel(dialog: Locator) {
+  const raw = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const filter = [
+      style.backdropFilter,
+      style.getPropertyValue("-webkit-backdrop-filter"),
+    ]
+      .filter((value) => value && value !== "none")
+      .join(" ");
+    const search = element.querySelector(".admin-command-search");
+    const action = element.querySelector(".admin-command-action");
+    const meta = element.querySelector("small");
+    const row = element.querySelector(".admin-command-action-item");
+    const list = element.querySelector(".admin-command-list");
+    const hint = element.querySelector(".admin-command-hint");
+    const inner = element.querySelector(".admin-command-inner");
+    return {
+      background: style.backgroundColor,
+      backdrop: getComputedStyle(element, "::backdrop").backgroundColor,
+      filter,
+      title: getComputedStyle(element.querySelector("h2")!).color,
+      meta: meta ? getComputedStyle(meta).color : "",
+      row: row ? getComputedStyle(row).backgroundColor : "",
+      list: list ? getComputedStyle(list).backgroundColor : "",
+      hint: hint ? getComputedStyle(hint).backgroundColor : "",
+      inner: inner ? getComputedStyle(inner).backgroundColor : "",
+      search: search ? getComputedStyle(search).backgroundColor : "",
+      action: action ? getComputedStyle(action).backgroundColor : "",
+    };
+  });
+  const background = parseColor(raw.background);
+  return {
+    ...background,
+    backdropAlpha: parseColor(raw.backdrop).alpha,
+    filter: raw.filter,
+    title: parseColor(raw.title).rgb,
+    meta: parseColor(raw.meta).rgb,
+    row: parseColor(raw.row),
+    listAlpha: parseColor(raw.list).alpha,
+    hintAlpha: parseColor(raw.hint).alpha,
+    innerAlpha: parseColor(raw.inner).alpha,
+    searchAlpha: parseColor(raw.search).alpha,
+    actionAlpha: parseColor(raw.action).alpha,
+  };
+}
 
 async function mockShell(
   page: Page,
@@ -297,6 +376,22 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await page.keyboard.press("Meta+K");
   const dialog = page.locator("[data-admin-command-dialog]");
   await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("data-command-mode", "command");
+  const searchPanel = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      filter: `${style.backdropFilter} ${style.getPropertyValue("-webkit-backdrop-filter")}`,
+    };
+  });
+  expect(parseColor(searchPanel.background).alpha).toBeCloseTo(0.6, 1);
+  expect(searchPanel.filter).toContain("saturate");
+  const searchBackdrop = parseColor(
+    await dialog.evaluate(
+      (element) => getComputedStyle(element, "::backdrop").backgroundColor,
+    ),
+  );
+  expect(searchBackdrop.alpha).toBeLessThan(0.2);
   const dialogSize = await dialog.evaluate((element) => ({
     width: Number.parseFloat(getComputedStyle(element).width),
     maxHeight: Number.parseFloat(getComputedStyle(element).maxHeight),
@@ -350,6 +445,230 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
     dialog.getByRole("option", { name: /定義を確認/ }),
   ).toContainText("タスク");
   await expect(page).toHaveURL(/\/admin\/articles\//);
+  await expect(dialog).toHaveAttribute("data-command-mode", "action");
+  const glass = await readCommandPanel(dialog);
+  expect(glass.alpha).toBeGreaterThanOrEqual(0.55);
+  expect(glass.alpha).toBeLessThanOrEqual(0.65);
+  expect(glass.backdropAlpha).toBeGreaterThanOrEqual(0.08);
+  expect(glass.backdropAlpha).toBeLessThanOrEqual(0.14);
+  expect(glass.listAlpha).toBe(0);
+  expect(glass.hintAlpha).toBe(0);
+  expect(glass.innerAlpha).toBe(0);
+  expect(glass.row.alpha).toBeGreaterThan(0.35);
+  expect(glass.row.alpha).toBeLessThan(0.95);
+  expect(glass.filter).toContain("blur");
+  expect(glass.filter).toContain("saturate");
+  expect(glass.searchAlpha).toBeCloseTo(0.6, 1);
+  expect(glass.actionAlpha).toBeCloseTo(0.6, 1);
+  const behind = [255, 255, 255].map(
+    (channel) => channel * (1 - glass.backdropAlpha),
+  );
+  const panel = glass.rgb.map(
+    (channel, index) =>
+      channel * glass.alpha + behind[index] * (1 - glass.alpha),
+  );
+  const row = glass.row.rgb.map(
+    (channel, index) =>
+      channel * glass.row.alpha + panel[index] * (1 - glass.row.alpha),
+  );
+  expect(contrast(glass.title, panel)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(glass.meta, row)).toBeGreaterThanOrEqual(4.5);
+});
+
+test("要対応ポップアップは透過を減らす設定で不透明に戻る", async ({ page }) => {
+  await mockShell(page);
+  await page.goto("admin/articles/");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await expect(dialog).toHaveAttribute("data-command-mode", "action");
+  const session = await page.context().newCDPSession(page);
+  await session.send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-transparency", value: "reduce" }],
+  });
+  await expect
+    .poll(() =>
+      dialog.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const filter = `${style.backdropFilter} ${style.getPropertyValue("-webkit-backdrop-filter")}`;
+        return (
+          style.backgroundColor === "rgb(245, 247, 248)" &&
+          !filter.includes("blur") &&
+          !filter.includes("saturate")
+        );
+      }),
+    )
+    .toBe(true);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Meta+K");
+  await expect(dialog).toHaveAttribute("data-command-mode", "command");
+  await expect(
+    dialog.getByRole("heading", { name: "操作を検索" }),
+  ).toBeVisible();
+});
+
+test("表示設定のスライダーで要対応の透け感を広く調整し、保存・復元できる", async ({
+  page,
+}) => {
+  await mockShell(page);
+  await page.goto("admin/articles/");
+  const menu = page.locator("[data-settings-menu]");
+  const glassSetting = menu.locator("fieldset", {
+    hasText: "ポップアップの透け感",
+  });
+  await menu.locator("> summary").click();
+  const slider = glassSetting.getByRole("slider", {
+    name: "ポップアップの透け感",
+  });
+  const value = glassSetting.locator("[data-glass-value]");
+  await expect(slider).toHaveValue("40");
+  await expect(value).toHaveText("40%");
+
+  // Strongest: 100% see-through (0% panel opacity).
+  await slider.focus();
+  await slider.press("End");
+  await expect(value).toHaveText("100%");
+  await expect(slider).toHaveAttribute(
+    "aria-valuetext",
+    "ポップアップの透け感 100%",
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--command-glass-opacity")
+          .trim(),
+      ),
+    )
+    .toBe("0%");
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
+    ),
+  ).toBe("0%");
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await expect(dialog).toHaveAttribute("data-command-mode", "action");
+  const strong = await readCommandPanel(dialog);
+  expect(strong.alpha).toBe(0);
+  expect(strong.backdropAlpha).toBe(0);
+  await page.keyboard.press("Escape");
+
+  await page.reload();
+  await menu.locator("> summary").click();
+  await expect(slider).toHaveValue("100");
+  await expect(value).toHaveText("100%");
+
+  // Weakest: opaque panel.
+  await slider.focus();
+  await slider.press("Home");
+  await expect(value).toHaveText("0%");
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const solid = await readCommandPanel(dialog);
+  expect(solid.alpha).toBe(1);
+  await page.keyboard.press("Escape");
+
+  await menu.locator("> summary").click();
+  await menu.locator("[data-a11y-reset]").click();
+  await expect(slider).toHaveValue("40");
+  await expect(value).toHaveText("40%");
+  const resetGlass = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
+  );
+  expect(resetGlass).toBeUndefined();
+  await page.reload();
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const standard = await readCommandPanel(dialog);
+  expect(standard.alpha).toBeGreaterThanOrEqual(0.55);
+  expect(standard.alpha).toBeLessThanOrEqual(0.65);
+});
+
+test("ポップアップの透け感は表示設定からのみ変更できる", async ({ page }) => {
+  await mockShell(page);
+  await page.goto("admin/portal/");
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  await expect(dialog.getByRole("slider")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.locator("[data-settings-menu] > summary").click();
+  const slider = page.getByRole("slider", { name: "ポップアップの透け感" });
+  await slider.focus();
+  await slider.press("Home");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Meta+K");
+  expect((await readCommandPanel(dialog)).alpha).toBe(1);
+  await page.keyboard.press("Escape");
+  await page.locator("[data-settings-menu] > summary").click();
+  await slider.focus();
+  await slider.press("End");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Meta+K");
+  expect((await readCommandPanel(dialog)).alpha).toBe(0);
+});
+
+test("Aa表示設定も0%と100%を即座に反映する", async ({ page }) => {
+  await mockShell(page);
+  await page.goto("admin/portal/");
+  const menu = page.locator("[data-settings-menu]");
+  await menu.locator("> summary").click();
+  const panel = menu.locator(".settings-panel");
+  const slider = menu.getByRole("slider", { name: "ポップアップの透け感" });
+  const alpha = async () => {
+    const color = await panel.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    );
+    return parseColor(color).alpha;
+  };
+  expect(await alpha()).toBeCloseTo(0.6, 1);
+  await slider.focus();
+  await slider.press("Home");
+  expect(await alpha()).toBe(1);
+  await slider.press("End");
+  expect(await alpha()).toBe(0);
+  await expect(panel).not.toHaveCSS("backdrop-filter", "none");
+  await page.reload();
+  await menu.locator("> summary").click();
+  expect(await alpha()).toBe(0);
+  await expect(slider).toHaveValue("100");
+});
+
+test("Aa表示設定はOSの透明度を下げる設定を尊重する", async ({ page }) => {
+  await mockShell(page);
+  await page.goto("admin/portal/");
+  const menu = page.locator("[data-settings-menu]");
+  await menu.locator("> summary").click();
+  const panel = menu.locator(".settings-panel");
+  const session = await page.context().newCDPSession(page);
+  await session.send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-transparency", value: "reduce" }],
+  });
+  await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(panel).toHaveCSS("backdrop-filter", "none");
+});
+
+test("以前の3段階の透過設定をスライダーでも復元できる", async ({ page }) => {
+  await mockShell(page);
+  await page.goto("admin/articles/");
+  await page.evaluate(() =>
+    localStorage.setItem("atlasez-prefs", JSON.stringify({ glass: "40%" })),
+  );
+  await page.reload();
+  const menu = page.locator("[data-settings-menu]");
+  await menu.locator("> summary").click();
+  await expect(
+    menu.getByRole("slider", { name: "ポップアップの透け感" }),
+  ).toHaveValue("60");
+  await expect(menu.locator("[data-glass-value]")).toHaveText("60%");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--command-glass-opacity")
+          .trim(),
+      ),
+    )
+    .toBe("40%");
 });
 
 test("要対応ポップアップから状態変更を実行し、通知を混在させない", async ({

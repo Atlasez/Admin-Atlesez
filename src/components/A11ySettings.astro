@@ -15,8 +15,10 @@ interface Props {
    * ヘッダーの「表示設定」ポップオーバー（SettingsMenu）から使う。
    */
   bare?: boolean;
+  /** 運営ヘッダーのみ。要対応・操作検索・表示設定の透け感を共通で調整する。 */
+  showGlass?: boolean;
 }
-const { locale = "ja", bare = false } = Astro.props;
+const { locale = "ja", bare = false, showGlass = false } = Astro.props;
 const L =
   locale === "ja"
     ? {
@@ -40,6 +42,9 @@ const L =
         gothic: "標準ゴシック",
         readable: "可読性重視",
         reset: "初期設定に戻す",
+        glass: "ポップアップの透け感",
+        glassStrong: "強い（よく透ける）",
+        glassWeak: "弱い（不透明）",
       }
     : {
         title: "Display settings",
@@ -62,6 +67,9 @@ const L =
         gothic: "Default",
         readable: "Readable",
         reset: "Reset to defaults",
+        glass: "Popup transparency",
+        glassStrong: "Strong (see-through)",
+        glassWeak: "Weak (opaque)",
       };
 
 /**
@@ -177,6 +185,31 @@ const groups = [
           </div>
         </fieldset>
       ))}
+      {showGlass && (
+        <fieldset>
+          <legend>{L.glass}</legend>
+          <div class="a11y-glass-control">
+            <div class="a11y-glass-hints">
+              <span>{L.glassWeak}</span>
+              <output for="a11y-glass-bare" data-glass-value>40%</output>
+              <span>{L.glassStrong}</span>
+            </div>
+            <input
+              id="a11y-glass-bare"
+              data-glass-range
+              data-glass-value-label={L.glass}
+              type="range"
+              name="glass"
+              min="0"
+              max="100"
+              step="1"
+              value="40"
+              aria-label={L.glass}
+              aria-valuetext="40%"
+            />
+          </div>
+        </fieldset>
+      )}
       <button type="button" class="button button-secondary" data-a11y-reset>
         {L.reset}
       </button>
@@ -222,6 +255,31 @@ const groups = [
             </div>
           </fieldset>
         ))}
+        {showGlass && (
+          <fieldset>
+            <legend>{L.glass}</legend>
+            <div class="a11y-glass-control">
+              <div class="a11y-glass-hints">
+                <span>{L.glassStrong}</span>
+                <output for="a11y-glass" data-glass-value>40%</output>
+                <span>{L.glassStrong}</span>
+              </div>
+              <input
+                id="a11y-glass"
+                data-glass-range
+                data-glass-value-label={L.glass}
+                type="range"
+                name="glass"
+                min="0"
+                max="100"
+                step="1"
+                value="40"
+                aria-label={L.glass}
+                aria-valuetext="40%"
+              />
+            </div>
+          </fieldset>
+        )}
         <button type="button" class="button button-secondary" data-a11y-reset>
           {L.reset}
         </button>
@@ -317,6 +375,53 @@ const groups = [
   .a11y-options:has(> :nth-child(2):last-child) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .a11y-glass-control {
+    width: 100%;
+  }
+  .a11y-glass-hints {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-1);
+    font-size: calc(0.73rem * var(--text-scale));
+    color: var(--text-secondary);
+  }
+  .a11y-glass-hints output {
+    flex: 0 0 auto;
+    color: var(--text-primary);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .a11y-glass-control input[type="range"] {
+    display: block;
+    width: 100%;
+    height: 2rem;
+    min-height: 2rem;
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    background: linear-gradient(to right, var(--accent-primary) var(--glass-progress, 40%), var(--border-strong) var(--glass-progress, 40%));
+    background-size: calc(100% - 18px) 6px;
+    background-position: center;
+    background-repeat: no-repeat;
+    cursor: pointer;
+  }
+  .a11y-glass-control input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: transparent; }
+  .a11y-glass-control input[type="range"]::-moz-range-track { height: 6px; background: transparent; }
+  .a11y-glass-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+    margin-top: -6px; background: var(--accent-primary); border: 2px solid var(--background-primary);
+    border-radius: 50%; box-shadow: 0 0 0 1px var(--border-strong);
+  }
+  .a11y-glass-control input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; background: var(--accent-primary);
+    border: 2px solid var(--background-primary); border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--border-strong);
+  }
+  .a11y-glass-control input[type="range"]:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+  }
   /*
    * 丸を隠せるのは :has() で選択状態を面に反映できる場合だけ。
    * 非対応のブラウザでは丸を残さないと、どれを選んでいるか分からなくなる。
@@ -382,8 +487,17 @@ const groups = [
     }
   }
 
+  /** Stored glass is panel opacity (0–100%), not the see-through percentage. */
+  function getGlassOpacity(value: string | undefined): number {
+    if (typeof value !== "string" || !/^(?:100|[1-9]?\d)%$/.test(value)) return 60;
+    return Math.min(100, Math.max(0, Number(value.slice(0, -1))));
+  }
+
   function apply(prefs: Record<string, string>): void {
     const d = document.documentElement;
+    const opacity = getGlassOpacity(prefs.glass);
+    d.style.setProperty("--command-glass-opacity", `${opacity}%`);
+    d.style.setProperty("--command-glass-blur", `${Math.round(opacity * 0.1)}px`);
     for (const [k, attr] of Object.entries(ATTRS)) {
       const v = prefs[k];
       if (k === "bg" && v === "black") {
@@ -442,6 +556,20 @@ const groups = [
       form
         .querySelectorAll<HTMLSelectElement>('select[name="lang"]')
         .forEach(updateLanguageOptionLabels);
+      const glassRange = form.querySelector<HTMLInputElement>("[data-glass-range]");
+      const glassOutput = form.querySelector<HTMLOutputElement>("[data-glass-value]");
+      const syncGlassValue = () => {
+        if (!glassRange) return;
+        const seeThrough = Number(glassRange.value);
+        if (glassOutput) glassOutput.textContent = `${seeThrough}%`;
+        glassRange.style.setProperty("--glass-progress", `${seeThrough}%`);
+        glassRange.setAttribute(
+          "aria-valuetext",
+          `${glassRange.dataset.glassValueLabel ?? "Transparency"} ${seeThrough}%`,
+        );
+      };
+      if (glassRange) glassRange.value = String(100 - getGlassOpacity(prefs.glass));
+      syncGlassValue();
       const syncBackgroundChoice = () => {
         const value = document.documentElement.dataset.prefMode === "black"
           ? "black"
@@ -452,14 +580,30 @@ const groups = [
         if (input) input.checked = true;
       };
       window.addEventListener("atlasez-theme-change", syncBackgroundChoice);
-      form.addEventListener("change", () => {
-        form
-          .querySelectorAll<HTMLSelectElement>('select[name="lang"]')
-          .forEach(updateLanguageOptionLabels);
+      window.addEventListener("atlasez-glass-change", () => {
+        if (glassRange) glassRange.value = String(100 - getGlassOpacity(loadPrefs().glass));
+        syncGlassValue();
+      });
+      const savePrefs = (notify: boolean) => {
+        if (notify) {
+          form
+            .querySelectorAll<HTMLSelectElement>('select[name="lang"]')
+            .forEach(updateLanguageOptionLabels);
+        }
         const data = new FormData(form);
         const next: Record<string, string> = {};
+        // Public pages omit the slider; their other display settings must not erase it.
+        if (!glassRange && loadPrefs().glass) next.glass = loadPrefs().glass;
         for (const [k, v] of data.entries()) {
-          if (typeof v === "string" && v !== "default") next[k] = v;
+          if (typeof v !== "string" || v === "default") continue;
+          if (k === "glass") {
+            const opacity = 100 - Number(v);
+            if (Number.isInteger(opacity) && opacity >= 0 && opacity <= 100 && opacity !== 60) {
+              next.glass = `${opacity}%`;
+            }
+          } else {
+            next[k] = v;
+          }
         }
         try {
           localStorage.setItem(KEY, JSON.stringify(next));
@@ -467,9 +611,25 @@ const groups = [
           /* 保存不可でも表示には適用する */
         }
         apply(next);
-        window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
-        // 言語は HTML 属性ではなく文字の差し替えで反映するので別に知らせる
-        window.dispatchEvent(new CustomEvent("atlasez-lang-change"));
+        if (notify) {
+          window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
+          // 言語は HTML 属性ではなく文字の差し替えで反映するので別に知らせる
+          window.dispatchEvent(new CustomEvent("atlasez-lang-change"));
+        }
+      };
+      glassRange?.addEventListener("input", () => {
+        syncGlassValue();
+        savePrefs(false);
+        window.dispatchEvent(new CustomEvent("atlasez-glass-change"));
+      });
+      form.addEventListener("change", (event) => {
+        if (event.target === glassRange) {
+          syncGlassValue();
+          savePrefs(false);
+          window.dispatchEvent(new CustomEvent("atlasez-glass-change"));
+          return;
+        }
+        savePrefs(true);
       });
       form
         .querySelector("[data-a11y-reset]")
@@ -488,9 +648,12 @@ const groups = [
               sel.selectedIndex = 0;
               if (sel.name === "lang") updateLanguageOptionLabels(sel);
             });
+          if (glassRange) glassRange.value = "40";
+          syncGlassValue();
           apply({});
           window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
           window.dispatchEvent(new CustomEvent("atlasez-lang-change"));
+          window.dispatchEvent(new CustomEvent("atlasez-glass-change"));
         });
     },
   );
