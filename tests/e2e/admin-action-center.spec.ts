@@ -458,8 +458,8 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
   expect(glass.row.alpha).toBeLessThan(0.95);
   expect(glass.filter).toContain("blur");
   expect(glass.filter).toContain("saturate");
-  expect(glass.searchAlpha).toBe(1);
-  expect(glass.actionAlpha).toBe(1);
+  expect(glass.searchAlpha).toBeCloseTo(0.6, 1);
+  expect(glass.actionAlpha).toBeCloseTo(0.6, 1);
   const behind = [255, 255, 255].map(
     (channel) => channel * (1 - glass.backdropAlpha),
   );
