@@ -614,9 +614,6 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       let actionFilter = 'all';
       let actionCounts: NonNullable<ActionCenterResponse['counts']> = {};
       let openMode: 'command' | 'action' = 'command';
-      const glassAdjust = dialog.querySelector<HTMLElement>('[data-admin-command-glass-adjust]');
-      const glassSlider = dialog.querySelector<HTMLInputElement>('[data-admin-command-glass-range]');
-      const glassOutput = dialog.querySelector<HTMLOutputElement>('[data-admin-command-glass-output]');
       const reducedTransparency = window.matchMedia('(prefers-reduced-transparency: reduce)');
       const applyGlassFilter = () => {
         if (reducedTransparency.matches) {
