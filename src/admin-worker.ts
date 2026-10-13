@@ -42,6 +42,11 @@ import {
 } from "./lib/date-time";
 import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
 import { dispatchApplicationEmails } from "./lib/application-email-delivery";
+import {
+  deliverDiscordNotifications,
+  deliverProgressDiscordNotification,
+  dispatchDueDiscordNotifications,
+} from "./lib/discord-notifications";
 import { purgeExpiredPersonalData } from "./lib/personal-data-retention";
 import { normalizeArticleReferences } from "./lib/article-references.mjs";
 import { tikzPackageHelp } from "./lib/tikz-policy.mjs";
@@ -8134,19 +8139,28 @@ async function getProjectProfileReviewerScope(
   return getProjectReviewerScope(request, env, requestedProject);
 }
 
-async function postDiscordWebhook(url: string | undefined, content: string) {
-  if (!url) return;
+async function notifyAtlasDiscordWebhook(
+  env: Env,
+  input: { dedupeKey: string; kind: string; content: string },
+) {
+  if (!env.DISCORD_ATLAS_WEBHOOK_URL?.trim()) return;
   try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        content: content.slice(0, 1_900),
-        allowed_mentions: { parse: [] },
-      }),
-    });
+    await deliverDiscordNotifications(env, [
+      {
+        dedupeKey: input.dedupeKey,
+        kind: input.kind,
+        destinationKind: "webhook",
+        destinationRef: "DISCORD_ATLAS_WEBHOOK_URL",
+        content: input.content,
+      },
+    ]);
   } catch {
-    /* 通知失敗は本文保存を妨げない。 */
+    console.error(
+      JSON.stringify({
+        event: "discord_notification_enqueue_failed",
+        kind: input.kind,
+      }),
+    );
   }
 }
 
@@ -8443,71 +8457,39 @@ async function createApplicationResponseTask(
 
 async function notifyProgressToDiscord(
   env: Env,
+  reportId: string,
   subject: string | null,
   body: string,
 ) {
-  const subjectLabel = subject ? `【${subject}】` : "【全体】";
-  const message = `📌 ${subjectLabel} 進捗報告\n${body}`;
-  await Promise.all([
-    postDiscordWebhook(env.DISCORD_PROGRESS_WEBHOOK_URL, message),
-    postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, message),
-    postDiscordChannel(env, env.DISCORD_PROGRESS_CHANNEL_ID, message),
-    postDiscordSubjectChannel(env, subject, message),
-  ]);
-}
-
-async function postDiscordSubjectChannel(
-  env: Env,
-  subject: string | null,
-  content: string,
-) {
-  if (!env.DISCORD_BOT_TOKEN || !subject) return;
-  const channel = await env.REPORTS.prepare(
-    "SELECT discord_channel_id FROM atlasez_discord_channel_mappings WHERE project_id = 'atlas' AND subject = ?",
-  )
-    .bind(subject)
-    .first<{ discord_channel_id: string }>();
-  if (!channel) return;
-  try {
-    await fetch(
-      `https://discord.com/api/v10/channels/${channel.discord_channel_id}/messages`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          content: content.slice(0, 1_900),
-          allowed_mentions: { parse: [] },
-        }),
-      },
-    );
-  } catch {
-    /* Discord設定が未完了でも進捗保存は継続する。 */
+  let subjectChannelId: string | null = null;
+  if (env.DISCORD_BOT_TOKEN?.trim() && subject) {
+    try {
+      const channel = await env.REPORTS.prepare(
+        "SELECT discord_channel_id FROM atlasez_discord_channel_mappings WHERE project_id = 'atlas' AND subject = ?",
+      )
+        .bind(subject)
+        .first<{ discord_channel_id: string }>();
+      subjectChannelId = channel?.discord_channel_id ?? null;
+    } catch {
+      subjectChannelId = null;
+    }
   }
-}
-
-async function postDiscordChannel(
-  env: Env,
-  channelId: string | undefined,
-  content: string,
-) {
-  if (!env.DISCORD_BOT_TOKEN || !channelId) return;
   try {
-    await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-      method: "POST",
-      headers: {
-        authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        content: content.slice(0, 1_900),
-        allowed_mentions: { parse: [] },
-      }),
+    const summary = await deliverProgressDiscordNotification(env, {
+      reportId,
+      subject,
+      body,
+      subjectChannelId,
     });
+    return summary.notified;
   } catch {
-    /* 通知失敗は進捗保存を妨げない。 */
+    console.error(
+      JSON.stringify({
+        event: "discord_progress_notify_failed",
+        category: "queue_or_send",
+      }),
+    );
+    return false;
   }
 }
 
@@ -13989,11 +13971,12 @@ async function createOperation(
   if (type === "progress") {
     const body = text(payload.body, MAX_OPERATION_TEXT_LENGTH);
     if (!body) return json({ error: "進捗内容を入力してください。" }, 400);
+    const reportId = crypto.randomUUID();
     await env.REPORTS.prepare(
       "INSERT INTO editorial_progress_reports (id,email,subject,document_id,body,created_at,project_id) VALUES (?,?,?,?,?,?,?)",
     )
       .bind(
-        crypto.randomUUID(),
+        reportId,
         scope.email,
         subject,
         text(payload.documentId, 64) || null,
@@ -14002,14 +13985,11 @@ async function createOperation(
         project.id,
       )
       .run();
-    if (project.slug === "atlas")
-      await notifyProgressToDiscord(env, subject, body);
-    return json({
-      ok: true,
-      discordNotified: Boolean(
-        env.DISCORD_ATLAS_WEBHOOK_URL || env.DISCORD_PROGRESS_WEBHOOK_URL,
-      ),
-    });
+    const discordNotified =
+      project.slug === "atlas"
+        ? await notifyProgressToDiscord(env, reportId, subject, body)
+        : false;
+    return json({ ok: true, discordNotified });
   }
   if (type === "task") {
     const title = text(payload.title, 200);
@@ -21123,10 +21103,11 @@ async function startPublicationReview(
   const recipients = stage === "subject-coordinator" ? coordinators : leaders;
   const recipientLabel =
     stage === "subject-coordinator" ? "分野統括" : "プロジェクトリーダー";
-  await postDiscordWebhook(
-    env.DISCORD_ATLAS_WEBHOOK_URL,
-    `公開審査依頼（${recipientLabel}）：${document.title}\n${document.subject} / ${documentId}`,
-  );
+  await notifyAtlasDiscordWebhook(env, {
+    dedupeKey: `publication-review:${documentId}:${round}:request:${stage}`,
+    kind: "publication-review",
+    content: `公開審査依頼（${recipientLabel}）：${document.title}\n${document.subject} / ${documentId}`,
+  });
   return json({ ok: true, status: "in-review", stage, round, recipients, recipientLabel });
 }
 
@@ -21188,7 +21169,11 @@ async function decidePublicationReview(
       "UPDATE editorial_documents SET status='in-review', publication_review_stage=NULL, publication_review_started_at=NULL, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
     ).bind(now, scope.email, documentId).run();
     await notifyEditorialDocumentChange(env, documentId);
-    await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査差し戻し：${document.title}\nフィードバック中へ戻しました。`);
+    await notifyAtlasDiscordWebhook(env, {
+      dedupeKey: `publication-review:${documentId}:${document.publication_review_round}:returned`,
+      kind: "publication-review",
+      content: `公開審査差し戻し：${document.title}\nフィードバック中へ戻しました。`,
+    });
     return json({ ok: true, status: "in-review", stage: null, returnedToFeedback: true });
   }
   if (stage === "subject-coordinator" && leaders.length && !scope.isManager) {
@@ -21196,7 +21181,11 @@ async function decidePublicationReview(
       "UPDATE editorial_documents SET publication_review_stage='project-leader', publication_review_started_at=?, updated_at=?, updated_by=? WHERE id=?",
     ).bind(now, now, scope.email, documentId).run();
     await notifyEditorialDocumentChange(env, documentId);
-    await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査依頼（プロジェクトリーダー）：${document.title}`);
+    await notifyAtlasDiscordWebhook(env, {
+      dedupeKey: `publication-review:${documentId}:${document.publication_review_round}:leader-request`,
+      kind: "publication-review",
+      content: `公開審査依頼（プロジェクトリーダー）：${document.title}`,
+    });
     return json({ ok: true, status: "in-review", stage: "project-leader" });
   }
   await env.REPORTS.prepare(
@@ -24572,8 +24561,9 @@ export default {
       return;
     }
     if (cron === "*/5 * * * *") {
+      // 一つの定期処理が失敗しても、Discord再送を含む残りの処理は完了させる。
       ctx.waitUntil(
-        Promise.all([
+        Promise.allSettled([
           progressEditorialPublicationRuns(env),
           dispatchDueTaskReminders(env),
           dispatchTaskTemplates(env.REPORTS,primaryAdminEmail(env)),
@@ -24584,7 +24574,18 @@ export default {
           syncDiscordRolesToAdmin(env),
           dispatchScheduledEditorialPublications(env),
           archiveStaleAuditLogs(env),
-        ]),
+          dispatchDueDiscordNotifications(env),
+        ]).then((results) => {
+          const rejected = results.filter((result) => result.status === "rejected").length;
+          if (rejected)
+            console.error(
+              JSON.stringify({
+                event: "admin_cron_job_failed",
+                cron: "*/5 * * * *",
+                rejected,
+              }),
+            );
+        }),
       );
       return;
     }
