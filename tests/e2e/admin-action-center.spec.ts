@@ -512,9 +512,13 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   await mockShell(page);
   await page.goto("admin/articles/");
   const menu = page.locator("[data-settings-menu]");
-  const glassSetting = menu.locator("fieldset", { hasText: "ポップアップの透け感" });
+  const glassSetting = menu.locator("fieldset", {
+    hasText: "ポップアップの透け感",
+  });
   await menu.locator("> summary").click();
-  const slider = glassSetting.getByRole("slider", { name: "ポップアップの透け感" });
+  const slider = glassSetting.getByRole("slider", {
+    name: "ポップアップの透け感",
+  });
   const value = glassSetting.locator("[data-glass-value]");
   await expect(slider).toHaveValue("40");
   await expect(value).toHaveText("40%");
@@ -523,7 +527,10 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   await slider.focus();
   await slider.press("End");
   await expect(value).toHaveText("100%");
-  await expect(slider).toHaveAttribute("aria-valuetext", "ポップアップの透け感 100%");
+  await expect(slider).toHaveAttribute(
+    "aria-valuetext",
+    "ポップアップの透け感 100%",
+  );
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -577,7 +584,9 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   expect(standard.alpha).toBeLessThanOrEqual(0.65);
 });
 
-test("ポップアップの透け感は表示設定からのみ変更できる", async ({ page }) => {
+test("ポップアップの透け感は表示設定からのみ変更できる", async ({
+  page,
+}) => {
   await mockShell(page);
   await page.goto("admin/portal/");
   const dialog = page.locator("[data-admin-command-dialog]");
@@ -600,25 +609,26 @@ test("ポップアップの透け感は表示設定からのみ変更できる",
   expect((await readCommandPanel(dialog)).alpha).toBe(0);
 });
 
-test("Aa表示設定も共通の透け感に従い、0%と100%を即座に反映する", async ({ page }) => {
+test("Aa表示設定も0%と100%を即座に反映する", async ({ page }) => {
   await mockShell(page);
   await page.goto("admin/portal/");
   const menu = page.locator("[data-settings-menu]");
   await menu.locator("> summary").click();
   const panel = menu.locator(".settings-panel");
   const slider = menu.getByRole("slider", { name: "ポップアップの透け感" });
-  const alpha = async () => parseColor(
-    await panel.evaluate((element) => getComputedStyle(element).backgroundColor),
-  ).alpha;
+  const alpha = async () => {
+    const color = await panel.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    );
+    return parseColor(color).alpha;
+  };
   expect(await alpha()).toBeCloseTo(0.6, 1);
   await slider.focus();
   await slider.press("Home");
   expect(await alpha()).toBe(1);
   await slider.press("End");
   expect(await alpha()).toBe(0);
-  expect(await panel.evaluate((element) =>
-    getComputedStyle(element).backdropFilter
-  )).not.toBe("none");
+  await expect(panel).not.toHaveCSS("backdrop-filter", "none");
   await page.reload();
   await menu.locator("> summary").click();
   expect(await alpha()).toBe(0);
