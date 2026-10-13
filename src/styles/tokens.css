@@ -18,8 +18,9 @@
   --text-scale: 1;
   --line-height-body: 1.75;
   --font-size-body: calc(1rem * var(--text-scale));
-  /* 要対応ダイアログの背景不透明度。表示設定で10～100%（標準60%）に調整する。 */
+  /* 要対応ダイアログの背景不透明度。0～100%（標準60%）に調整する。 */
   --command-glass-opacity: 60%;
+  --command-glass-blur: 6px;
 
   /* 色（ライト＝紙のような白） */
   --text-primary: #182027;
