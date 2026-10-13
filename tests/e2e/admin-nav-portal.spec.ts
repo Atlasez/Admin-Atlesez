@@ -425,6 +425,25 @@ test("ClientRouterで往復後も通知とportal言語更新が一度の操作�
   ).toBeVisible();
 });
 
+test("ポータルの不要な説明文を削除し、案内と見出しを残す", async ({ page }) => {
+  await mockAdminShell(page);
+  await page.goto("admin/portal/");
+
+  await expect(
+    page.getByText("プロフィール、相談先、最初の小タスクを確認しましょう。"),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("あなたの権限に応じた参加中のプロジェクトです。"),
+  ).toHaveCount(0);
+  await expect(page.getByText("初参加の方へ", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "参加後の案内 →" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "参加中のプロジェクト" }),
+  ).toBeVisible();
+});
+
 test("portalの小ラベルだけを削除し主要sectionを維持する", async ({ page }) => {
   await mockAdminShell(page);
   await page.goto("admin/portal/");
