@@ -506,15 +506,92 @@ test("要対応ポップアップは透過を減らす設定で不透明に戻�
   ).toBeVisible();
 });
 
-test("表示設定で要対応の透過を切り替え、開いたまま反映する", async ({
+test("表示設定のスライダーで要対応の透け感を広く調整し、保存・復元できる", async ({
   page,
 }) => {
   await mockShell(page);
   await page.goto("admin/articles/");
   const menu = page.locator("[data-settings-menu]");
-  const glassSetting = menu.locator("fieldset", { hasText: "要対応の透過" });
+  const glassSetting = menu.locator("fieldset", { hasText: "要対応の透け感" });
   await menu.locator("> summary").click();
-  await glassSetting.getByText("強め", { exact: true }).click();
+  const slider = glassSetting.getByRole("slider", { name: "要対応の透け感" });
+  const value = glassSetting.locator("[data-glass-value]");
+  await expect(slider).toHaveValue("60");
+  await expect(value).toHaveText("40%");
+
+  // Strongest: 90% see-through (10% panel opacity).
+  await slider.focus();
+  await slider.press("Home");
+  await expect(value).toHaveText("90%");
+  await expect(slider).toHaveAttribute("aria-valuetext", "要対応の透け感 90%");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--command-glass-opacity")
+          .trim(),
+      ),
+    )
+    .toBe("10%");
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
+    ),
+  ).toBe("10%");
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await expect(dialog).toHaveAttribute("data-command-mode", "action");
+  const strong = await readCommandPanel(dialog);
+  expect(strong.alpha).toBeGreaterThanOrEqual(0.08);
+  expect(strong.alpha).toBeLessThanOrEqual(0.12);
+  expect(strong.backdropAlpha).toBeLessThanOrEqual(0.05);
+  await page.keyboard.press("Escape");
+
+  await page.reload();
+  await menu.locator("> summary").click();
+  await expect(slider).toHaveValue("10");
+  await expect(value).toHaveText("90%");
+
+  // Weakest: opaque panel.
+  await slider.focus();
+  await slider.press("End");
+  await expect(value).toHaveText("0%");
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const solid = await readCommandPanel(dialog);
+  expect(solid.alpha).toBe(1);
+  await page.keyboard.press("Escape");
+
+  await menu.locator("> summary").click();
+  await menu.locator("[data-a11y-reset]").click();
+  await expect(slider).toHaveValue("60");
+  await expect(value).toHaveText("40%");
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass ?? null,
+    ),
+  ).toBeNull();
+  await page.reload();
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const standard = await readCommandPanel(dialog);
+  expect(standard.alpha).toBeGreaterThanOrEqual(0.55);
+  expect(standard.alpha).toBeLessThanOrEqual(0.65);
+});
+
+test("以前の3段階の透過設定をスライダーでも復元できる", async ({ page }) => {
+  await mockShell(page);
+  await page.goto("admin/articles/");
+  await page.evaluate(() =>
+    localStorage.setItem("atlasez-prefs", JSON.stringify({ glass: "40%" })),
+  );
+  await page.reload();
+  const menu = page.locator("[data-settings-menu]");
+  await menu.locator("> summary").click();
+  await expect(
+    menu.getByRole("slider", { name: "要対応の透け感" }),
+  ).toHaveValue("40");
+  await expect(menu.locator("[data-glass-value]")).toHaveText("60%");
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -524,43 +601,6 @@ test("表示設定で要対応の透過を切り替え、開いたまま反映�
       ),
     )
     .toBe("40%");
-  expect(
-    await page.evaluate(() =>
-      JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}"),
-    ),
-  ).toMatchObject({ glass: "40%" });
-  await page.keyboard.press("Escape");
-  await page.getByRole("link", { name: "アクションセンター" }).click();
-  const dialog = page.locator("[data-admin-command-dialog]");
-  await expect(dialog).toHaveAttribute("data-command-mode", "action");
-  const strong = await readCommandPanel(dialog);
-  expect(strong.alpha).toBeGreaterThanOrEqual(0.35);
-  expect(strong.alpha).toBeLessThanOrEqual(0.45);
-  expect(strong.backdropAlpha).toBeLessThanOrEqual(0.2);
-  await page.evaluate(() => {
-    document.documentElement.style.setProperty(
-      "--command-glass-opacity",
-      "100%",
-    );
-  });
-  const solid = await readCommandPanel(dialog);
-  expect(solid.alpha).toBe(1);
-  await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
-  await menu.locator("> summary").click();
-  await glassSetting.getByText("標準", { exact: true }).click();
-  expect(
-    await page.evaluate(
-      () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
-    ),
-  ).toBeUndefined();
-  await page.reload();
-  await page.getByRole("link", { name: "アクションセンター" }).click();
-  const standard = await readCommandPanel(
-    page.locator("[data-admin-command-dialog]"),
-  );
-  expect(standard.alpha).toBeGreaterThanOrEqual(0.55);
-  expect(standard.alpha).toBeLessThanOrEqual(0.65);
 });
 
 test("要対応ポップアップから状態変更を実行し、通知を混在させない", async ({

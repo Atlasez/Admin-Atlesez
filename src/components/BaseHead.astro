@@ -104,8 +104,10 @@ const ogImage = new URL(
         motion: "data-pref-motion",
         font: "data-pref-font",
       };
-      if (prefs.glass === "100%" || prefs.glass === "40%") {
-        d.style.setProperty("--command-glass-opacity", prefs.glass);
+      // Restore the whole slider range before first paint; legacy 40/100% values work.
+      if (typeof prefs.glass === "string" && /^(?:100|[1-9]?\d)%$/.test(prefs.glass)) {
+        var opacity = Math.min(100, Math.max(10, Number(prefs.glass.slice(0, -1))));
+        d.style.setProperty("--command-glass-opacity", opacity + "%");
       }
       Object.keys(keys).forEach(function (k) {
         if (prefs[k] && prefs[k] !== "default") {
