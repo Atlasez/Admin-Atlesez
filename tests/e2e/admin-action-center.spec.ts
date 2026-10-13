@@ -609,11 +609,10 @@ test("ポップアップ内のスライダーで背景・ぼかし・暗幕・�
   expect(transparent.backdropAlpha).toBe(0);
   expect(transparent.row.alpha).toBe(0);
   expect(transparent.filter).toContain("blur(0px)");
-  expect(
-    await page.evaluate(
-      () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
-    ),
-  ).toBe("0%");
+  const savedOpacity = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
+  );
+  expect(savedOpacity).toBe("0%");
 
   await page.keyboard.press("Escape");
   await page.reload();
