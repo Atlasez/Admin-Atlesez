@@ -77,9 +77,15 @@ test("portal proposal mutes zero KPIs and keeps the application link", async ({
   );
   const intakeBorder = await page.locator(".my-intake").evaluate((element) => {
     const style = getComputedStyle(element);
-    return `${style.borderLeftWidth} ${style.borderLeftStyle} ${style.borderLeftColor}`;
+    return {
+      width: style.borderLeftWidth,
+      styleName: style.borderLeftStyle,
+      color: style.borderLeftColor,
+    };
   });
-  expect(intakeBorder.startsWith("0px")).toBe(true);
+  expect(intakeBorder.width).toBe("2px");
+  expect(intakeBorder.styleName).toBe("solid");
+  expect(intakeBorder.color).toBe(accent);
   const projectBorder = await page
     .locator(".project-entry")
     .evaluate((element) => getComputedStyle(element).borderTopWidth);
@@ -158,4 +164,78 @@ test("mobile header proposal is a single row", async ({ page }) => {
   await shot(page, "notifications-after-375");
   const mobileHeader = await page.locator(".admin-nav").boundingBox();
   expect(mobileHeader?.height ?? 999).toBeLessThan(84);
+});
+
+function contrast(foreground: number[], background: number[]) {
+  const channel = (value: number) => {
+    const scaled = value / 255;
+    return scaled <= 0.04045
+      ? scaled / 12.92
+      : ((scaled + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (color: number[]) =>
+    0.2126 * channel(color[0]) +
+    0.7152 * channel(color[1]) +
+    0.0722 * channel(color[2]);
+  const lighter = Math.max(luminance(foreground), luminance(background));
+  const darker = Math.min(luminance(foreground), luminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+test("action center proposal is glass over the portal and falls back to solid", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/action-center/after/");
+  const dialog = page.locator(".admin-command-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole("heading", { name: "要対応" })).toBeVisible();
+  const glass = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const filter = [style.backdropFilter, style.webkitBackdropFilter]
+      .filter((value) => value && value !== "none")
+      .join(" ");
+    return {
+      background: style.backgroundColor,
+      filter,
+      title: getComputedStyle(element.querySelector("h2")!).color,
+      meta: getComputedStyle(element.querySelector("small")!).color,
+    };
+  });
+  expect(glass.background).toBe("rgba(35, 36, 39, 0.78)");
+  expect(glass.filter).toContain("blur");
+  expect(glass.filter).toContain("saturate");
+  const title = glass.title.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
+  const meta = glass.meta.match(/\d+/g)?.slice(0, 3).map(Number) ?? [];
+  // Worst case still covered by the existing 62% black scrim, including a white page behind it.
+  const behind = [255, 255, 255].map((channel) => channel * 0.38);
+  const panel = [35, 36, 39].map(
+    (channel, index) => channel * 0.78 + behind[index] * 0.22,
+  );
+  expect(contrast(title, panel)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(meta, panel)).toBeGreaterThanOrEqual(4.5);
+  mkdirSync(artifactDir, { recursive: true });
+  await page.screenshot({
+    path: `${artifactDir}/action-center-after-1280.png`,
+    fullPage: false,
+  });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({
+    path: `${artifactDir}/action-center-after-375.png`,
+    fullPage: false,
+  });
+
+  const session = await page.context().newCDPSession(page);
+  await session.send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-transparency", value: "reduce" }],
+  });
+  const solid = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      filter: `${style.backdropFilter} ${style.webkitBackdropFilter}`,
+    };
+  });
+  expect(solid.background).toBe("rgb(35, 36, 39)");
+  expect(solid.filter).not.toContain("blur");
 });

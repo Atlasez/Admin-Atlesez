@@ -1017,18 +1017,22 @@ a {
   padding: var(--space-5) 0 var(--space-4);
 }
 
-.is-after .welcome-entry,
-.is-after .my-intake {
+.is-after .welcome-entry {
   gap: var(--space-3);
   padding: var(--space-4) 0;
 }
 
 .is-after .my-intake {
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--border-default);
-  border-left: 0;
+  background: color-mix(
+    in srgb,
+    var(--accent-primary) 5%,
+    var(--background-secondary)
+  );
+  border: 1px solid color-mix(in srgb, var(--border-default) 65%, transparent);
+  border-left: 2px solid var(--accent-primary);
+  gap: var(--space-3);
   margin: 0;
+  padding: var(--space-4);
 }
 
 .is-after .portal-summary {
@@ -1297,5 +1301,314 @@ a {
   .portal-app-download {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+/* Dark theme tokens, matching src/styles/tokens.css. Used behind the action-center dialog. */
+[data-pref-bg="dark"] {
+  color-scheme: dark;
+  --text-primary: #e8e6e1;
+  --text-secondary: #b5b1a8;
+  --text-muted: #8f8b82;
+  --background-primary: #191a1c;
+  --background-secondary: #232427;
+  --background-inset: #2b2c30;
+  --border-default: #3d3e42;
+  --border-strong: #6a6b70;
+  --accent-primary: #7fa8cc;
+  --accent-hover: #a3c2dd;
+  --on-accent: #10151a;
+  --link: #8db4d6;
+  --focus-ring: #e8a45c;
+  --task-count: #52a450;
+}
+
+.admin-command-dialog {
+  background: var(--background-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 0.75rem;
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 0.4);
+  color: var(--text-primary);
+  margin: auto;
+  max-height: min(34rem, calc(100vh - 2rem));
+  padding: 0;
+  width: min(38rem, calc(100vw - 3rem));
+}
+
+.admin-command-dialog::backdrop {
+  background: rgb(0 0 0 / 0.62);
+  backdrop-filter: blur(3px);
+}
+
+.admin-command-inner {
+  padding: 0.9rem 1rem 0.8rem;
+}
+
+.admin-command-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.admin-command-head h2 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.admin-command-close {
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  min-height: 2rem;
+  width: 2rem;
+}
+
+.admin-command-search {
+  align-items: center;
+  background: var(--background-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  display: flex;
+  gap: 0.55rem;
+  margin-top: 0.45rem;
+  min-height: 3rem;
+  padding: 0 0.8rem;
+}
+
+.admin-command-search > span {
+  color: var(--text-secondary);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.admin-command-search input {
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+  flex: 1;
+  font: inherit;
+  font-size: 0.95rem;
+  min-height: 2.6rem;
+  min-width: 0;
+  outline: 0;
+}
+
+.admin-command-search input::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+.admin-command-search kbd,
+.admin-command-hint kbd {
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.68rem;
+  padding: 0.16rem 0.45rem;
+  white-space: nowrap;
+}
+
+.admin-command-action-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+}
+
+.admin-command-action-filter {
+  align-items: center;
+  background: var(--background-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 750;
+  gap: 0.3rem;
+  min-height: 1.95rem;
+  padding: 0.25rem 0.55rem;
+}
+
+.admin-command-action-filter strong {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+}
+
+.admin-command-action-filter.is-active {
+  background: color-mix(
+    in srgb,
+    var(--accent-primary) 12%,
+    var(--background-primary)
+  );
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.admin-command-list {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+  max-height: min(22rem, calc(100vh - 12rem));
+  overflow: auto;
+  padding: 0.05rem 0.2rem;
+}
+
+.admin-command-section {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.admin-command-section h3 {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: 0;
+  padding: 0.1rem 0.75rem 0.2rem;
+}
+
+.admin-command-options {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.admin-command-action-item {
+  align-items: stretch;
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0.3rem 0.4rem;
+}
+
+.admin-command-item-main {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0.55rem;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 2.2rem minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 0.35rem 0.4rem;
+  text-align: left;
+}
+
+.admin-command-item-icon {
+  align-items: center;
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-size: 1rem;
+  height: 1.5rem;
+  justify-content: center;
+  width: 1.5rem;
+}
+
+.admin-command-item-icon::before {
+  content: "↗";
+}
+
+.admin-command-item-icon[data-command-icon="actions"]::before {
+  content: "☷";
+}
+
+.admin-command-item-copy {
+  align-items: baseline;
+  display: flex;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.admin-command-item-copy strong {
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.25;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-command-item-copy small {
+  color: var(--text-secondary);
+  flex: 0 1 auto;
+  font-size: 0.73rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-command-item-arrow {
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.admin-command-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.admin-command-action {
+  background: var(--background-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 0.45rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  min-height: 2.15rem;
+  padding: 0.35rem 0.65rem;
+  white-space: nowrap;
+}
+
+.admin-command-hint {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  font-size: 0.7rem;
+  gap: 0.25rem;
+  margin: 0.55rem 0.15rem 0;
+}
+
+/* Liquid glass is only the panel. Type, spacing, and controls stay opaque. */
+.is-glass .admin-command-dialog {
+  background-color: rgb(35 36 39 / 0.78);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    0 1rem 3rem rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .is-glass .admin-command-dialog {
+    background-color: var(--background-secondary);
+    border-color: var(--border-strong);
+    box-shadow: 0 1rem 3rem rgb(0 0 0 / 0.4);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .is-glass .admin-command-dialog {
+    background-color: var(--background-secondary);
+    border-color: var(--border-strong);
+    box-shadow: 0 1rem 3rem rgb(0 0 0 / 0.4);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }

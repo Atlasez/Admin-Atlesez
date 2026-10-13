@@ -1,0 +1,18 @@
+---
+import ActionCenterModal from "../../components/ActionCenterModal.astro";
+import Chrome from "../../components/Chrome.astro";
+import PortalScreen from "../../components/PortalScreen.astro";
+import Prototype from "../../layouts/Prototype.astro";
+---
+
+<Prototype
+  title="要対応 · 案"
+  variant="after"
+  screen="action-center"
+  theme="dark"
+  glass
+>
+  <Chrome variant="after" screen="portal" />
+  <PortalScreen variant="after" />
+  <ActionCenterModal />
+</Prototype>

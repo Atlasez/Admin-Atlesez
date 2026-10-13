@@ -10,36 +10,41 @@ const { variant } = Astro.props;
   <header class="notification-heading">
     <div>
       <h1>通知</h1>
-      {
-        variant === "before" && (
-          <p>
-            通知元ごとの最近の通知を時系列で確認できます。古い記録や対応が必要な作業は、各対象画面やアクションセンターで確認してください。
-          </p>
-        )
-      }
+      { variant === "before" && (
+      <p>
+        通知元ごとの最近の通知を時系列で確認できます。古い記録や対応が必要な作業は、各対象画面やアクションセンターで確認してください。
+      </p>
+      ) }
     </div>
-    <a class="action-center-link" href="#actions">アクションセンター <span aria-hidden="true">→</span></a>
+    <a class="action-center-link" href="#actions"
+      >アクションセンター <span aria-hidden="true">→</span></a
+    >
   </header>
 
-  {
-    variant === "before" && (
-      <section class="notification-summary" aria-label="通知の件数">
-        <strong data-unread-count>0</strong>
-        <span>件が未読</span>
-        <span class="summary-divider" aria-hidden="true"></span>
-        <span data-visible-count>0件を表示</span>
-      </section>
-    )
-  }
+  { variant === "before" && (
+  <section class="notification-summary" aria-label="通知の件数">
+    <strong data-unread-count>0</strong>
+    <span>件が未読</span>
+    <span class="summary-divider" aria-hidden="true"></span>
+    <span data-visible-count>0件を表示</span>
+  </section>
+  ) }
 
   <details class="notification-list-panel">
     <summary>通知の表示設定</summary>
   </details>
-  <section class="notification-list-panel" aria-labelledby="notification-list-heading">
+  <section
+    class="notification-list-panel"
+    aria-labelledby="notification-list-heading"
+  >
     <div class="notification-list-toolbar">
       <div>
         <h2 id="notification-list-heading">最近の通知</h2>
-        <div class="notification-filters" role="group" aria-label="通知の絞り込み">
+        <div
+          class="notification-filters"
+          role="group"
+          aria-label="通知の絞り込み"
+        >
           <button type="button" aria-pressed="true">すべて</button>
           <button type="button" aria-pressed="false">未読</button>
           <button type="button" aria-pressed="false">要対応</button>

@@ -11,6 +11,9 @@ export default defineConfig({
   vite: {
     tsconfig: false,
     build: {
+      // Keep the required space in `blur(20px) saturate(1.4)`. Lightning CSS
+      // drops it, and the declaration is then invalid.
+      cssMinify: false,
       rolldownOptions: {
         tsconfig: false,
       },
