@@ -600,10 +600,7 @@ test("ポップアップ内のスライダーで背景・ぼかし・暗幕・�
   await expect(dialog.locator("[data-admin-command-glass-output]")).toHaveText(
     "100%",
   );
-  await expect(slider).toHaveAttribute(
-    "aria-valuetext",
-    "背景の透け感 100%",
-  );
+  await expect(slider).toHaveAttribute("aria-valuetext", "背景の透け感 100%");
   const transparent = await readCommandPanel(dialog);
   expect(transparent.alpha).toBe(0);
   expect(transparent.backdropAlpha).toBe(0);
