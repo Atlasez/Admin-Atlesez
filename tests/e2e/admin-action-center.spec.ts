@@ -584,9 +584,7 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   expect(standard.alpha).toBeLessThanOrEqual(0.65);
 });
 
-test("ポップアップの透け感は表示設定からのみ変更できる", async ({
-  page,
-}) => {
+test("ポップアップの透け感は表示設定からのみ変更できる", async ({ page }) => {
   await mockShell(page);
   await page.goto("admin/portal/");
   const dialog = page.locator("[data-admin-command-dialog]");
