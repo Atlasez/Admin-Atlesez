@@ -435,9 +435,7 @@ test("ポータルの不要な説明文を削除し、案内と見出しを残�
   await expect(
     page.getByText("あなたの権限に応じた参加中のプロジェクトです。"),
   ).toHaveCount(0);
-  await expect(
-    page.getByText("初参加の方へ", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("初参加の方へ", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("link", { name: "参加後の案内 →" }),
   ).toBeVisible();
