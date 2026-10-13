@@ -33,5 +33,5 @@ test("進行管理は担当情報がない応答を日本語の案内にする",
   ).toHaveAttribute("href", "https://atlasez.org/contact/");
   await expect(page.locator("body")).not.toContainText("isManager");
   await expect(page.locator("[data-admin-load-error]")).toBeHidden();
-  await expect(page.locator("[data-admin-load-surface]")).toBeHidden();
+  await expect(page.locator("[data-task-show-completed]")).toBeVisible();
 });

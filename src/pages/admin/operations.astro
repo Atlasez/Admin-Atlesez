@@ -388,7 +388,6 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     font-size: 2rem;
     margin: 0.25rem 0;
   }
-  .operations .grid[hidden] { display: none; }
   .operation-scope-alert { border: 1px solid var(--border-default); border-left: 3px solid var(--danger, #a03123); margin-top: 1.25rem; padding: 1rem 1.1rem 1.15rem; }
   .operation-scope-alert[hidden] { display: none; }
   .operation-scope-alert h2 { font-size: 1.05rem; margin: 0 0 .45rem; }
@@ -1445,7 +1444,6 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     const taskDetails = get<HTMLTextAreaElement>('[data-task-details]');
     const eventFeedback = get<HTMLOutputElement>('[data-event-feedback]');
     const scopeError = get<HTMLElement>('[data-operation-scope-error]');
-    const loadSurface = get<HTMLElement>('[data-admin-load-surface]');
     const blockFeedback = get<HTMLOutputElement>('[data-block-feedback]');
     const calendarSelectionSummary = get<HTMLOutputElement>('[data-calendar-selection-summary]');
     const createBlockButton = get<HTMLButtonElement>('[data-create-block]');
@@ -1789,7 +1787,6 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     };
     const showScopeError = () => {
       scopeError.hidden = false;
-      loadSurface.hidden = true;
       eventFeedback.value = '';
       retry?.fail(new Error(OPERATION_SCOPE_MISSING_MESSAGE));
       const notice = root.querySelector<HTMLElement>('[data-admin-load-error]');
@@ -1797,7 +1794,6 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     };
     const clearScopeError = () => {
       scopeError.hidden = true;
-      loadSurface.hidden = false;
     };
     const render = () => {
       const scope = readOperationScope(data);
