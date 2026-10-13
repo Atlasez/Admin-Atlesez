@@ -1,0 +1,32 @@
+---
+import BaseHead from "../components/BaseHead.astro";
+import "../styles/admin.css";
+
+interface Props {
+  title: string;
+  description: string;
+}
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <BaseHead title={title} description={description} noindex={true} enableArticleEnhancements={false} />
+  </head>
+  <body data-admin-shell>
+    <p class="prototype-banner">画面案です。本番のログイン・404・エラー・ログアウトにはまだ接続していません。</p>
+    <slot />
+  </body>
+</html>
+
+<style>
+  .prototype-banner {
+    background: var(--accent-subtle);
+    border-bottom: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    margin: 0;
+    padding: 0.55rem 1rem;
+  }
+</style>

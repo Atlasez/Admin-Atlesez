@@ -1,0 +1,31 @@
+---
+import AdminScreenPrototype from "../../../../layouts/AdminScreenPrototype.astro";
+---
+
+<AdminScreenPrototype title="進行管理を読み込めませんでした（画面案）" description="進行管理の日本語エラー画面案">
+  <main class="ops">
+    <header>
+      <p>タスク管理</p>
+      <h1>進行管理</h1>
+    </header>
+    <section class="alert" role="alert">
+      <h2>進行管理の情報を読み込めませんでした</h2>
+      <p>再読み込みしてください。担当の判別に必要な情報が応答に含まれていないため、画面は途中で止めています。</p>
+      <button type="button">再読み込み</button>
+      <p class="help">改善しない場合は、開いていたURLと時刻を添えて<a href="https://atlasez.org/contact/">お問い合わせ</a>へ連絡してください。</p>
+    </section>
+  </main>
+</AdminScreenPrototype>
+
+<style>
+  .ops { margin: 0 auto; max-width: 40rem; padding: 2rem 1.25rem 4rem; }
+  header { border-bottom: 1px solid var(--border-default); padding-bottom: 1rem; }
+  header p { color: var(--text-secondary); font-size: .78rem; margin: 0; }
+  header h1 { font-size: 1.6rem; margin: .2rem 0 0; }
+  .alert { border: 1px solid var(--border-default); border-left: 3px solid var(--danger, #a03123); margin-top: 1.25rem; padding: 1rem 1.1rem 1.15rem; }
+  .alert h2 { font-size: 1.05rem; margin: 0 0 .45rem; }
+  .alert p { color: var(--text-secondary); line-height: 1.7; margin: 0; }
+  .alert button { background: var(--accent-primary); border: 0; color: var(--on-accent); cursor: pointer; font: inherit; font-weight: 800; margin: 1rem 0 .8rem; padding: .7rem 1rem; }
+  .help { font-size: .82rem; }
+  .help a { color: var(--accent-primary); }
+</style>

@@ -55,6 +55,30 @@ const adminPagePathSet = new Set(
   ADMIN_PAGE_PATHS.flatMap((path) => [path, `${path}/`]),
 );
 
+const uiPrototypeNames = [
+  "editor-header",
+  "editor-header-admin",
+  "editor-header-codex",
+  "editor-header-compare",
+  "editor-header-focus",
+  "editor-header-jreast",
+  "editor-toolbar",
+  "learning-content",
+  "welcome-screens",
+  "welcome-login",
+  "welcome-not-found",
+  "welcome-auth-error",
+  "welcome-server-error",
+  "welcome-logged-out",
+  "welcome-operations-error",
+] as const;
+
+/** Nested UI prototypes. Full global admins only; not a top-level nav item. */
+export const globalAdminPrototypePaths = uiPrototypeNames.flatMap((name) => {
+  const path = `/admin/ui-prototype/${name}`;
+  return [path, `${path}/`];
+});
+
 // Nested pages stay out of the top-level navigation list while still passing
 // through the admin Worker page gate.
 const adminNestedPagePathSet = new Set([
@@ -62,22 +86,7 @@ const adminNestedPagePathSet = new Set([
   "/admin/editor/outline/",
   "/admin/member-profile/edit",
   "/admin/member-profile/edit/",
-  "/admin/ui-prototype/editor-header",
-  "/admin/ui-prototype/editor-header/",
-  "/admin/ui-prototype/editor-header-admin",
-  "/admin/ui-prototype/editor-header-admin/",
-  "/admin/ui-prototype/editor-header-codex",
-  "/admin/ui-prototype/editor-header-codex/",
-  "/admin/ui-prototype/editor-header-compare",
-  "/admin/ui-prototype/editor-header-compare/",
-  "/admin/ui-prototype/editor-header-focus",
-  "/admin/ui-prototype/editor-header-focus/",
-  "/admin/ui-prototype/editor-header-jreast",
-  "/admin/ui-prototype/editor-header-jreast/",
-  "/admin/ui-prototype/editor-toolbar",
-  "/admin/ui-prototype/editor-toolbar/",
-  "/admin/ui-prototype/learning-content",
-  "/admin/ui-prototype/learning-content/",
+  ...globalAdminPrototypePaths,
 ]);
 
 export const isAdminPagePath = (pathname: string) =>
