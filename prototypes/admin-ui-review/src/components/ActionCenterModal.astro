@@ -1,0 +1,111 @@
+---
+const rows = [
+  { title: "応募：学習サイト「アトラス」", detail: "応募・新着", actions: ["確認を開始"] },
+  { title: "フィードバック依頼：数学の数式・図表・CSS総合テスト", detail: "タスク・未着手", actions: ["着手"] },
+  { title: "応募対応：学習サイト「アトラス」 / テスト釜", detail: "タスク・未着手", actions: ["着手"] },
+  { title: "応募対応：学習サイト「アトラス」 / テスト 送信", detail: "タスク・未着手", actions: ["着手"] },
+  { title: "応募：学習サイト「アトラス」", detail: "応募・確認が必要", actions: ["受け入れ", "見送り"] },
+  { title: "aaaaaa", detail: "タスク・未着手", actions: ["着手"] },
+  { title: "応募対応：学習サイト「アトラス」 / 動作確認", detail: "タスク・未着手", actions: ["着手"] },
+  { title: "応募対応：学習サイト「アトラス」 / 公開前確認", detail: "タスク・期限間近", actions: ["着手"] },
+];
+---
+
+<dialog
+  class="admin-command-dialog"
+  data-action-dialog
+  aria-labelledby="admin-command-heading"
+>
+  <form method="dialog" class="admin-command-inner">
+    <div class="admin-command-head">
+      <h2 id="admin-command-heading">要対応</h2>
+      <button
+        type="submit"
+        class="admin-command-close"
+        aria-label="操作検索を閉じる"
+      >
+        ×
+      </button>
+    </div>
+    <label class="admin-command-search">
+      <span aria-hidden="true">⌕</span>
+      <input
+        type="search"
+        placeholder="確認・実行する項目を検索"
+        autocomplete="off"
+      />
+      <kbd>Esc</kbd>
+    </label>
+    <div
+      class="admin-command-action-toolbar"
+      role="toolbar"
+      aria-label="要対応の絞り込み"
+    >
+      <button
+        type="button"
+        class="admin-command-action-filter is-active"
+        aria-pressed="true"
+      >
+        すべて<strong>8</strong>
+      </button>
+      <button
+        type="button"
+        class="admin-command-action-filter"
+        aria-pressed="false"
+      >
+        期限・緊急<strong>0</strong>
+      </button>
+      <button
+        type="button"
+        class="admin-command-action-filter"
+        aria-pressed="false"
+      >
+        承認待ち<strong>0</strong>
+      </button>
+    </div>
+    <div class="admin-command-list" role="listbox" aria-label="操作候補">
+      <section class="admin-command-section">
+        <h3>対応が必要な項目</h3>
+        <div
+          class="admin-command-options"
+          role="group"
+          aria-label="対応が必要な項目"
+        >
+          { rows.map((row) => (
+          <div
+            class="admin-command-item admin-command-action-item"
+            role="option"
+          >
+            <button type="button" class="admin-command-item-main">
+              <span
+                class="admin-command-item-icon"
+                data-command-icon="actions"
+                aria-hidden="true"
+              ></span>
+              <span class="admin-command-item-copy">
+                <strong>{row.title}</strong>
+                <small>{row.detail}</small>
+              </span>
+              <span class="admin-command-item-arrow" aria-hidden="true">↗</span>
+            </button>
+            <span class="admin-command-actions" aria-label={`${row.title}の操作`}>
+              {row.actions.map((action) => (
+              <button type="button" class="admin-command-action">
+                {action}
+              </button>
+              ))}
+            </span>
+          </div>
+          )) }
+        </div>
+      </section>
+    </div>
+    <p class="admin-command-hint">
+      <kbd>↑</kbd><kbd>↓</kbd>で移動 <kbd>Enter</kbd>で開く
+    </p>
+  </form>
+</dialog>
+<script>
+  const dialog = document.querySelector("[data-action-dialog]");
+  if (dialog instanceof HTMLDialogElement && !dialog.open) dialog.showModal();
+</script>

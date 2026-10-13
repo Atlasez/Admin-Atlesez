@@ -1,0 +1,20 @@
+{
+  "name": "admin-ui-review-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1 --port 4331",
+    "check": "astro check",
+    "build": "astro build",
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "astro": "^7.2.8"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.9",
+    "@playwright/test": "^1.62.0",
+    "typescript": "^5.6.0"
+  }
+}

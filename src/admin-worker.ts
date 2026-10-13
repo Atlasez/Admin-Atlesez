@@ -23701,6 +23701,21 @@ async function handleAdminRequest(
     if (isResponse(scope)) return scope;
     return fetchAdminAsset(request, env);
   }
+  // Before/after ADMIN UI review. Isolated static files, same developer-mode
+  // gate as the other prototypes. Production pages do not use this output.
+  if (
+    url.pathname === "/admin/ui-review-prototype" ||
+    url.pathname.startsWith("/admin/ui-review-prototype/")
+  ) {
+    if (request.method !== "GET" && request.method !== "HEAD")
+      return new Response("Method not allowed", {
+        status: 405,
+        headers: { Allow: "GET, HEAD" },
+      });
+    const scope = await getPrototypeDeveloperScope(request, env);
+    if (isResponse(scope)) return scope;
+    return fetchAdminAsset(request, env);
+  }
   if (
     url.pathname === "/api/onboarding/atlas-writing-practice" &&
     request.method === "POST"

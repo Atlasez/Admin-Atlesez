@@ -1,0 +1,50 @@
+# ADMIN operations UI prototype
+
+Static before/after prototype for the ADMIN portal, notifications, and action-center dialog. The ADMIN production build copies it to `dist/admin/ui-review-prototype/` and the Worker serves that directory at `/admin/ui-review-prototype/` only after developer-mode authorization. It does not change production pages, shared components, shared styles, or D1. Fonts, colors, and control styles follow the current light theme in `src/styles/tokens.css`.
+
+Open 開発者モード at `/admin/developer/?mode=developer`, then choose 「運営UIレビュー」 under 検証用ページ. Direct URLs, for a developer-mode account:
+
+| Screen                  | URL                                                                         |
+| ----------------------- | --------------------------------------------------------------------------- |
+| Index                   | `https://admin.atlasez.org/admin/ui-review-prototype/`                      |
+| Portal, current         | `https://admin.atlasez.org/admin/ui-review-prototype/portal/before/`        |
+| Portal, proposal        | `https://admin.atlasez.org/admin/ui-review-prototype/portal/after/`         |
+| Notifications, current  | `https://admin.atlasez.org/admin/ui-review-prototype/notifications/before/` |
+| Notifications, proposal | `https://admin.atlasez.org/admin/ui-review-prototype/notifications/after/`  |
+| Action center, current  | `https://admin.atlasez.org/admin/ui-review-prototype/action-center/before/` |
+| Action center, proposal | `https://admin.atlasez.org/admin/ui-review-prototype/action-center/after/`  |
+
+## View
+
+From this directory:
+
+```sh
+npm install
+npm run dev
+```
+
+Astro serves `http://127.0.0.1:4331/`.
+
+| Screen                  | URL                      |
+| ----------------------- | ------------------------ |
+| Index                   | `/`                      |
+| Portal, current         | `/portal/before/`        |
+| Portal, proposal        | `/portal/after/`         |
+| Notifications, current  | `/notifications/before/` |
+| Notifications, proposal | `/notifications/after/`  |
+| Action center, current  | `/action-center/before/` |
+| Action center, proposal | `/action-center/after/`  |
+
+## Check
+
+```sh
+npm run check
+npm run build
+npm test
+```
+
+Playwright builds the site, checks the proposal against the current screens, and writes desktop (1280) and mobile (375) screenshots to `screenshots/`.
+
+The proposal keeps 「応募フォームへ」 as the existing primary button. It does not change radius, the menu button chrome, or the 「表示設定」 control style. On viewports at or below 620px, that control and logout move into the existing menu so the header is one row.
+
+The portal notice keeps its blue left border and drops that edge from 3px to 2px, with a lighter fill. The action-center proposal keeps the current dialog fonts and layout. Only the panel surface changes: the same dark base at 78% opacity, a 20px blur with saturation, and a 1px light edge. `prefers-reduced-transparency: reduce` and browsers without `backdrop-filter` use the solid panel color.
