@@ -15,7 +15,7 @@ interface Props {
    * ヘッダーの「表示設定」ポップオーバー（SettingsMenu）から使う。
    */
   bare?: boolean;
-  /** 運営ヘッダーだけ。要対応ダイアログの透過を切り替える。 */
+  /** 運営ヘッダーのみ。要対応・操作検索・表示設定の透け感を共通で調整する。 */
   showGlass?: boolean;
 }
 const { locale = "ja", bare = false, showGlass = false } = Astro.props;
@@ -42,7 +42,7 @@ const L =
         gothic: "標準ゴシック",
         readable: "可読性重視",
         reset: "初期設定に戻す",
-        glass: "要対応・操作検索の透け感",
+        glass: "ポップアップの透け感",
         glassStrong: "強い（よく透ける）",
         glassWeak: "弱い（不透明）",
       }
@@ -67,7 +67,7 @@ const L =
         gothic: "Default",
         readable: "Readable",
         reset: "Reset to defaults",
-        glass: "Action and search transparency",
+        glass: "Popup transparency",
         glassStrong: "Strong (see-through)",
         glassWeak: "Weak (opaque)",
       };
