@@ -200,7 +200,7 @@ const groups = [
               data-glass-value-label={L.glass}
               type="range"
               name="glass"
-              min="10"
+              min="0"
               max="100"
               step="1"
               value="60"
@@ -270,7 +270,7 @@ const groups = [
                 data-glass-value-label={L.glass}
                 type="range"
                 name="glass"
-                min="10"
+                min="0"
                 max="100"
                 step="1"
                 value="60"
@@ -470,15 +470,17 @@ const groups = [
     }
   }
 
-  /** Stored glass is the panel opacity (10–100%), not the see-through percentage. */
+  /** Stored glass is panel opacity (0–100%), not the see-through percentage. */
   function getGlassOpacity(value: string | undefined): number {
     if (typeof value !== "string" || !/^(?:100|[1-9]?\d)%$/.test(value)) return 60;
-    return Math.min(100, Math.max(10, Number(value.slice(0, -1))));
+    return Math.min(100, Math.max(0, Number(value.slice(0, -1))));
   }
 
   function apply(prefs: Record<string, string>): void {
     const d = document.documentElement;
-    d.style.setProperty("--command-glass-opacity", `${getGlassOpacity(prefs.glass)}%`);
+    const opacity = getGlassOpacity(prefs.glass);
+    d.style.setProperty("--command-glass-opacity", `${opacity}%`);
+    d.style.setProperty("--command-glass-blur", `${Math.round(opacity * 0.1)}px`);
     for (const [k, attr] of Object.entries(ATTRS)) {
       const v = prefs[k];
       if (k === "bg" && v === "black") {
@@ -560,6 +562,10 @@ const groups = [
         if (input) input.checked = true;
       };
       window.addEventListener("atlasez-theme-change", syncBackgroundChoice);
+      window.addEventListener("atlasez-glass-change", () => {
+        if (glassRange) glassRange.value = String(getGlassOpacity(loadPrefs().glass));
+        syncGlassValue();
+      });
       const savePrefs = (notify: boolean) => {
         if (notify) {
           form
@@ -574,7 +580,7 @@ const groups = [
           if (typeof v !== "string" || v === "default") continue;
           if (k === "glass") {
             const opacity = Number(v);
-            if (Number.isInteger(opacity) && opacity >= 10 && opacity <= 100 && opacity !== 60) {
+            if (Number.isInteger(opacity) && opacity >= 0 && opacity <= 100 && opacity !== 60) {
               next.glass = `${opacity}%`;
             }
           } else {

@@ -209,6 +209,11 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       <label class="admin-command-search"><span aria-hidden="true">⌕</span><input type="search" data-admin-command-input placeholder="記事・タスク・操作を検索" autocomplete="off" /><kbd>Esc</kbd></label>
       <div class="admin-command-action-toolbar" data-admin-command-action-toolbar hidden role="toolbar" aria-label="要対応の絞り込み"></div>
       <div class="admin-command-list" data-admin-command-list role="listbox" aria-label="操作候補"></div>
+      <div class="admin-command-glass-adjust" data-admin-command-glass-adjust hidden>
+        <label for="admin-command-glass-range">背景の透け感</label>
+        <input id="admin-command-glass-range" type="range" min="0" max="100" step="1" value="40" data-admin-command-glass-range aria-label="背景の透け感" />
+        <output for="admin-command-glass-range" data-admin-command-glass-output>40%</output>
+      </div>
       <p class="admin-command-hint"><kbd>↑</kbd><kbd>↓</kbd>で移動 <kbd>Enter</kbd>で開く</p>
     </form>
   </dialog>
@@ -614,18 +619,46 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       let actionFilter = 'all';
       let actionCounts: NonNullable<ActionCenterResponse['counts']> = {};
       let openMode: 'command' | 'action' = 'command';
-      const glassFilter = 'blur(20px) saturate(1.4)';
+      const glassAdjust = dialog.querySelector<HTMLElement>('[data-admin-command-glass-adjust]');
+      const glassSlider = dialog.querySelector<HTMLInputElement>('[data-admin-command-glass-range]');
+      const glassOutput = dialog.querySelector<HTMLOutputElement>('[data-admin-command-glass-output]');
       const reducedTransparency = window.matchMedia('(prefers-reduced-transparency: reduce)');
+      const syncGlassSlider = () => {
+        if (!glassSlider) return;
+        const computedOpacity = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--command-glass-opacity'));
+        const opacity = Number.isFinite(computedOpacity) ? Math.max(0, Math.min(100, computedOpacity)) : 60;
+        const transparency = 100 - opacity;
+        glassSlider.value = String(transparency);
+        if (glassOutput) glassOutput.textContent = `${transparency}%`;
+        glassSlider.setAttribute('aria-valuetext', `背景の透け感 ${transparency}%`);
+      };
+      glassSlider?.addEventListener('input', () => {
+        const transparency = Math.max(0, Math.min(100, Number(glassSlider.value)));
+        const opacity = 100 - transparency;
+        const root = document.documentElement;
+        root.style.setProperty('--command-glass-opacity', `${opacity}%`);
+        root.style.setProperty('--command-glass-blur', `${Math.round(opacity * 0.1)}px`);
+        syncGlassSlider();
+        try {
+          const stored = JSON.parse(localStorage.getItem('atlasez-prefs') ?? '{}') as Record<string, unknown> | null;
+          const prefs = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+          if (opacity === 60) delete prefs.glass;
+          else prefs.glass = `${opacity}%`;
+          localStorage.setItem('atlasez-prefs', JSON.stringify(prefs));
+        } catch { /* ストレージなしでも表示は切り替える */ }
+        window.dispatchEvent(new CustomEvent('atlasez-glass-change'));
+      });
       const applyCommandMode = (mode: 'command' | 'action') => {
         openMode = mode;
         dialog.dataset.commandMode = mode;
-        if (mode === 'action' && !reducedTransparency.matches) {
-          dialog.style.backdropFilter = glassFilter;
-          dialog.style.setProperty('-webkit-backdrop-filter', glassFilter);
-          return;
+        if (glassAdjust) glassAdjust.hidden = mode !== 'action';
+        if (glassSlider) {
+          glassSlider.disabled = reducedTransparency.matches;
+          glassSlider.title = reducedTransparency.matches
+            ? 'OSの「透明度を下げる」設定が優先されています。'
+            : '背景の透け感を0〜100%で調整';
         }
-        dialog.style.backdropFilter = '';
-        dialog.style.removeProperty('-webkit-backdrop-filter');
+        if (mode === 'action') syncGlassSlider();
       };
       reducedTransparency.addEventListener('change', () => applyCommandMode(openMode));
       let activeIndex = 0;
@@ -798,12 +831,14 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-command-dialog[data-command-mode="action"] {
     background-color: color-mix(in srgb, var(--background-secondary) var(--command-glass-opacity), transparent);
     border-color: color-mix(in srgb, var(--text-primary) 18%, transparent);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-primary) 22%, transparent), 0 1rem 3rem rgb(0 0 0 / .4);
-    backdrop-filter: blur(20px) saturate(1.4);
-    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-primary) 22%, transparent), 0 1rem 3rem rgb(0 0 0 / .22);
+    backdrop-filter: blur(var(--command-glass-blur)) saturate(1.1);
+    -webkit-backdrop-filter: blur(var(--command-glass-blur)) saturate(1.1);
   }
   .admin-command-dialog[data-command-mode="action"]::backdrop {
-    background-color: rgb(0 0 0 / calc(var(--command-glass-opacity) * .33));
+    background-color: rgb(0 0 0 / calc(var(--command-glass-opacity) * .18));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
   .admin-command-dialog[data-command-mode="action"] :is(.admin-command-inner, .admin-command-head, .admin-command-list, .admin-command-hint),
   .admin-command-dialog[data-command-mode="action"] :global(:is(.admin-command-section, .admin-command-options, .admin-command-item-main)) {
@@ -813,7 +848,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-command-dialog[data-command-mode="action"] :global(.admin-command-action-item:hover),
   .admin-command-dialog[data-command-mode="action"] :global(.admin-command-item.is-active),
   .admin-command-dialog[data-command-mode="action"] :global(.admin-command-empty) {
-    background-color: color-mix(in srgb, var(--background-primary) 80%, transparent);
+    background-color: color-mix(in srgb, var(--background-primary) calc(var(--command-glass-opacity) * .8), transparent);
   }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .admin-command-dialog[data-command-mode="action"] {
@@ -899,6 +934,13 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   :global(.admin-command-action:hover),:global(.admin-command-action:focus-visible) { border-color:var(--accent-primary); color:var(--accent-primary); outline:2px solid color-mix(in srgb,var(--accent-primary) 28%,transparent); outline-offset:1px; }
   :global(.admin-command-action:disabled) { cursor:wait; opacity:.6; }
   :global(.admin-command-empty) { color:var(--text-secondary); font-size:.9rem; margin:.5rem; padding:.8rem; }
+  .admin-command-glass-adjust { align-items:center; border-top:1px solid color-mix(in srgb,var(--text-primary) 18%,transparent); display:flex; font-size:.75rem; gap:.6rem; margin:.6rem .15rem 0; padding-top:.55rem; }
+  .admin-command-glass-adjust[hidden] { display:none!important; }
+  .admin-command-glass-adjust label { color:var(--text-primary); flex:0 0 auto; font-weight:700; }
+  .admin-command-glass-adjust input { accent-color:var(--accent-primary); cursor:pointer; flex:1; height:1.6rem; min-height:1.6rem; min-width:0; }
+  .admin-command-glass-adjust input:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+  .admin-command-glass-adjust input:disabled { cursor:not-allowed; opacity:.5; }
+  .admin-command-glass-adjust output { color:var(--text-primary); font-variant-numeric:tabular-nums; font-weight:700; min-width:2.5rem; text-align:right; }
   .admin-command-hint { align-items:center; color:var(--text-secondary); display:flex; font-size:.7rem; gap:.25rem; margin:.55rem .15rem 0; }
   .admin-command-hint kbd { margin-right:.1rem; }
   @media(max-width:980px) { .admin-command-button { grid-column:1/-1; grid-row:2; justify-self:end; } .admin-account { align-items:center; flex-wrap:wrap; } }

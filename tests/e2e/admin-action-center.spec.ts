@@ -449,12 +449,12 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
   const glass = await readCommandPanel(dialog);
   expect(glass.alpha).toBeGreaterThanOrEqual(0.55);
   expect(glass.alpha).toBeLessThanOrEqual(0.65);
-  expect(glass.backdropAlpha).toBeGreaterThanOrEqual(0.12);
-  expect(glass.backdropAlpha).toBeLessThanOrEqual(0.25);
+  expect(glass.backdropAlpha).toBeGreaterThanOrEqual(0.08);
+  expect(glass.backdropAlpha).toBeLessThanOrEqual(0.14);
   expect(glass.listAlpha).toBe(0);
   expect(glass.hintAlpha).toBe(0);
   expect(glass.innerAlpha).toBe(0);
-  expect(glass.row.alpha).toBeGreaterThan(0.4);
+  expect(glass.row.alpha).toBeGreaterThan(0.35);
   expect(glass.row.alpha).toBeLessThan(0.95);
   expect(glass.filter).toContain("blur");
   expect(glass.filter).toContain("saturate");
@@ -576,6 +576,63 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   const standard = await readCommandPanel(dialog);
   expect(standard.alpha).toBeGreaterThanOrEqual(0.55);
   expect(standard.alpha).toBeLessThanOrEqual(0.65);
+});
+
+test("ポップアップ内のスライダーで背景・ぼかし・暗幕・項目の透け感が即座に変わる", async ({
+  page,
+}) => {
+  await mockShell(page);
+  await page.goto("admin/portal/");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await expect(dialog).toHaveAttribute("data-command-mode", "action");
+  const slider = dialog.getByRole("slider", { name: "背景の透け感" });
+  await expect(slider).toHaveValue("40");
+  await expect(dialog.locator("[data-admin-command-glass-output]")).toHaveText(
+    "40%",
+  );
+  const initial = await readCommandPanel(dialog);
+  expect(initial.alpha).toBeGreaterThan(0.55);
+
+  await slider.focus();
+  await slider.press("End");
+  await expect(slider).toHaveValue("100");
+  await expect(dialog.locator("[data-admin-command-glass-output]")).toHaveText(
+    "100%",
+  );
+  await expect(slider).toHaveAttribute(
+    "aria-valuetext",
+    "背景の透け感 100%",
+  );
+  const transparent = await readCommandPanel(dialog);
+  expect(transparent.alpha).toBe(0);
+  expect(transparent.backdropAlpha).toBe(0);
+  expect(transparent.row.alpha).toBe(0);
+  expect(transparent.filter).toContain("blur(0px)");
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
+    ),
+  ).toBe("0%");
+
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  await expect(slider).toHaveValue("100");
+  const restored = await readCommandPanel(dialog);
+  expect(restored.alpha).toBe(0);
+
+  await slider.focus();
+  await slider.press("Home");
+  await expect(slider).toHaveValue("0");
+  const opaque = await readCommandPanel(dialog);
+  expect(opaque.alpha).toBe(1);
+  expect(opaque.backdropAlpha).toBeGreaterThan(0.16);
+  await page.keyboard.press("Escape");
+  await page.locator("[data-settings-menu] > summary").click();
+  await expect(
+    page.getByRole("slider", { name: "要対応の透け感" }),
+  ).toHaveValue("100");
 });
 
 test("以前の3段階の透過設定をスライダーでも復元できる", async ({ page }) => {
