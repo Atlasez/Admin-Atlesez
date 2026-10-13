@@ -203,7 +203,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       <button type="submit" class="admin-logout">ログアウト</button>
     </form>
   </div>
-  <dialog class="admin-command-dialog" id="admin-command-dialog" data-admin-command-dialog aria-labelledby="admin-command-heading">
+  <dialog class="admin-command-dialog" id="admin-command-dialog" data-admin-command-dialog data-command-mode="command" aria-labelledby="admin-command-heading">
     <form method="dialog" class="admin-command-inner">
       <div class="admin-command-head"><h2 id="admin-command-heading" data-admin-command-heading>操作を検索</h2><button type="submit" class="admin-command-close" aria-label="操作検索を閉じる">×</button></div>
       <label class="admin-command-search"><span aria-hidden="true">⌕</span><input type="search" data-admin-command-input placeholder="記事・タスク・操作を検索" autocomplete="off" /><kbd>Esc</kbd></label>
@@ -614,6 +614,18 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       let actionFilter = 'all';
       let actionCounts: NonNullable<ActionCenterResponse['counts']> = {};
       let openMode: 'command' | 'action' = 'command';
+      const glassFilter = 'blur(20px) saturate(1.4)';
+      const applyCommandMode = (mode: 'command' | 'action') => {
+        openMode = mode;
+        dialog.dataset.commandMode = mode;
+        if (mode === 'action') {
+          dialog.style.backdropFilter = glassFilter;
+          dialog.style.setProperty('-webkit-backdrop-filter', glassFilter);
+          return;
+        }
+        dialog.style.backdropFilter = '';
+        dialog.style.removeProperty('-webkit-backdrop-filter');
+      };
       let activeIndex = 0;
       let searchTimer: number | undefined;
       const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character] ?? character));
@@ -683,7 +695,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           commands = [...local, ...remote]; activeIndex = 0; render();
         } catch { commands = local; activeIndex = 0; render(); }
       };
-      const open = () => { openMode = 'command'; actionToolbar?.setAttribute('hidden', ''); if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...recentCommands(), ...paletteCommands().filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); input.focus(); };
+      const open = () => { applyCommandMode('command'); actionToolbar?.setAttribute('hidden', ''); if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...recentCommands(), ...paletteCommands().filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); input.focus(); };
       const applyCommandAudience = (admin: boolean) => {
         if (admin === useAdminCommands) return;
         useAdminCommands = admin;
@@ -695,7 +707,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         applyCommandAudience(status.canAccessAdmin === true || (status.canAccessAdmin !== false && status.isManager === true));
       }).catch(() => undefined);
       async function openActionCenter() {
-        openMode = 'action';
+        applyCommandMode('action');
         actionFilter = 'all';
         actionCounts = {};
         actionToolbar?.removeAttribute('hidden');
@@ -734,7 +746,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       }
       button.addEventListener("click", open);
       actionCenterButtons.forEach((actionButton) => actionButton.addEventListener('click', (event) => { event.preventDefault(); void openActionCenter(); }));
-      dialog.addEventListener('close', () => { openMode = 'command'; actionToolbar?.setAttribute('hidden', ''); if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; });
+      dialog.addEventListener('close', () => { applyCommandMode('command'); actionToolbar?.setAttribute('hidden', ''); if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; });
       document.addEventListener('astro:page-load', recordCurrentRoute);
       recordCurrentRoute();
       input.addEventListener("input", () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(() => void search(), 120); });
@@ -781,6 +793,38 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-command-button kbd,.admin-command-hint kbd,.admin-command-search kbd { border:1px solid var(--border-default); border-radius:999px; color:var(--text-muted); font:inherit; font-size:.68rem; padding:.16rem .45rem; white-space:nowrap; }
   .admin-command-dialog { background:var(--background-secondary); border:1px solid var(--border-strong); border-radius:.75rem; box-shadow:0 1rem 3rem rgb(0 0 0 / .4); color:var(--text-primary); margin:auto; max-height:min(34rem,calc(100vh - 2rem)); padding:0; width:min(38rem,calc(100vw - 3rem)); }
   .admin-command-dialog::backdrop { background:rgb(0 0 0 / .62); backdrop-filter:blur(3px); }
+  .admin-command-dialog[data-command-mode="action"] {
+    background-color: color-mix(in srgb, var(--background-secondary) 78%, transparent);
+    border-color: color-mix(in srgb, var(--text-primary) 18%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-primary) 22%, transparent), 0 1rem 3rem rgb(0 0 0 / .4);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .admin-command-dialog[data-command-mode="action"] {
+      background-color: var(--background-secondary);
+      border-color: var(--border-strong);
+      box-shadow: 0 1rem 3rem rgb(0 0 0 / .4);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .admin-command-dialog[data-command-mode="action"] {
+      background-color: var(--background-secondary);
+      border-color: var(--border-strong);
+      box-shadow: 0 1rem 3rem rgb(0 0 0 / .4);
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .admin-command-dialog[data-command-mode="action"],
+    .admin-command-dialog[data-command-mode="action"]::backdrop {
+      animation: none;
+      transition: none;
+    }
+  }
   .admin-command-inner { padding:.9rem 1rem .8rem; }
   .admin-command-head { align-items:center; display:flex; justify-content:space-between; }
   .admin-command-head h2 { font-size:1.25rem; margin:0; }

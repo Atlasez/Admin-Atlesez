@@ -1,4 +1,65 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+function contrast(foreground: number[], background: number[]) {
+  const channel = (value: number) => {
+    const scaled = value / 255;
+    return scaled <= 0.04045
+      ? scaled / 12.92
+      : ((scaled + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (color: number[]) =>
+    0.2126 * channel(color[0]) +
+    0.7152 * channel(color[1]) +
+    0.0722 * channel(color[2]);
+  const lighter = Math.max(luminance(foreground), luminance(background));
+  const darker = Math.min(luminance(foreground), luminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function parseColor(value: string) {
+  const color = value.match(
+    /color\(srgb\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)(?:\s*\/\s*([0-9.]+))?\)/,
+  );
+  if (color) {
+    return {
+      rgb: [1, 2, 3].map((index) => Math.round(Number(color[index]) * 255)),
+      alpha: color[4] === undefined ? 1 : Number(color[4]),
+    };
+  }
+  const channels = value.match(/[\d.]+/g)?.map(Number) ?? [];
+  return {
+    rgb: channels.slice(0, 3),
+    alpha: channels.length > 3 ? channels[3] : 1,
+  };
+}
+
+async function readCommandPanel(dialog: Locator) {
+  const raw = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const filter = [style.backdropFilter, style.webkitBackdropFilter]
+      .filter((value) => value && value !== "none")
+      .join(" ");
+    const search = element.querySelector(".admin-command-search");
+    const action = element.querySelector(".admin-command-action");
+    return {
+      background: style.backgroundColor,
+      filter,
+      title: getComputedStyle(element.querySelector("h2")!).color,
+      meta: getComputedStyle(element.querySelector("small")!).color,
+      search: search ? getComputedStyle(search).backgroundColor : "",
+      action: action ? getComputedStyle(action).backgroundColor : "",
+    };
+  });
+  const background = parseColor(raw.background);
+  return {
+    ...background,
+    filter: raw.filter,
+    title: parseColor(raw.title).rgb,
+    meta: parseColor(raw.meta).rgb,
+    searchAlpha: parseColor(raw.search).alpha,
+    actionAlpha: parseColor(raw.action).alpha,
+  };
+}
 
 async function mockShell(
   page: Page,
@@ -297,6 +358,16 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await page.keyboard.press("Meta+K");
   const dialog = page.locator("[data-admin-command-dialog]");
   await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("data-command-mode", "command");
+  const searchPanel = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      filter: `${style.backdropFilter} ${style.webkitBackdropFilter}`,
+    };
+  });
+  expect(searchPanel.background).toBe("rgb(245, 247, 248)");
+  expect(searchPanel.filter).not.toContain("saturate");
   const dialogSize = await dialog.evaluate((element) => ({
     width: Number.parseFloat(getComputedStyle(element).width),
     maxHeight: Number.parseFloat(getComputedStyle(element).maxHeight),
@@ -350,6 +421,49 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
     dialog.getByRole("option", { name: /定義を確認/ }),
   ).toContainText("タスク");
   await expect(page).toHaveURL(/\/admin\/articles\//);
+  await expect(dialog).toHaveAttribute("data-command-mode", "action");
+  const glass = await readCommandPanel(dialog);
+  expect(glass.alpha).toBeGreaterThanOrEqual(0.7);
+  expect(glass.alpha).toBeLessThanOrEqual(0.8);
+  expect(glass.filter).toContain("blur");
+  expect(glass.filter).toContain("saturate");
+  expect(glass.searchAlpha).toBe(1);
+  expect(glass.actionAlpha).toBe(1);
+  const behind = [255, 255, 255].map((channel) => channel * 0.38);
+  const panel = glass.rgb.map(
+    (channel, index) =>
+      channel * glass.alpha + behind[index] * (1 - glass.alpha),
+  );
+  expect(contrast(glass.title, panel)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(glass.meta, panel)).toBeGreaterThanOrEqual(4.5);
+});
+
+test("要対応ポップアップは透過を減らす設定で不透明に戻る", async ({ page }) => {
+  await mockShell(page);
+  await page.goto("admin/articles/");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await expect(dialog).toHaveAttribute("data-command-mode", "action");
+  const session = await page.context().newCDPSession(page);
+  await session.send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-transparency", value: "reduce" }],
+  });
+  const solid = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      filter: `${style.backdropFilter} ${style.webkitBackdropFilter}`,
+    };
+  });
+  expect(solid.background).toBe("rgb(245, 247, 248)");
+  expect(solid.filter).not.toContain("blur");
+  expect(solid.filter).not.toContain("saturate");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Meta+K");
+  await expect(dialog).toHaveAttribute("data-command-mode", "command");
+  await expect(
+    dialog.getByRole("heading", { name: "操作を検索" }),
+  ).toBeVisible();
 });
 
 test("要対応ポップアップから状態変更を実行し、通知を混在させない", async ({
