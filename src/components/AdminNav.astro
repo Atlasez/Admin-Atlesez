@@ -190,7 +190,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     <a class="admin-management-link" href={`/admin/manage/?project=${projectSlug}`} hidden={site === "portal"} data-admin-project-link="manage" data-admin-site={site} data-admin-page="management" aria-current={current === "management" ? "page" : undefined}>管理</a>
   </nav>
   <div class="admin-account" data-admin-account hidden>
-    <a class="admin-action-center-utility-link" href="/admin/action-center/" data-admin-action-center-utility aria-label="要対応一覧（アクションセンター）" title="要対応一覧を開く"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>要対応</span></a>
+    <a class="admin-action-center-utility-link" href="/admin/action-center/" data-requires-admin data-admin-action-center-utility aria-label="要対応一覧（アクションセンター）" title="要対応一覧を開く"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>要対応</span></a>
     <button type="button" class="admin-command-button" data-admin-command aria-haspopup="dialog" aria-controls="admin-command-dialog" aria-label="操作を検索（⌘K）" title="操作を検索（⌘K）"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.3 15.3 5.2 5.2"/></svg></button>
     <SettingsMenu locale="ja" />
     <button type="button" class="admin-notifications" data-admin-notifications aria-expanded="false" aria-controls="admin-notification-panel" aria-haspopup="dialog" aria-label="通知を開く"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span data-admin-notification-count hidden>0</span></button>
@@ -580,7 +580,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       type CommandAction = { entityType: string; entityId: string; fromState: string; toState: string; label: string; expectedUpdatedAt?: string; approvalRequestType?: string };
       type Command = { label: string; detail: string; group: 'recent' | 'quick' | 'result' | 'action'; icon: string; href?: string; run?: () => void; keepDialogOpen?: boolean; kind?: string; status?: string; priority?: string; actions?: CommandAction[] };
       type ActionCenterResponse = { items?: Array<{ title?: string; detail?: string; href?: string; kind?: string; status?: string; priority?: string; actions?: CommandAction[] }>; counts?: { today?: number; dueSoon?: number; approvals?: number; assigned?: number }; error?: string };
-      const staticCommands: Command[] = [
+      const adminCommands: Command[] = [
         { label: "要対応", detail: "確認・実行が必要な項目", group: 'quick', icon: 'actions', href: "/admin/action-center/", keepDialogOpen: true, run: () => { void openActionCenter(); } },
         { label: "編集・フィードバック", detail: "記事とフィードバック", group: 'quick', icon: 'articles', href: "/admin/articles/" },
         { label: "タスク管理", detail: "担当タスクと期限", group: 'quick', icon: 'tasks', href: "/admin/operations/?project=atlas" },
@@ -588,6 +588,14 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         { label: "管理トップ", detail: "設定・権限・状態", group: 'quick', icon: 'manage', href: "/admin/manage/?project=atlas" },
         { label: "表示設定を開く", detail: "テーマ・文字サイズ", group: 'quick', icon: 'settings', run: () => document.querySelector<HTMLElement>("[data-settings-menu] summary")?.click() },
       ];
+      const memberCommands: Command[] = [
+        { label: "自分のタスク", detail: "担当タスクと期限", group: 'quick', icon: 'tasks', href: "/admin/member-tasks/" },
+        { label: "カレンダー", detail: "予定と締切", group: 'quick', icon: 'calendar', href: "/admin/member-calendar/" },
+        { label: "通知", detail: "自分への通知", group: 'quick', icon: 'actions', href: "/admin/notifications/" },
+        { label: "表示設定を開く", detail: "テーマ・文字サイズ", group: 'quick', icon: 'settings', run: () => document.querySelector<HTMLElement>("[data-settings-menu] summary")?.click() },
+      ];
+      let useAdminCommands = false;
+      const paletteCommands = () => useAdminCommands ? adminCommands : memberCommands;
       const actionKindLabels: Record<string, string> = { task: 'タスク', document: '記事', application: '応募', approval: '承認' };
       const actionPriorityLabels: Record<string, string> = { urgent: '今日対応', 'due-soon': '期限間近', new: '新着' };
       const actionStatusLabels: Record<string, string> = { open: '未着手', doing: '進行中', pending: '承認待ち' };
@@ -599,11 +607,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           return Array.isArray(value) ? value.filter((item): item is CommandHistory => Boolean(item && typeof item === "object" && typeof (item as CommandHistory).label === "string" && typeof (item as CommandHistory).count === "number" && typeof (item as CommandHistory).lastUsed === "number")).slice(0, 8) : [];
         } catch { return []; }
       };
-      const recentCommands = (): Command[] => readHistory().sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed)).slice(0, 5).map((item) => {
-        const quickCommand = staticCommands.find((command) => command.label === item.label && (!item.href || command.href === item.href));
+      const recentCommands = (): Command[] => readHistory().sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed)).slice(0, 5).flatMap((item) => {
+        const quickCommand = paletteCommands().find((command) => command.label === item.label && (!item.href || command.href === item.href));
+        if (item.href && !quickCommand) return [];
         const savedDetail = typeof item.detail === "string" ? item.detail.replace(/・\d+回$/, "") : "";
         const detail = quickCommand?.detail ?? (savedDetail || "最近使った操作");
-        return { label: item.label, detail: `${detail}・${item.count}回`, group: 'recent', icon: 'history', ...(item.href ? { href: item.href } : {}), ...(quickCommand?.run ? { run: quickCommand.run } : {}), ...(quickCommand?.keepDialogOpen ? { keepDialogOpen: true } : {}) };
+        return [{ label: item.label, detail: `${detail}・${item.count}回`, group: 'recent' as const, icon: 'history', ...(item.href ? { href: item.href } : {}), ...(quickCommand?.run ? { run: quickCommand.run } : {}), ...(quickCommand?.keepDialogOpen ? { keepDialogOpen: true } : {}) }];
       });
       const recordUsage = (command: Command) => {
         if (command.group === 'action') return;
@@ -617,12 +626,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       };
       const recordCurrentRoute = () => {
         if ((window.location.pathname.replace(/\/$/, '') || '/') !== '/admin/action-center') return;
-        const actionCenter = staticCommands.find((command) => command.href === '/admin/action-center/');
+        const actionCenter = paletteCommands().find((command) => command.href === '/admin/action-center/');
         if (!actionCenter) return;
         const alreadyRecorded = readHistory().some((item) => item.href === actionCenter.href && Date.now() - item.lastUsed < 1500);
         if (!alreadyRecorded) recordUsage(actionCenter);
       };
-      let commands = [...staticCommands];
+      let commands = [...paletteCommands()];
       let actionCommands: Command[] = [];
       let actionFilter = 'all';
       let actionCounts: NonNullable<ActionCenterResponse['counts']> = {};
@@ -686,8 +695,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           render();
           return;
         }
-        if (query.length < 2) { commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); return; }
-        const local = staticCommands.filter((command) => `${command.label} ${command.detail}`.includes(query)).map((command) => ({ ...command, group: 'result' as const }));
+        if (query.length < 2) { commands = [...recentCommands(), ...paletteCommands().filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); return; }
+        const local = paletteCommands().filter((command) => `${command.label} ${command.detail}`.includes(query)).map((command) => ({ ...command, group: 'result' as const }));
+        if (!useAdminCommands) { commands = local; activeIndex = 0; render(); return; }
         try {
           const response = await fetch(`/api/admin/command-search?q=${encodeURIComponent(query)}`, { credentials: "same-origin", cache: "no-store" });
           const data = await response.json().catch(() => ({})) as { results?: Array<{ type?: string; title?: string; detail?: string; href?: string }> };
@@ -695,7 +705,17 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           commands = [...local, ...remote]; activeIndex = 0; render();
         } catch { commands = local; activeIndex = 0; render(); }
       };
-      const open = () => { openMode = 'command'; actionToolbar?.setAttribute('hidden', ''); if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); input.focus(); };
+      const open = () => { openMode = 'command'; actionToolbar?.setAttribute('hidden', ''); if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...recentCommands(), ...paletteCommands().filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); input.focus(); };
+      const applyCommandAudience = (admin: boolean) => {
+        if (admin === useAdminCommands) return;
+        useAdminCommands = admin;
+        if (dialog.open && openMode === 'command') open();
+      };
+      void fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
+        if (!response.ok) return;
+        const status = await response.json().catch(() => ({})) as { canAccessAdmin?: boolean; isManager?: boolean };
+        applyCommandAudience(status.canAccessAdmin === true || (status.canAccessAdmin !== false && status.isManager === true));
+      }).catch(() => undefined);
       async function openActionCenter() {
         openMode = 'action';
         actionFilter = 'all';

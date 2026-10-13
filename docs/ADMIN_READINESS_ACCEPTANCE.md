@@ -11,6 +11,8 @@
 - `tests/e2e/application-project-fields.spec.ts`: 5プロジェクト×1280px/390pxで設問の表示・必須・無効化・送信内容・画面幅を確認する。UIのAPI応答は仮データ。
 - 既存の `admin-workflow-atomicity.test.ts`、`admin-worker-discord-roles.test.ts`、`onboarding.spec.ts`、`applicant-discord.spec.ts`、応募管理のE2Eを継続実行する。これらは外部サービスの実証を代替しない。
 
+受け入れ担当の【仮】は[受け入れ手順](ADMIN_MEMBER_INTAKE.md)にある。主担当は運営事務局、代理は当該プロジェクトのプロジェクト責任者、連絡は https://atlasez.org/contact/ 。確定前の仮の値であり、下の本番受入を実施済みにはしない。
+
 ## 本番受入の記録欄
 
 以下はADMINのGitHub Actions deploy復旧と対象main SHA・配信Version一致の確認後に実行する。日付、対象SHA、操作者、結果、監査ID、秘密値を含まない証拠を記録する。

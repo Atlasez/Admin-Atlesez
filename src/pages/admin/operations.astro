@@ -1341,6 +1341,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
 </style>
 <script>
   import { createAdminLoadRetry } from '../../scripts/admin-load-retry';
+  import { OPERATION_SCOPE_MISSING_MESSAGE, readOperationScope } from '../../lib/operation-overview-scope';
   type OperationMember = { email: string; display_name?: string };
   type OperationParticipant = { displayName: string; availability: string; isSelf: boolean };
   type OperationEvent = { id: string; title: string; starts_at: string; ends_at?: string | null; details?: string | null; timezone?: string; source?: string; availability?: string | null; availabilityCounts?: Record<string, number>; participants?: OperationParticipant[] };
@@ -1726,11 +1727,17 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       renderCalendarSelectionSummary();
     };
     const render = () => {
+      const scope = readOperationScope(data);
+      if (!scope) {
+        eventFeedback.value = OPERATION_SCOPE_MISSING_MESSAGE;
+        retry?.fail(new Error(OPERATION_SCOPE_MISSING_MESSAGE));
+        return;
+      }
       renderTimezoneOffset();
       const members = new Map((data.members ?? []).map((member) => [member.email, member.display_name || '表示名未設定']));
       projectTitle.textContent = memberPage ? 'カレンダー' : `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : progressOnly ? '進捗報告' : 'タスク管理'}`;
-      get<HTMLElement>('[data-event-create]').hidden = memberPage || !data.scope.isManager;
-      const canManageCurrentProject = Boolean(data.scope.isManager || data.scope.projectRole === 'manager');
+      get<HTMLElement>('[data-event-create]').hidden = memberPage || !scope.isManager;
+      const canManageCurrentProject = Boolean(scope.isManager || scope.projectRole === 'manager');
       taskCreateTestLabel.hidden = !canManageCurrentProject;
       const selectedAssignees = new Set([...assignee.selectedOptions].map((option) => option.value));
       assignee.innerHTML = '<option value="" disabled>担当者を選択</option>' + (data.members ?? []).map((member) => `<option value="${escapeHtml(member.email)}" ${selectedAssignees.has(member.email) ? 'selected' : ''}>${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
@@ -1738,9 +1745,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       progressProjectFilter.innerHTML = '<option value="">すべてのプロジェクト</option>' + (data.projects ?? []).map((project) => `<option value="${escapeHtml(String(project.id))}">${escapeHtml(String(project.name || project.slug || project.id))}</option>`).join('');
       if ([...(data.projects ?? [])].some((project) => String(project.id) === currentProject)) progressProjectFilter.value = currentProject;
       renderProgressReports();
-      const taskAssignedTo = (item: Record<string, any>) => { if (typeof item.assigned_to_me === 'boolean') return item.assigned_to_me; const assignee = String(item.assignee_email ?? '').trim().toLowerCase(), email = String(data.scope.email ?? '').toLowerCase(); return (item.task_kind === 'feedback' && assignee === '*') || assignee.split(',').map((value: string) => value.trim()).includes(email); };
+      const taskAssignedTo = (item: Record<string, any>) => { if (typeof item.assigned_to_me === 'boolean') return item.assigned_to_me; const assignee = String(item.assignee_email ?? '').trim().toLowerCase(), email = scope.email.toLowerCase(); return (item.task_kind === 'feedback' && assignee === '*') || assignee.split(',').map((value: string) => value.trim()).includes(email); };
       const taskKindLabel = (item: Record<string, any>) => item.task_kind === 'feedback' ? 'フィードバック依頼' : 'タスク依頼';
-      const allVisibleTasks = (data.tasks ?? []).filter((item) => (taskShowArchived.checked || !item.archived_at) && (taskFilter === 'all' || (taskFilter === 'assigned' ? taskAssignedTo(item) : (item.created_by_me ?? item.created_by === data.scope.email))));
+      const allVisibleTasks = (data.tasks ?? []).filter((item) => (taskShowArchived.checked || !item.archived_at) && (taskFilter === 'all' || (taskFilter === 'assigned' ? taskAssignedTo(item) : (item.created_by_me ?? item.created_by === scope.email))));
       const visibleTasks = allVisibleTasks
         .filter((item) => taskShowCompleted.checked || item.status !== 'done')
         .sort((left, right) => {
@@ -1772,7 +1779,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
           : item.status === 'done'
             ? `<button type="button" class="task-archive-button" data-task-archive="${escapeHtml(String(item.id))}" data-archive-next="true">アーカイブ</button>`
             : '';
-        const createdByMe = item.created_by_me ?? item.created_by === data.scope.email;
+        const createdByMe = item.created_by_me ?? item.created_by === scope.email;
         const createdByLabel = item.created_by_display_name ?? (createdByMe ? '自分' : item.created_by);
         const testAction = canManageCurrentProject ? `<button type="button" class="task-archive-button" data-task-test="${escapeHtml(String(item.id))}" data-test-next="${item.is_test_data ? 'false' : 'true'}">${item.is_test_data ? '通常タスクに戻す' : 'テスト用に設定'}</button>` : '';
         return `<article class="item task-item ${item.status === 'done' ? 'is-done' : ''} ${archived ? 'is-archived' : ''}"><div class="task-row"><div class="task-title"><span class="task-kind-label">${escapeHtml(taskKindLabel(item))}</span>${item.is_test_data ? '<span class="task-archived-label">テストデータ</span>' : ''}${isNew ? '<span class="task-new">新着</span>' : ''}${archived ? '<span class="task-archived-label">アーカイブ済み</span>' : ''}<b>${escapeHtml(String(item.title ?? ''))}</b></div><select aria-label="${escapeHtml(String(item.title ?? 'タスク'))}の状態" data-task-status="${escapeHtml(String(item.id))}" ${item.can_update === false ? 'disabled' : ''}><option value="open" ${item.status === 'open' ? 'selected' : ''}>未着手</option><option value="doing" ${item.status === 'doing' ? 'selected' : ''}>進行中</option><option value="done" ${item.status === 'done' ? 'selected' : ''}>完了</option></select></div><div class="task-meta"><span class="task-role">${assigned ? '自分がこなす' : createdByMe ? '自分が依頼' : 'すべて'}</span><span>${escapeHtml(String(item.subject || '全体'))}</span><span>担当：${escapeHtml(assigneeLabel)}</span>${createdByLabel ? `<span>依頼者：${escapeHtml(String(createdByLabel))}</span>` : ''}${item.due_at ? `<span>期限：${escapeHtml(String(item.due_at).replace('T',' '))}</span>` : ''}${item.created_at ? `<span>受信：${escapeHtml(formatDate(String(item.created_at)))}</span>` : ''}</div>${item.details ? `<p class="task-details">${escapeHtml(String(item.details).replace(/\n\n記事編集画面:.*/, ''))}</p>` : ''}${editorLink}${archiveAction}${testAction}${item.is_test_data ? '' : taskReminderEditor(item)}</article>`;
@@ -1787,7 +1794,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       events.innerHTML = (data.events ?? []).map((item) => {
         const participants = item.participants ?? [];
         const summary = availabilitySummary(`${item.title}の参加状況`, participants, item.availabilityCounts);
-        return `<article class="item"><div class="event-heading"><b>${escapeHtml(item.title)}</b>${data.scope.isManager ? `<button type="button" class="event-delete" data-delete-event="${escapeHtml(item.id)}">この日程を削除</button>` : ''}</div><small>${formatDate(item.starts_at)}${item.ends_at ? ` 〜 ${formatDate(item.ends_at)}` : ''}</small><div class="availability">${Object.entries(availabilityLabels).map(([value, label]) => `<button type="button" class="${item.availability === value ? 'is-selected' : ''}" aria-pressed="${item.availability === value}" data-availability="${value}" data-event="${escapeHtml(item.id)}">${label}${item.availability === value ? ' ✓' : ''}</button>`).join('')}</div><div class="participant-summary">${summary || '<span>まだ参加登録はありません。</span>'}</div></article>`;
+        return `<article class="item"><div class="event-heading"><b>${escapeHtml(item.title)}</b>${scope.isManager ? `<button type="button" class="event-delete" data-delete-event="${escapeHtml(item.id)}">この日程を削除</button>` : ''}</div><small>${formatDate(item.starts_at)}${item.ends_at ? ` 〜 ${formatDate(item.ends_at)}` : ''}</small><div class="availability">${Object.entries(availabilityLabels).map(([value, label]) => `<button type="button" class="${item.availability === value ? 'is-selected' : ''}" aria-pressed="${item.availability === value}" data-availability="${value}" data-event="${escapeHtml(item.id)}">${label}${item.availability === value ? ' ✓' : ''}</button>`).join('')}</div><div class="participant-summary">${summary || '<span>まだ参加登録はありません。</span>'}</div></article>`;
       }).join('') || '<p>登録された日程はありません。</p>';
       eventPagination.hidden = !memberPage || !eventNextCursor;
       eventPaginationSummary.textContent = eventNextCursor ? `${data.events?.length ?? 0}件を読み込み済み` : '';
@@ -1840,6 +1847,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
           }
         }
         if (controller.signal.aborted || requestVersion !== loadVersion) return;
+        if (!readOperationScope(loaded)) throw new Error(OPERATION_SCOPE_MISSING_MESSAGE);
         data = loaded;
         taskNextCursor = loaded.pagination?.nextCursor ?? null;
         eventNextCursor = null;

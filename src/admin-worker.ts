@@ -23,7 +23,11 @@ import {
 } from "./lib/editorial-media";
 
 import { memberTaskFilters } from "./lib/member-task-filters";
-import { isAdminPagePath } from "./lib/admin-routes";
+import {
+  globalAdminPrototypePaths,
+  isAdminPagePath,
+} from "./lib/admin-routes";
+import { applicationAcceptanceEmail } from "./lib/application-acceptance-email";
 import {
   canAccess,
   getUserStage,
@@ -3706,6 +3710,8 @@ async function createReportAdminPermission(
     return json({ error: "メールアドレスと担当分野を確認してください。" }, 400);
   const archivedError = await archivedMemberError(env, email);
   if (archivedError) return archivedError;
+  const introError = await firstPermissionIntroError(env, email);
+  if (introError) return introError;
   const normalizedSubjects = subjects.includes("*") ? ["*"] : subjects;
   const state = await loadDiscordProvisioningState(env, email);
   const provisioning = await provisionApplicationDiscordRoles(
@@ -3754,6 +3760,10 @@ async function updateReportAdminPermissions(
   const archivedError = await archivedMemberError(env, email);
   if (archivedError) return archivedError;
   const normalizedSubjects = subjects.includes("*") ? ["*"] : subjects;
+  if (normalizedSubjects.length) {
+    const introError = await firstPermissionIntroError(env, email);
+    if (introError) return introError;
+  }
   const existingGlobal = await env.REPORTS.prepare(
     "SELECT 1 AS found FROM report_admin_permissions WHERE email=? AND subject='*' LIMIT 1",
   )
@@ -3958,6 +3968,40 @@ function parseMemberLifecycleSnapshot(value: unknown): MemberLifecycleSnapshot |
     isNonEmptyString(entry.assigned_at) && isNonEmptyString(entry.assigned_by)
   )) return null;
   return value as MemberLifecycleSnapshot;
+}
+
+/** 最初の運営権限は、自己紹介2画面が保存されるまで付与しない。既存権限の更新は止めない。 */
+async function firstPermissionIntroError(
+  env: Env,
+  email: string,
+): Promise<Response | null> {
+  const existing = await env.REPORTS.prepare(
+    "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email)=lower(?) LIMIT 1",
+  )
+    .bind(email)
+    .first<{ found: number }>();
+  if (existing?.found) return null;
+  const profile = await env.REPORTS.prepare(
+    "SELECT bio FROM editorial_member_profiles WHERE lower(email)=lower(?)",
+  )
+    .bind(email)
+    .first<{ bio: string | null }>();
+  const projectProfile = await env.REPORTS.prepare(
+    `SELECT 1 AS found FROM editorial_project_member_profiles
+     WHERE lower(email)=lower(?) AND length(trim(COALESCE(internal_bio, ''))) > 0
+     LIMIT 1`,
+  )
+    .bind(email)
+    .first<{ found: number }>();
+  if (profile?.bio?.trim() && projectProfile?.found) return null;
+  return json(
+    {
+      error:
+        "運営外の自己紹介とプロジェクト内自己紹介が保存されるまで、最初の運営権限は付与できません。本人に /onboarding/ の入力を完了してもらってください。",
+      code: "INTRO_INCOMPLETE",
+    },
+    409,
+  );
 }
 
 async function archivedMemberError(env: Env, email: string): Promise<Response | null> {
@@ -8138,31 +8182,11 @@ async function queueApplicationAcceptanceEmail(
   const projectLabel =
     APPLICATION_FORM_LABELS[application.projectSlug] ?? application.projectSlug;
   const english = application.formLanguage === "en";
-  const subject = english
-    ? `Atlasez | Your application to ${projectLabel} was accepted`
-    : `Atlasez｜${projectLabel}への参加が承認されました`;
-  const textBody = english
-    ? [
-        "This is Atlasez management.",
-        "",
-        `Your application to ${projectLabel} has been accepted.`,
-        "Please sign in to the Atlasez management site and follow the onboarding instructions.",
-        "If you have not connected Discord yet, open the application status page and choose ‘Connect Discord’ once.",
-        "",
-        "Application status: https://admin.atlasez.org/applicant/",
-      ].join("\n")
-    : [
-        "Atlasez運営です。",
-        "",
-        `${projectLabel}への参加が承認されました。`,
-        "管理サイトへログインし、オンボーディングの案内に沿って参加手続きを進めてください。",
-        "Discord連携がまだの場合は、応募状況ページから「Discordと連携」を1回実行してください。",
-        "",
-        "応募状況：https://admin.atlasez.org/applicant/",
-      ].join("\n");
-  const htmlBody = english
-    ? `<h2>Application accepted</h2><p>Your application to ${emailSafe(projectLabel)} has been accepted.</p><p>Please sign in and follow the onboarding instructions. If Discord is not connected yet, choose “Connect Discord” once on the application status page.</p><p><a href="https://admin.atlasez.org/applicant/">Open application status</a></p>`
-    : `<h2>参加が承認されました</h2><p>${emailSafe(projectLabel)}への参加が承認されました。</p><p>管理サイトへログインし、オンボーディングの案内に沿って参加手続きを進めてください。Discord連携がまだの場合は、応募状況ページから「Discordと連携」を1回実行してください。</p><p><a href="https://admin.atlasez.org/applicant/">応募状況を開く</a></p>`;
+  const { subject, textBody, htmlBody } = applicationAcceptanceEmail(
+    projectLabel,
+    english,
+    emailSafe(projectLabel),
+  );
   await env.REPORTS.prepare(
     `INSERT OR IGNORE INTO atlasez_application_email_deliveries
      (id,application_id,recipient_email,kind,subject,text_body,html_body,status,attempt_count,next_attempt_at,created_at,updated_at)
@@ -24137,6 +24161,7 @@ async function handleAdminRequest(
       "/admin/ui-prototype/learning-content/",
       "/admin/portal-prototype",
       "/admin/portal-prototype/",
+      ...globalAdminPrototypePaths,
     ]);
     if (managerPages.has(url.pathname)) {
       const managerScope =

@@ -45,6 +45,7 @@ const createEnvironment = () => {
     CREATE TABLE atlasez_member_discord_role_assignments (email TEXT NOT NULL, discord_role_id TEXT NOT NULL, is_active INTEGER NOT NULL, assigned_at TEXT NOT NULL, assigned_by TEXT NOT NULL, PRIMARY KEY(email,discord_role_id));
     CREATE TABLE atlasez_member_discord_accounts (email TEXT PRIMARY KEY, discord_user_id TEXT NOT NULL);
     CREATE TABLE editorial_member_profiles (email TEXT PRIMARY KEY, display_name TEXT, bio TEXT, avatar_url TEXT, university TEXT, year TEXT, interests TEXT, affiliation_type TEXT, country TEXT, timezone TEXT, updated_at TEXT);
+    CREATE TABLE editorial_project_member_profiles (project_id TEXT NOT NULL, email TEXT NOT NULL, internal_bio TEXT, updated_at TEXT, PRIMARY KEY(project_id, email));
     CREATE TABLE admin_member_lifecycle (email TEXT PRIMARY KEY, status TEXT NOT NULL, snapshot_json TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL, archived_by TEXT, archived_at TEXT);
     CREATE TABLE atlasez_project_member_lifecycle (project_id TEXT NOT NULL, email TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'active', PRIMARY KEY(project_id,email));
     CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_email TEXT NOT NULL, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, target_label TEXT NOT NULL, summary TEXT NOT NULL, details_json TEXT NOT NULL, created_at TEXT NOT NULL);
@@ -435,4 +436,100 @@ it("records workflow-role history only when a role assignment actually changes",
       )
       .get(),
   ).toMatchObject({ count: 1 });
+});
+
+const permissionRequest = (
+  method: "POST" | "PUT" | "DELETE",
+  email: string,
+  subject = "physics",
+) =>
+  new Request(
+    method === "DELETE"
+      ? `https://admin.example/api/admin/report-admin-permissions?email=${encodeURIComponent(email)}&subject=${encodeURIComponent(subject)}`
+      : "https://admin.example/api/admin/report-admin-permissions",
+    {
+      method,
+      headers: {
+        "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        origin: "https://admin.example",
+        "content-type": "application/json",
+      },
+      body:
+        method === "DELETE"
+          ? undefined
+          : JSON.stringify({ email, subjects: [subject] }),
+    },
+  );
+
+it("does not grant the first admin permission before both introductions exist", async () => {
+  const { db, environment } = createEnvironment();
+  const response = await worker.fetch(
+    permissionRequest("POST", "new@example.org"),
+    environment as never,
+  );
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ code: "INTRO_INCOMPLETE" });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM report_admin_permissions WHERE email='new@example.org'",
+      )
+      .get(),
+  ).toMatchObject({ count: 0 });
+
+  const replaced = await worker.fetch(
+    permissionRequest("PUT", "new@example.org"),
+    environment as never,
+  );
+  expect(replaced.status).toBe(409);
+  expect(await replaced.json()).toMatchObject({ code: "INTRO_INCOMPLETE" });
+});
+
+it("lets a first grant pass the introduction check once both bios exist", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    "INSERT INTO editorial_member_profiles (email, display_name, bio) VALUES ('new@example.org','新しい人','公開用の紹介')",
+  ).run();
+  db.prepare(
+    "INSERT INTO editorial_project_member_profiles (project_id, email, internal_bio, updated_at) VALUES ('atlas','new@example.org','  ','2026-10-13T00:00:00.000Z')",
+  ).run();
+  const blank = await worker.fetch(
+    permissionRequest("POST", "new@example.org"),
+    environment as never,
+  );
+  expect(blank.status).toBe(409);
+  expect(await blank.json()).toMatchObject({ code: "INTRO_INCOMPLETE" });
+
+  db.prepare(
+    "UPDATE editorial_project_member_profiles SET internal_bio='プロジェクト内の紹介' WHERE email='new@example.org'",
+  ).run();
+  const ready = await worker.fetch(
+    permissionRequest("POST", "new@example.org"),
+    environment as never,
+  );
+  const body = (await ready.json()) as { code?: string; error?: string };
+  expect(body.code).not.toBe("INTRO_INCOMPLETE");
+  expect(body.error ?? "").toContain("Discord");
+  expect(ready.status).toBe(409);
+});
+
+it("still updates a member who already has a permission, and still revokes", async () => {
+  const { environment } = createEnvironment();
+  const updated = await worker.fetch(
+    permissionRequest("PUT", "member@example.org"),
+    environment as never,
+  );
+  const updatedBody = (await updated.json()) as {
+    code?: string;
+    error?: string;
+  };
+  expect(updatedBody.code).not.toBe("INTRO_INCOMPLETE");
+  expect(updatedBody.error ?? "").toContain("Discord");
+
+  const revoked = await worker.fetch(
+    permissionRequest("DELETE", "member@example.org", "mathematics"),
+    environment as never,
+  );
+  const revokedBody = (await revoked.json()) as { code?: string };
+  expect(revokedBody.code).not.toBe("INTRO_INCOMPLETE");
 });

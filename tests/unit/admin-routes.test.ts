@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ADMIN_PAGE_PATHS, isAdminPagePath } from "../../src/lib/admin-routes";
+import {
+  ADMIN_PAGE_PATHS,
+  globalAdminPrototypePaths,
+  isAdminPagePath,
+} from "../../src/lib/admin-routes";
 
 describe("admin page routes", () => {
   it("exposes every generated admin page through the Worker", () => {
@@ -50,5 +54,14 @@ describe("admin page routes", () => {
     expect(ADMIN_PAGE_PATHS).not.toContain(
       "/admin/ui-prototype/learning-content",
     );
+  });
+
+  it("keeps welcome-screen prototypes out of top-level navigation", () => {
+    expect(isAdminPagePath("/admin/ui-prototype/welcome-login/")).toBe(true);
+    expect(isAdminPagePath("/admin/ui-prototype/welcome-not-found")).toBe(true);
+    expect(globalAdminPrototypePaths).toContain(
+      "/admin/ui-prototype/welcome-operations-error/",
+    );
+    expect(ADMIN_PAGE_PATHS).not.toContain("/admin/ui-prototype/welcome-login");
   });
 });
