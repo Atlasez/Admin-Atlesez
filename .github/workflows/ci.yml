@@ -15,10 +15,10 @@ env:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -50,7 +50,7 @@ jobs:
         run: node scripts/check-links.mjs dist "$BASE_PATH"
       - name: Playwrightブラウザ導入
         run: |
-          # ubuntu-latestには不要なGoogle Chrome apt sourceが登録されており、
+          # ubuntu-24.04には不要なGoogle Chrome apt sourceが登録されており、
           # 配布元の一時的なハッシュ不一致でPlaywright導入全体が失敗することがある。
           sudo find /etc/apt/sources.list.d -maxdepth 1 -type f -exec grep -Il 'dl.google.com' {} \; -delete
           npx playwright install --with-deps chromium

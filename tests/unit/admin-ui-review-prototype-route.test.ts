@@ -3,7 +3,7 @@ import worker from "../../src/admin-worker";
 import { createAdminTestEnvironment } from "../helpers/admin-test-environment";
 
 describe("ADMIN UI review prototype route", () => {
-  it("requires developer-mode authorization for the page and every nested asset", async () => {
+  it("limits the page and every nested asset to the primary admin", async () => {
     const { db, env, request } = createAdminTestEnvironment();
     const assets = vi.spyOn(env.ASSETS, "fetch");
     const now = new Date().toISOString();
@@ -25,19 +25,24 @@ describe("ADMIN UI review prototype route", () => {
     ]) {
       const response = await request(path, "regular-staff@example.test");
       expect(response.status, path).toBe(403);
+      const managerResponse = await request(
+        path,
+        "developer-scope@example.test",
+      );
+      expect(managerResponse.status, path).toBe(403);
     }
 
     const page = await request(
       "/admin/ui-review-prototype/",
-      "developer-scope@example.test",
+      "global@atlasez.test",
     );
     const proposal = await request(
       "/admin/ui-review-prototype/portal/after/",
-      "developer-scope@example.test",
+      "global@atlasez.test",
     );
     const asset = await request(
       "/admin/ui-review-prototype/_astro/review.css",
-      "developer-scope@example.test",
+      "global@atlasez.test",
     );
 
     expect(page.status).toBe(200);

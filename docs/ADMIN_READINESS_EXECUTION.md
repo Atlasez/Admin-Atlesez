@@ -3,6 +3,8 @@
 開始: 2026-10-02 JST。ユーザーが監査項目1〜8の実行とGoalによる継続管理を依頼。
 ユーザーの継続指示により作業を再開。Goalに保存した目標を継続参照する。番号の定義とP1/P2の改善案は[監査](ADMIN_READINESS_AUDIT_2026-10-02.md)を参照。
 
+> **履歴記録:** 冒頭の完了判定表と2026-10-02/03の状態は当時のスナップショットであり、現在のPR・main・本番状態を示さない。最新証拠とGo/No-Goは[2026-10-12実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)、Cloudflare復旧は[Issue #509](https://github.com/Atlasez/Admin-Atlesez/issues/509)を確認する。過去のSHA、PR head、CI状態、migration、deploy経路を現状判断へ流用しない。
+
 ## 完了判定
 
 コード実装、ローカル検証、PR/CI、main反映、本番受入は別々に記録する。本番受入の証拠がない項目に完了チェックを付けない。秘密値・Cookie・非公開会員情報・SQL exportをコミットしない。

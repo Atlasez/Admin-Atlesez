@@ -1,5 +1,7 @@
 # 運営サイト改善の再開メモ（2026-10-01）
 
+> 履歴文書です。表の「GitHub mainでPRレビュー必須化」は2026-10-01時点の記録で、現行方針ではありません。2026-10-12時点のrequired approving review countは0であり、レビュー承認のbranch protection必須化は行いません。最新方針は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)を参照してください。
+
 ユーザーの「一旦途中でやめて再開できるように整理してね」により、新しい実装は中断した。次回はこの文書とAGENTS.mdの指定文書を読み、git statusから再開する。
 
 ## 作業場所

@@ -169,7 +169,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     <a class="admin-project-switcher-title" href={homePath} data-project-current-link data-admin-i18n data-admin-ja={brandLabel} data-admin-en={site === "portal" ? "Atlasez member site" : site === "secretariat" ? "Atlasez Secretariat" : site === "semi-platform" ? "Seminar platform" : site === "student-council" ? "Japan Student Council Association" : site === "thinking-cafe" ? "Thinking Cafe" : "Atlas learning site operations"}>{brandLabel}</a>
     </div>
   </div>
-  <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
+  <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-label="メニュー" aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
   <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
       <a class="admin-action-center-link" data-requires-admin href="/admin/action-center/" data-admin-page="action-center" data-admin-action-center-tab aria-current={current === "action-center" ? "page" : undefined} aria-label="要対応一覧（アクションセンター）" title="要対応一覧を開く"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>要対応</span></a>
       <a href="/admin/member-tasks/" data-admin-site="portal" data-admin-page="member-tasks" hidden={site !== "portal"} aria-current={current === "member-tasks" ? "page" : undefined}>タスク管理</a>
@@ -955,5 +955,60 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     .admin-nav[data-admin-nav][data-current-site] nav > .admin-action-center-link { border-width: 1px !important; margin: .1rem 0; min-height: 2.4rem; }
     .admin-action-center-utility-link { display: inline-flex; }
   }
-  @media (max-width: 620px) { .admin-action-center-utility-link { padding-inline: .45rem; } .admin-action-center-utility-link span { display: none; } }
+  @media (max-width: 620px) {
+    .admin-action-center-utility-link { padding-inline: .45rem; }
+    .admin-action-center-utility-link span { display: none; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-nav-brand-logo {
+      align-items: center;
+      box-sizing: border-box;
+      display: flex;
+      flex: 0 0 44px;
+      height: 44px;
+      justify-content: center;
+      width: 44px;
+    }
+    .admin-nav[data-admin-nav][data-current-site] .admin-project-switcher-title {
+      align-items: center;
+      display: flex;
+      min-height: 44px;
+    }
+    .admin-nav[data-admin-nav][data-current-site] .admin-menu-toggle {
+      box-sizing: border-box;
+      flex: 0 0 44px;
+      height: 44px;
+      justify-content: center;
+      min-height: 44px;
+      min-width: 44px;
+      padding-inline: 0;
+      width: 44px;
+    }
+    .admin-nav[data-admin-nav][data-current-site] .admin-action-center-utility-link,
+    .admin-nav[data-admin-nav][data-current-site] .admin-command-button,
+    .admin-nav[data-admin-nav][data-current-site] .admin-notifications,
+    .admin-nav[data-admin-nav][data-current-site] .admin-account-profile {
+      box-sizing: border-box;
+      flex: 0 0 44px;
+      height: 44px;
+      justify-content: center;
+      min-height: 44px;
+      min-width: 44px;
+      width: 44px;
+    }
+    .admin-nav[data-admin-nav][data-current-site] .admin-logout {
+      box-sizing: border-box;
+      min-height: 44px;
+      padding: .4rem .55rem;
+    }
+    .admin-nav[data-admin-nav][data-current-site] nav > a,
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu summary {
+      box-sizing: border-box;
+      min-height: 44px !important;
+    }
+    .admin-nav[data-admin-nav][data-current-site] nav > .admin-action-center-link {
+      min-height: 44px !important;
+    }
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu summary {
+      height: 44px;
+    }
+  }
 </style>

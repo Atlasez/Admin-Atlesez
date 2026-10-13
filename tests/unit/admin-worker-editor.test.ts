@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import prettier from "prettier";
 import worker, {
   editorialOutlineAutoSlug,
   mergeEditorialTaxonomyYaml,
   scheduledPublicationEpoch,
 } from "../../src/admin-worker";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 class EmptyStatement {
   constructor(protected readonly query: string) {}
@@ -110,11 +113,98 @@ describe("admin worker editor APIs", () => {
     ];
     const merged = mergeEditorialTaxonomyYaml(yaml, rows, "informatics");
     expect(merged).toContain("- id: informatics");
-    expect(merged).toContain('name: { ja: "機械学習", en: "機械学習" }');
+    expect(merged).toContain(
+      'name:\n        ja: "機械学習"\n        en: "機械学習"',
+    );
     expect(merged).toContain("entryConceptIds: []");
     expect(merged.indexOf("- id: informatics")).toBeGreaterThan(
       merged.indexOf("- id: physics"),
     );
+  });
+
+  it("keeps generated taxonomy YAML compatible with the public formatter", async () => {
+    const filepath = fileURLToPath(
+      new URL("../../src/content/subjects/subjects.yaml", import.meta.url),
+    );
+    const yaml = await readFile(filepath, "utf8");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "subject",
+          subject_slug: "",
+          slug: "informatics",
+          name: "情報",
+          description: "情報科学とプログラミングの基礎。",
+          sort_order: 160,
+          status: "active",
+          created_by: "system",
+          publication_status: "published",
+        },
+        {
+          kind: "category",
+          subject_slug: "informatics",
+          slug: "category-l0f-kog-i1y-p8y",
+          name: "機械学習",
+          description: "",
+          sort_order: 0,
+          entry_concept_ids: [
+            "informatics.category-l0f-kog-i1y-p8y.concentration-inequalities",
+          ],
+          outline_entries: [
+            {
+              id: "b67be709-40cb-40b2-8df8-381d1b356bc8",
+              parent_id: null,
+              slug: "concentration-inequalities",
+              title: "集中不等式",
+              summary: "確率論と機械学習で用いる集中不等式の基礎",
+              concept_id:
+                "informatics.category-l0f-kog-i1y-p8y.concentration-inequalities",
+              sort_order: 0,
+            },
+          ],
+        },
+      ],
+      "informatics",
+      "category-l0f-kog-i1y-p8y",
+    );
+    const options = await prettier.resolveConfig(filepath);
+    await expect(
+      prettier.check(merged, { ...options, filepath }),
+    ).resolves.toBe(true);
+
+    const newSubject = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "subject",
+          subject_slug: "readiness-fixture",
+          slug: "readiness-fixture",
+          name: "運用準備用の長い分野名と英語表示名 αβγ مرحبا",
+          description:
+            "管理画面で新しく作成され、公開サイトへ追加される分野の長い説明文です。",
+          sort_order: 161,
+          status: "active",
+          created_by: "system",
+          publication_status: "published",
+        },
+        {
+          kind: "category",
+          subject_slug: "readiness-fixture",
+          slug: "long-category-name",
+          name: "長いカテゴリ名を持つ運用準備用のカテゴリ",
+          description: "",
+          sort_order: 0,
+          entry_concept_ids: [
+            "readiness-fixture.long-category-name.long-concept-identifier",
+          ],
+        },
+      ],
+      "readiness-fixture",
+    );
+    await expect(
+      prettier.check(newSubject, { ...options, filepath }),
+    ).resolves.toBe(true);
   });
 
   it("adds a dynamic category to an existing learning-site subject only once", () => {
@@ -179,11 +269,66 @@ describe("admin worker editor APIs", () => {
       "mathematics",
     );
     expect(merged).toContain("  order: 20");
-    expect(merged).toContain('name: { ja: "機械学習", en: "機械学習" }');
+    expect(merged).toContain(
+      'name:\n        ja: "機械学習"\n        en: "機械学習"',
+    );
     expect(merged).toContain("      order: 30");
     expect(merged).toContain(
-      'entryConceptIds: ["math.machine-learning.concentration-inequality"]',
+      'entryConceptIds:\n        - "math.machine-learning.concentration-inequality"',
     );
+  });
+
+  it("replaces formatter-wrapped category fields without leaving old values", async () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  categories:",
+      "    - id: machine-learning",
+      "      slug: machine-learning",
+      "      name:",
+      "        {",
+      '          ja: "古い長いカテゴリ名です",',
+      '          en: "Old long category name",',
+      "        }",
+      "      order: 1",
+      "      entryConceptIds:",
+      '        ["math.machine-learning.old-concept-identifier"]',
+      "      relatedCategoryIds: []",
+      "- id: physics",
+      "  slug: physics",
+      "",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "category",
+          subject_slug: "mathematics",
+          slug: "machine-learning",
+          name: "機械学習",
+          description: "",
+          sort_order: 2,
+          entry_concept_ids: ["math.machine-learning.new-concept-identifier"],
+        },
+      ],
+      "mathematics",
+    );
+
+    expect(merged).toContain(
+      'name:\n        ja: "機械学習"\n        en: "機械学習"',
+    );
+    expect(merged).toContain(
+      'entryConceptIds:\n        - "math.machine-learning.new-concept-identifier"',
+    );
+    expect(merged).not.toContain("古い長いカテゴリ名です");
+    expect(merged).not.toContain("old-concept-identifier");
+    const filepath = fileURLToPath(
+      new URL("../../src/content/subjects/subjects.yaml", import.meta.url),
+    );
+    const options = await prettier.resolveConfig(filepath);
+    await expect(
+      prettier.check(merged, { ...options, filepath }),
+    ).resolves.toBe(true);
   });
 
   it("preserves a legacy category entry list when no admin outline exists", () => {
@@ -2073,6 +2218,132 @@ describe("admin worker editor APIs", () => {
     );
   });
 
+  it.each([
+    {
+      actorRole: "project-leader",
+      stage: "subject-coordinator",
+      expectedStatus: 403,
+    },
+    {
+      actorRole: "project-leader",
+      stage: "project-leader",
+      expectedStatus: 200,
+    },
+    {
+      actorRole: "subject-coordinator",
+      stage: "project-leader",
+      expectedStatus: 403,
+    },
+    {
+      actorRole: "subject-coordinator",
+      stage: "subject-coordinator",
+      expectedStatus: 200,
+    },
+  ])(
+    "limits direct editorial document access to the assigned review stage ($actorRole / $stage)",
+    async ({ actorRole, stage, expectedStatus }) => {
+      const documentId = "22222222-2222-4222-8222-222222222222";
+      class StageScopedStatement extends EmptyStatement {
+        async all<T>() {
+          if (
+            this.query.includes("SELECT subject FROM report_admin_permissions")
+          )
+            return { results: [] as T[] };
+          if (
+            this.query.includes(
+              "SELECT role, subject FROM editorial_workflow_roles",
+            )
+          )
+            return {
+              results: [
+                {
+                  role: actorRole,
+                  subject:
+                    actorRole === "subject-coordinator" ? "mathematics" : "",
+                },
+              ] as T[],
+            };
+          return { results: [] as T[] };
+        }
+
+        async first<T>() {
+          if (this.query.includes("FROM atlasez_project_member_lifecycle"))
+            return null as T | null;
+          if (this.query.includes("FROM editorial_documents WHERE id = ?"))
+            return {
+              id: documentId,
+              creator_kind: "person",
+              document_kind: "canonical",
+              base_document_id: null,
+              base_document_updated_at: null,
+              source_article_id: null,
+              subject: "mathematics",
+              category: "algebra",
+              locale: "ja",
+              slug: "private-draft",
+              title: "非公開原稿",
+              summary: "審査中の原稿",
+              concept_id: "",
+              concept_name: null,
+              concept_name_en: null,
+              concept_is_new: 0,
+              body: "非公開本文",
+              writing_memo: "運営メモ",
+              latex_engine: "katex",
+              status: "in-review",
+              created_by: "author@example.test",
+              updated_by: "author@example.test",
+              created_at: "2026-10-12T00:00:00.000Z",
+              updated_at: "2026-10-12T00:00:00.000Z",
+              reviewed_at: null,
+              published_at: null,
+              archived_at: null,
+              archived_by: null,
+              archive_expires_at: null,
+              scheduled_publish_at: null,
+              scheduled_publish_claimed_at: null,
+              publication_review_stage: stage,
+              publication_review_round: 1,
+              publication_pr_number: null,
+              publication_pr_url: null,
+              publication_branch: null,
+              publication_action: null,
+              publication_requested_at: null,
+              locked_ranges: "[]",
+              article_references: "[]",
+            } as T;
+          return null as T | null;
+        }
+      }
+      const env = {
+        ...emptyEnv,
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: {
+          ...emptyEnv.REPORTS,
+          prepare: (query: string) => new StageScopedStatement(query),
+        },
+      };
+      const response = await worker.fetch(
+        new Request(
+          `https://admin.example/api/admin/editor/documents/${documentId}`,
+          {
+            headers: {
+              "Cf-Access-Authenticated-User-Email": "reviewer@example.test",
+            },
+          },
+        ),
+        env as never,
+      );
+
+      expect(response.status).toBe(expectedStatus);
+      if (expectedStatus === 200)
+        await expect(response.json()).resolves.toMatchObject({
+          document: { id: documentId, body: "非公開本文" },
+        });
+      else await expect(response.json()).resolves.not.toHaveProperty("body");
+    },
+  );
+
   it("returns all article scope for the designated primary operator", async () => {
     const documentQueries: string[] = [];
     class GlobalStatement extends EmptyStatement {
@@ -2900,9 +3171,15 @@ describe("admin worker editor APIs", () => {
 
       async first<T>() {
         if (
-          this.sql.includes("SELECT subject, status FROM editorial_documents")
+          this.sql.includes(
+            "SELECT subject, status, publication_review_stage FROM editorial_documents",
+          )
         )
-          return { subject: "mathematics", status: "draft" } as T;
+          return {
+            subject: "mathematics",
+            status: "draft",
+            publication_review_stage: null,
+          } as T;
         return null as T | null;
       }
 
@@ -2974,9 +3251,15 @@ describe("admin worker editor APIs", () => {
 
       async first<T>() {
         if (
-          this.sql.includes("SELECT subject, status FROM editorial_documents")
+          this.sql.includes(
+            "SELECT subject, status, publication_review_stage FROM editorial_documents",
+          )
         )
-          return { subject: "mathematics", status: "draft" } as T;
+          return {
+            subject: "mathematics",
+            status: "draft",
+            publication_review_stage: null,
+          } as T;
         return null as T | null;
       }
     }

@@ -25,16 +25,21 @@
 ## D1と適用順
 
 `0123_task_workspaces.sql` は2つの新規テーブルと索引だけを追加する。既存の行を更新・削除しない。
-#481/#482を先に導入する場合は0120→0121→0122→0123の順でレビューし、バックアップ後に適用する。0123自体は他の新機能テーブルに依存しない。
-本番migrationはPRレビュー後に正本D1へ適用し、その後PRレビュー済み・main CI成功済みのアプリ変更をGitHub Actionsのproduction Environment承認経由で反映する。
-migrationがない場合、新APIは503となる。タスクの既存一覧・作成・状態変更は利用できる。
 
-deploy workflowはD1 migrationを自動適用しない。新APIが参照する0120〜0123をバックアップ後にレビュー済み手順で適用してから、production Environment承認を経てアプリ変更を反映する。通常のmain変更はmain CI成功とproduction Environment承認を経たGitHub Actions deployだけで配信する。
+0120〜0123の順序は、これらの機能を導入した時点の履歴である。2026-10-12の固定D1に対する読み取り専用確認では未適用migrationはなかった。現在の状態は作業時に[実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)と固定D1のmigration一覧を再確認する。
+
+## 現在の変更・配信手順
+
+この機能のコード変更はPR・CIを通し、ADMINの通常配信は最新mainをProduction branchに固定したCloudflare Workers Buildsから行う。[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)を正本とし、GitHub Actions deploy、production Environment承認、ローカルからの直接deployを現在の手順として使わない。
+
+D1 migrationが必要な変更は通常のBuild/Deployと分ける。固定D1への適用前に、バックアップ、共有D1を使う公開Worker・旧Workerへの互換性、隔離検証、適用対象、復旧方法を確認し、明示された別手順で実施する。詳細は[ADMIN D1のバックアップと復元](ADMIN_D1_RECOVERY.md)を参照する。ローカル確認では本番D1を指定しない。
+
+migrationがない場合、新APIは503となる。タスクの既存一覧・作成・状態変更は利用できる。
 
 ## 検証と復旧
 
 SQLiteで実SQLの担当変更、循環、他プロジェクト拒否、競合、監査失敗時のロールバックを検証する。
 画面では保存失敗・追加入力保護・閲覧専用・390px幅・ダーク表示を確認する。
 反映後はタスク詳細とマイページ、およびポータル・タスク・カレンダー・管理トップ・記事一覧を認証済みChromeで確認する。
-問題時はレビュー済みrevert commitをmainへマージし、CI成功とproduction Environment承認を経て反映する。新規テーブルと引き継ぎ履歴は残す。DB restoreや破壊的な逆migrationは行わない。
-CI失敗、migration不足、Worker/Version/SHA不一致、GitHub Actions deployの失敗の場合は本番反映を停止する。
+問題時は修正またはrevertをPRで行い、CI成功後にmainへ反映する。配信は[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)に従い、Workers Buildsのrun・checkout SHA・固定Worker Version・公開build-infoを照合する。新規テーブルと引き継ぎ履歴は保持し、DB restoreや破壊的な逆migrationを通常のコード復旧に使わない。
+CI失敗、migration不足、Worker/Version/SHA不一致、Workers Buildsの失敗があれば本番反映を停止する。

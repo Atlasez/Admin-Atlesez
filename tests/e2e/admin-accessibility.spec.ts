@@ -108,3 +108,79 @@ test("1280px幅ではナビを折りたたみ、末尾リンクを操作でき�
   await expect(menuToggle).toHaveAttribute("aria-expanded", "false");
   await expect(nav).toBeHidden();
 });
+
+test("390px幅でも管理メニューを名前で識別でき、axe違反がない", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await mockAdminApis(page);
+  await page.goto("admin/applications/?project=atlas");
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.getByRole("button", { name: "メニュー" })).toBeVisible();
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(
+    results.violations.map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      nodes: violation.nodes.map((node) => ({
+        target: node.target,
+        summary: node.failureSummary,
+      })),
+    })),
+  ).toEqual([]);
+});
+
+test("375px幅の運営ヘッダーと開いたメニューに44px以上の操作領域がある", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await mockAdminApis(page);
+  await page.goto("admin/portal/");
+  await page.waitForLoadState("networkidle");
+  await expect(page.locator("[data-admin-account]")).toBeVisible();
+
+  const headerTargets = [
+    ".admin-nav-brand-logo",
+    ".admin-project-switcher-title",
+    ".admin-menu-toggle",
+    ".admin-action-center-utility-link",
+    ".admin-command-button",
+    ".admin-notifications",
+    ".admin-account-profile",
+    ".admin-logout",
+  ];
+  for (const selector of headerTargets) {
+    const bounds = await page.locator(selector).boundingBox();
+    expect(bounds, `${selector} should be visible`).not.toBeNull();
+    expect(bounds!.width, selector).toBeGreaterThanOrEqual(44);
+    expect(bounds!.height, selector).toBeGreaterThanOrEqual(44);
+  }
+
+  await page.locator(".admin-menu-toggle").click();
+  const menuTargets = page.locator(
+    "#admin-primary-nav a:visible, #admin-primary-nav summary:visible, #admin-primary-nav button:visible",
+  );
+  for (const target of await menuTargets.all()) {
+    const bounds = await target.boundingBox();
+    const targetName =
+      (await target.getAttribute("class")) ||
+      (await target.evaluate((element) => element.tagName.toLowerCase()));
+    const computed = await target.evaluate((element) => ({
+      minHeight: getComputedStyle(element).minHeight,
+      height: getComputedStyle(element).height,
+      media: matchMedia("(max-width: 620px)").matches,
+    }));
+    expect(bounds).not.toBeNull();
+    expect(bounds!.width, `${targetName} width`).toBeGreaterThanOrEqual(44);
+    expect(
+      bounds!.height,
+      `${targetName} height (${JSON.stringify(computed)})`,
+    ).toBeGreaterThanOrEqual(44);
+  }
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(375);
+});

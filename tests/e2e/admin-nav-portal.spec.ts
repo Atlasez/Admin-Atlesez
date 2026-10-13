@@ -66,6 +66,18 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
       });
       return;
     }
+    if (url.pathname === "/api/admin/developer/diagnostics") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          prototypeAccess: true,
+          generatedAt: "2026-10-13T00:00:00.000Z",
+          checks: [],
+        }),
+      });
+      return;
+    }
     if (url.pathname === "/api/admin/notifications") {
       const status = options.notificationStatus ?? 200;
       await route.fulfill({

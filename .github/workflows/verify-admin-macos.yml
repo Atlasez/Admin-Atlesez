@@ -27,7 +27,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build universal app and verify its signature
         env:
           ATLASEZ_APP_OUTPUT: dist-macos/test/Atlasez運営.app

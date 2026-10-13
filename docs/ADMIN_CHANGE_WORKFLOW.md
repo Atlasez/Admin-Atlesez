@@ -55,7 +55,7 @@ PR本文に必ず次を記載する。
 
 ## 5. 本番デプロイ
 
-ADMIN本番の唯一の通常デプロイ経路はCloudflare Workers Buildsで、repositoryを`Atlasez/Admin-Atlesez`、Production branchを`main`、Workerを`atlasez-admin`に固定する。PRのCI成功・レビューをmainマージ条件とし、Build側でも検証を成功条件にする。
+ADMIN本番の唯一の通常デプロイ経路はCloudflare Workers Buildsで、repositoryを`Atlasez/Admin-Atlesez`、Production branchを`main`、Workerを`atlasez-admin`に固定する。PRのCI成功後、通常の変更手順に沿ってレビュー完了を確認し、Build側でも検証を成功条件にする。branch protectionのrequired approving reviewsは0を維持し、レビュー承認の必須化設定を追加しない。
 
 ```bash
 # Workers Builds: Build command
