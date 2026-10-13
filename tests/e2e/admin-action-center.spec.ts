@@ -512,9 +512,9 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   await mockShell(page);
   await page.goto("admin/articles/");
   const menu = page.locator("[data-settings-menu]");
-  const glassSetting = menu.locator("fieldset", { hasText: "要対応・操作検索の透け感" });
+  const glassSetting = menu.locator("fieldset", { hasText: "ポップアップの透け感" });
   await menu.locator("> summary").click();
-  const slider = glassSetting.getByRole("slider", { name: "要対応・操作検索の透け感" });
+  const slider = glassSetting.getByRole("slider", { name: "ポップアップの透け感" });
   const value = glassSetting.locator("[data-glass-value]");
   await expect(slider).toHaveValue("40");
   await expect(value).toHaveText("40%");
@@ -523,7 +523,7 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   await slider.focus();
   await slider.press("End");
   await expect(value).toHaveText("100%");
-  await expect(slider).toHaveAttribute("aria-valuetext", "要対応・操作検索の透け感 100%");
+  await expect(slider).toHaveAttribute("aria-valuetext", "ポップアップの透け感 100%");
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -577,7 +577,7 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   expect(standard.alpha).toBeLessThanOrEqual(0.65);
 });
 
-test("要対応・操作検索の透け感は表示設定からのみ変更できる", async ({ page }) => {
+test("ポップアップの透け感は表示設定からのみ変更できる", async ({ page }) => {
   await mockShell(page);
   await page.goto("admin/portal/");
   const dialog = page.locator("[data-admin-command-dialog]");
@@ -585,7 +585,7 @@ test("要対応・操作検索の透け感は表示設定からのみ変更で�
   await expect(dialog.getByRole("slider")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await page.locator("[data-settings-menu] > summary").click();
-  const slider = page.getByRole("slider", { name: "要対応・操作検索の透け感" });
+  const slider = page.getByRole("slider", { name: "ポップアップの透け感" });
   await slider.focus();
   await slider.press("Home");
   await page.keyboard.press("Escape");
@@ -600,6 +600,45 @@ test("要対応・操作検索の透け感は表示設定からのみ変更で�
   expect((await readCommandPanel(dialog)).alpha).toBe(0);
 });
 
+test("Aa表示設定も共通の透け感に従い、0%と100%を即座に反映する", async ({ page }) => {
+  await mockShell(page);
+  await page.goto("admin/portal/");
+  const menu = page.locator("[data-settings-menu]");
+  await menu.locator("> summary").click();
+  const panel = menu.locator(".settings-panel");
+  const slider = menu.getByRole("slider", { name: "ポップアップの透け感" });
+  const alpha = async () => parseColor(
+    await panel.evaluate((element) => getComputedStyle(element).backgroundColor),
+  ).alpha;
+  expect(await alpha()).toBeCloseTo(0.6, 1);
+  await slider.focus();
+  await slider.press("Home");
+  expect(await alpha()).toBe(1);
+  await slider.press("End");
+  expect(await alpha()).toBe(0);
+  expect(await panel.evaluate((element) =>
+    getComputedStyle(element).backdropFilter
+  )).not.toBe("none");
+  await page.reload();
+  await menu.locator("> summary").click();
+  expect(await alpha()).toBe(0);
+  await expect(slider).toHaveValue("100");
+});
+
+test("Aa表示設定はOSの透明度を下げる設定を尊重する", async ({ page }) => {
+  await mockShell(page);
+  await page.goto("admin/portal/");
+  const menu = page.locator("[data-settings-menu]");
+  await menu.locator("> summary").click();
+  const panel = menu.locator(".settings-panel");
+  const session = await page.context().newCDPSession(page);
+  await session.send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-transparency", value: "reduce" }],
+  });
+  await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(panel).toHaveCSS("backdrop-filter", "none");
+});
+
 test("以前の3段階の透過設定をスライダーでも復元できる", async ({ page }) => {
   await mockShell(page);
   await page.goto("admin/articles/");
@@ -610,7 +649,7 @@ test("以前の3段階の透過設定をスライダーでも復元できる", a
   const menu = page.locator("[data-settings-menu]");
   await menu.locator("> summary").click();
   await expect(
-    menu.getByRole("slider", { name: "要対応・操作検索の透け感" }),
+    menu.getByRole("slider", { name: "ポップアップの透け感" }),
   ).toHaveValue("60");
   await expect(menu.locator("[data-glass-value]")).toHaveText("60%");
   await expect
