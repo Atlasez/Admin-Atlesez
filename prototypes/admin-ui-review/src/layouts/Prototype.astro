@@ -1,0 +1,48 @@
+---
+import "../styles/review.css";
+import { prototypePath } from "../paths";
+
+interface Props {
+  title: string;
+  variant?: "before" | "after";
+  screen: "index" | "portal" | "notifications" | "action-center";
+  theme?: "light" | "dark";
+  glass?: boolean;
+}
+
+const { title, variant, screen, theme = "light", glass = false } = Astro.props;
+const variantLabel =
+  variant === "before" ? "現行" : variant === "after" ? "案" : "目次";
+const screenLabel =
+  screen === "portal"
+    ? "ポータル"
+    : screen === "notifications"
+      ? "通知"
+      : screen === "action-center"
+        ? "要対応"
+        : "UIプロトタイプ";
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title}</title>
+  </head>
+  <body
+    class:list={[variant === "before" && "is-before", variant === "after" && "is-after", glass && "is-glass"]}
+    data-variant={variant ?? "index"}
+    data-screen={screen}
+    data-pref-bg={theme === "dark" ? "dark" : undefined}
+  >
+    <p class="review-bar">
+      <a href={prototypePath("/")}>UIプロトタイプ</a>
+      <span aria-hidden="true"> · </span>
+      <span>{screenLabel} / {variantLabel}</span>
+      <span aria-hidden="true"> · </span>
+      開発者モード専用。本番の画面ではありません。
+    </p>
+    <slot />
+  </body>
+</html>

@@ -58,6 +58,9 @@ test("開発者向け診断は状態を一覧表示し、再確認できる", as
   await expect(
     page.getByRole("link", { name: "ログイン・エラー画面案" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "運営UIレビュー" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "再確認" }).click();
   await expect.poll(() => requests).toBe(2);
 });
@@ -84,12 +87,15 @@ test("診断フラグが無い全分野管理者にはログイン画面案だ�
   await page.goto("admin/developer/?mode=developer");
   await expect(page.getByText(/最終確認：/)).toBeVisible();
   const prototypeLinks = page.locator("[data-prototype-link]");
-  await expect(prototypeLinks).toHaveCount(2);
+  await expect(prototypeLinks).toHaveCount(3);
   await expect(
     prototypeLinks.filter({ hasText: "XAI UIプロトタイプ" }),
   ).toBeHidden();
   await expect(
     prototypeLinks.filter({ hasText: "ポータル UIプロトタイプ" }),
+  ).toBeHidden();
+  await expect(
+    prototypeLinks.filter({ hasText: "運営UIレビュー" }),
   ).toBeHidden();
   const welcomeScreens = page.locator("[data-welcome-screens-link]");
   await expect(welcomeScreens).toBeVisible();
@@ -121,7 +127,7 @@ test("全分野管理者でない場合はログイン画面案を表示しな�
   await page.goto("admin/developer/?mode=developer");
   await expect(page.getByText(/最終確認：/)).toBeVisible();
   await expect(page.locator("[data-welcome-screens-link]")).toBeHidden();
-  await expect(page.locator("[data-prototype-link]")).toHaveCount(2);
+  await expect(page.locator("[data-prototype-link]")).toHaveCount(3);
 });
 
 test("診断の取得に失敗しても全分野管理者にはログイン画面案を表示する", async ({
@@ -143,10 +149,12 @@ test("診断の取得に失敗しても全分野管理者にはログイン画�
   await expect(page.getByRole("button", { name: "再試行" })).toBeVisible();
   await expect(page.getByText("一時的な障害")).toBeVisible();
   await expect(page.locator("[data-welcome-screens-link]")).toBeVisible();
-  await expect(page.locator("[data-prototype-link]")).toHaveCount(2);
+  const prototypeLinks = page.locator("[data-prototype-link]");
+  await expect(prototypeLinks).toHaveCount(3);
   await expect(
-    page
-      .locator("[data-prototype-link]")
-      .filter({ hasText: "XAI UIプロトタイプ" }),
+    prototypeLinks.filter({ hasText: "XAI UIプロトタイプ" }),
+  ).toBeHidden();
+  await expect(
+    prototypeLinks.filter({ hasText: "運営UIレビュー" }),
   ).toBeHidden();
 });
