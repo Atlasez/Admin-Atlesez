@@ -615,10 +615,11 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       let actionCounts: NonNullable<ActionCenterResponse['counts']> = {};
       let openMode: 'command' | 'action' = 'command';
       const glassFilter = 'blur(20px) saturate(1.4)';
+      const reducedTransparency = window.matchMedia('(prefers-reduced-transparency: reduce)');
       const applyCommandMode = (mode: 'command' | 'action') => {
         openMode = mode;
         dialog.dataset.commandMode = mode;
-        if (mode === 'action') {
+        if (mode === 'action' && !reducedTransparency.matches) {
           dialog.style.backdropFilter = glassFilter;
           dialog.style.setProperty('-webkit-backdrop-filter', glassFilter);
           return;
@@ -626,6 +627,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         dialog.style.backdropFilter = '';
         dialog.style.removeProperty('-webkit-backdrop-filter');
       };
+      reducedTransparency.addEventListener('change', () => applyCommandMode(openMode));
       let activeIndex = 0;
       let searchTimer: number | undefined;
       const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character] ?? character));
@@ -824,6 +826,13 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       animation: none;
       transition: none;
     }
+  }
+  .admin-command-dialog[data-command-mode="action"] .admin-command-list,
+  .admin-command-dialog[data-command-mode="action"] .admin-command-hint {
+    background-color: var(--background-secondary);
+  }
+  .admin-command-dialog[data-command-mode="action"] .admin-command-close {
+    background-color: var(--background-primary);
   }
   .admin-command-inner { padding:.9rem 1rem .8rem; }
   .admin-command-head { align-items:center; display:flex; justify-content:space-between; }

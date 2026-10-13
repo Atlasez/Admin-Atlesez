@@ -36,16 +36,31 @@ function parseColor(value: string) {
 async function readCommandPanel(dialog: Locator) {
   const raw = await dialog.evaluate((element) => {
     const style = getComputedStyle(element);
-    const filter = [style.backdropFilter, style.webkitBackdropFilter]
+    const filter = [
+      style.backdropFilter,
+      style.getPropertyValue("-webkit-backdrop-filter"),
+    ]
       .filter((value) => value && value !== "none")
       .join(" ");
     const search = element.querySelector(".admin-command-search");
     const action = element.querySelector(".admin-command-action");
+    const backing = (node: Element | null) => {
+      let current = node;
+      while (current) {
+        const color = getComputedStyle(current).backgroundColor;
+        const alpha = color.match(/[\d.]+/g)?.map(Number) ?? [];
+        if (alpha.length < 4 || alpha[3] >= 0.99) return color;
+        current = current.parentElement;
+      }
+      return "";
+    };
+    const meta = element.querySelector("small");
     return {
       background: style.backgroundColor,
       filter,
       title: getComputedStyle(element.querySelector("h2")!).color,
-      meta: getComputedStyle(element.querySelector("small")!).color,
+      meta: meta ? getComputedStyle(meta).color : "",
+      metaBackground: backing(meta),
       search: search ? getComputedStyle(search).backgroundColor : "",
       action: action ? getComputedStyle(action).backgroundColor : "",
     };
@@ -56,6 +71,7 @@ async function readCommandPanel(dialog: Locator) {
     filter: raw.filter,
     title: parseColor(raw.title).rgb,
     meta: parseColor(raw.meta).rgb,
+    metaBackground: parseColor(raw.metaBackground).rgb,
     searchAlpha: parseColor(raw.search).alpha,
     actionAlpha: parseColor(raw.action).alpha,
   };
@@ -363,7 +379,7 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
     const style = getComputedStyle(element);
     return {
       background: style.backgroundColor,
-      filter: `${style.backdropFilter} ${style.webkitBackdropFilter}`,
+      filter: `${style.backdropFilter} ${style.getPropertyValue("-webkit-backdrop-filter")}`,
     };
   });
   expect(searchPanel.background).toBe("rgb(245, 247, 248)");
@@ -435,7 +451,9 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
       channel * glass.alpha + behind[index] * (1 - glass.alpha),
   );
   expect(contrast(glass.title, panel)).toBeGreaterThanOrEqual(4.5);
-  expect(contrast(glass.meta, panel)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(glass.meta, glass.metaBackground)).toBeGreaterThanOrEqual(
+    4.5,
+  );
 });
 
 test("要対応ポップアップは透過を減らす設定で不透明に戻る", async ({ page }) => {
@@ -448,16 +466,19 @@ test("要対応ポップアップは透過を減らす設定で不透明に戻�
   await session.send("Emulation.setEmulatedMedia", {
     features: [{ name: "prefers-reduced-transparency", value: "reduce" }],
   });
-  const solid = await dialog.evaluate((element) => {
-    const style = getComputedStyle(element);
-    return {
-      background: style.backgroundColor,
-      filter: `${style.backdropFilter} ${style.webkitBackdropFilter}`,
-    };
-  });
-  expect(solid.background).toBe("rgb(245, 247, 248)");
-  expect(solid.filter).not.toContain("blur");
-  expect(solid.filter).not.toContain("saturate");
+  await expect
+    .poll(() =>
+      dialog.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const filter = `${style.backdropFilter} ${style.getPropertyValue("-webkit-backdrop-filter")}`;
+        return (
+          style.backgroundColor === "rgb(245, 247, 248)" &&
+          !filter.includes("blur") &&
+          !filter.includes("saturate")
+        );
+      }),
+    )
+    .toBe(true);
   await page.keyboard.press("Escape");
   await page.keyboard.press("Meta+K");
   await expect(dialog).toHaveAttribute("data-command-mode", "command");
