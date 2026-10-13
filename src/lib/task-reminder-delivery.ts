@@ -438,6 +438,12 @@ export async function dispatchDueTaskReminders(
        FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
        WHERE t.status!='done' AND t.archived_at IS NULL AND t.is_test_data=0 AND r.remind_at_utc IS NOT NULL AND r.remind_at_utc<=?
          AND lower(trim(t.reminder_email)) IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM editorial_task_reminder_delivery_attempts existing
+           WHERE existing.reminder_id=r.id
+             AND existing.occurrence_at=r.remind_at_utc
+             AND existing.recipient_email=lower(trim(t.reminder_email))
+         )
          ${ACTIVE_REMINDER_RECIPIENT_SQL}
        ORDER BY r.remind_at_utc ASC LIMIT ?`,
   )

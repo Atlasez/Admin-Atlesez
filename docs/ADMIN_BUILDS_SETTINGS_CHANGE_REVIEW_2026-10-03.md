@@ -1,6 +1,8 @@
 # ADMIN Workers Builds接続設定の変更レビュー
 
-追跡: [Issue #407](https://github.com/Atlasez/Admin-Atlesez/issues/407)。固定値は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)に従う。この文書はCloudflareの変更前レビュー記録であり、設定保存やトークン作成の実施記録ではない。
+> **履歴記録（2026-10-03）:** この設定案はIssue #407の当時の変更前レビューです。現在の復旧状況と停止条件は[ADMIN本番デプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)、[2026-10-12実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)、[Issue #509](https://github.com/Atlasez/Admin-Atlesez/issues/509)を確認してください。設定保存やトークン作成の実施記録ではなく、コマンドや前提を現状確認なしに適用しないでください。
+
+追跡: 旧Issue [#407](https://github.com/Atlasez/Admin-Atlesez/issues/407)。
 
 ## 変更対象と設定値
 

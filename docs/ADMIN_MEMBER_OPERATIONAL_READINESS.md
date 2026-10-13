@@ -1,10 +1,12 @@
 # 運営メンバー受入・実運用への準備
 
-更新日: 2026-10-05。対象は `admin.atlasez.org` / Worker `atlasez-admin`。
+更新日: 2026-10-12。対象は `admin.atlasez.org` / Worker `atlasez-admin`。
 
 この文書は、実装済みの入口と、人数を増やす前に解決する課題を記録する。
 今回の作業では実在の人への招待、アカウント作成、本番データ・権限の変更、通知送信は行っていない。
 修正の本番反映と一般メンバーでの確認が終わるまでは、実運用可能と判定しない。
+
+この文書の「アクセス問題」「作業開始時に確認した課題」「2026-10-05の検証」は、その日付時点の履歴であり、現在も未修正だという意味ではない。現在のmain・Worker・PR・CI・未検証項目は[2026-10-12実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)を正本として確認する。2026-10-12時点ではADMIN mainと公開`build-info.json`はSHA `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`で一致する一方、Worker VersionのSourceは`Unknown`で、Workers Buildsの最新runはDeploy段階で失敗している。PR #526の修正headは未配信である。
 
 ## 現在利用する仕組み
 
@@ -62,7 +64,7 @@ deploy-config、型検査、lint、format、ADMIN build、build-info、差分検
 
 新機能による受入フォロー保存、ロール任命、諸手続き、試験データ指定は自動メール・Discord通知を送らない。従来の実際の応募受入に伴う連携は、その設定・利用者の同意に従う。
 
-D1 migration `0127`〜`0129`は事前バックアップ・旧Worker互換性・既存行保持の確認が必要。通常Buildへmigrationを混ぜず、レビューしたmainのスキーマを新Worker配信前に適用する。
+D1 migration `0127`〜`0130`は2026-10-12に固定Account/DBを指定した読み取り専用migration listで適用漏れがないことを確認済み（`No migrations to apply!`）。PR #526はschema変更・migrationを含まない。将来のDB変更ではその時点のmainとmigration list、共有D1/旧Workerへの互換性、事前バックアップ、復旧方法を確認し、通常Buildにmigrationを混ぜず、別手順で適用を記録する。
 配信経路の具体的な整理は[`ADMIN_WORKERS_BUILDS_RECONCILIATION.md`](ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照する。
 
 ## 少人数での運用開始手順
@@ -76,9 +78,6 @@ D1 migration `0127`〜`0129`は事前バックアップ・旧Worker互換性・�
 
 ## 本番反映の停止条件
 
-今回の確認ではGitHub mainと公開 `build-info.json` の配信SHAが一致していないため、mainの内容を本番で確認済みとは扱わない。
-また、ユーザーから提示されたルールは「Workers Buildsのみ」、最新main内の運用文書は「GitHub Actions deploy workflowのみ」で、配信経路の指示に相違がある。
-ユーザーの提示した指示を優先し、この相違を解消して正規経路を確定するまでは配信しない。経路の整理は、設定値・影響・復旧方法を含むレビュー対象とする。
+2026-10-12時点で、mainと公開`build-info.json`が一致するだけではWorkers Buildsからの配信証明にならない。Issue #509の最新BuildはDeploy段階で失敗し、現在のWorker VersionはSource `Unknown`。最新head/Version/配信証跡は[実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)とIssue #509を参照する。PR #526はCI成功済みだが未merge・未配信である。
 
-CI成功、レビュー完了、正規経路の確定、対象main SHAの配信、Worker Versionの100%配信、認証済みChrome確認が揃うまで、本番反映・実運用準備完了とは記録しない。
-停止理由と進捗はPRおよび作業記録に残し、本番データを直接変更して配信の不足を補わない。
+ADMIN本番の通常経路は、`ADMIN_DEPLOYMENT_POLICY.md`で定めるGitHub mainをProduction branchとしたWorkers Buildsだけとする。Actions deploy、Dashboard Editor、別Worker、直接deployで不足を補わない。CI成功、通常のPR手順、Workers Builds run/checkout SHA、固定Worker Versionの100%配信、公開build-infoと認証済みChromeの確認が揃うまで、本番反映・実運用準備完了とは記録しない。

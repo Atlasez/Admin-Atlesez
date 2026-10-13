@@ -1,4 +1,6 @@
-# ADMIN配信をWorkers Buildsへ統一する提案
+# ADMIN配信をWorkers Buildsへ統一する切替記録（履歴文書）
+
+> この文書の「提案」時点の状態は現在のCloudflare接続状態ではない。2026-10-12時点ではWorkers Buildsが接続済みで、Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509)に記録された最新BuildはDeploy段階のWorkers Routes権限エラーで失敗している。一方、公開build-infoと固定Workerの現行Versionはmain SHAと一致すると同Issueに記録されている。現行状態の一次記録はIssue #509と本書の実運用監査記録を参照し、古い表を現在の状態として使わない。
 
 ## 現状と適用範囲
 
@@ -29,7 +31,7 @@
 
 ## Workers Buildsのコマンド案
 
-Buildは配信前の全検証を成功条件にする。既存のmain保護でPRのCI成功・レビューを必須にし、Build側でも次を実行する。
+Buildは配信前の全検証を成功条件にする。main protectionではCI status checkを維持し、required approving reviewsは0のままとする。通常の変更手順に沿ってレビュー完了を確認し、Build側でも次を実行する。
 
 ```bash
 npm ci && npm ci --prefix prototypes/xai && npm run verify:deploy-config && npm run check && npm run lint && npm test && npm run format:check && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ CF_BRANCH=main npm run build && npm run verify:build-info && npx wrangler deploy --dry-run --config wrangler.admin.jsonc --keep-vars

@@ -1128,4 +1128,35 @@ describe("Discord to admin role synchronization", () => {
       ),
     ).toBe(false);
   });
+
+  it("does not log member email or exception details when Discord lookup throws", async () => {
+    const state: State = {
+      roles: [],
+      permissions: [],
+      profile: null,
+    };
+    const writes: Array<{ query: string; args: unknown[] }> = [];
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    fetchSpy.mockRejectedValue(new Error("network unavailable"));
+
+    try {
+      await expect(
+        syncDiscordRolesToAdmin(makeEnv(state, writes) as never),
+      ).resolves.toMatchObject({ skipped: 1 });
+      expect(errorLog.mock.calls).toEqual([
+        [
+          "discord to admin member lookup failed",
+          { category: "network_error" },
+        ],
+      ]);
+      expect(JSON.stringify(errorLog.mock.calls)).not.toContain(
+        "member@example.com",
+      );
+      expect(JSON.stringify(errorLog.mock.calls)).not.toContain(
+        "network unavailable",
+      );
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
 });

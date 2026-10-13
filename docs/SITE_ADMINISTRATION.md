@@ -21,14 +21,15 @@
 CI成功後に正しいCloudflare Workerへデプロイします。
 本番のWorkerと復旧手順は[ADMIN_KNOWLEDGE_BASE.md](ADMIN_KNOWLEDGE_BASE.md)を正本とします。
 
-ADMINはmain push後のCIが全成功した後、GitHub `production` Environment承認を経て`.github/workflows/deploy-admin-from-github.yml`から配信します。公開サイトは[公開サイトの配信手順](PUBLISH.md)に従います。
+公開サイトとADMINは、それぞれの正本repositoryの`main`をProduction branchに固定したCloudflare Workers Buildsから通常配信します。ADMINの`.github/workflows/deploy-admin-from-github.yml`は検証専用で、GitHub `production` EnvironmentもCloudflareへの書込権限も持ちません。2026-10-12時点ではADMIN Workers BuildsのDeploy復旧がIssue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509)で進行中です。復旧の確認前にPR mergeやローカルbuildを本番反映済みと扱わず、手動Deploy経路も作りません。固定値・停止条件は[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)を参照してください。
 
 ```text
 編集者がファイルを変更
   → GitHubへPull Request
   → GitHub Actionsが自動検査
-  → レビュー・マージ
-  → 正規のnpmデプロイコマンドでWorkerへ公開
+  → 通常のPR手順で確認・mainへマージ
+  → main専用Cloudflare Workers BuildsでWorkerへ配信
+  → run/checkout SHA・Worker Version/配信率・build-infoを照合
 ```
 
 記事・画面・設定はGitHub上のファイルが正本です。
@@ -40,12 +41,12 @@ ADMINはmain push後のCIが全成功した後、GitHub `production` Environment
 
 最低限、次の権限を引き継いでください。
 
-| 対象                           | 必要な権限                 | 用途                                         |
-| ------------------------------ | -------------------------- | -------------------------------------------- |
-| GitHub `Atlasez/Admin-Atlesez` | Write以上                  | ブランチ、PR、Issue、マージ                  |
-| GitHubリポジトリ設定           | Admin                      | ブランチ保護、Actions、共同管理者の追加      |
-| Cloudflare                     | 対象プロジェクトの編集権限 | ビルド状況、環境変数、ドメイン、ロールバック |
-| 独自ドメイン管理サービス       | DNS編集権限                | ドメイン更新、DNS変更                        |
+| 対象                           | 必要な権限               | 用途                                                   |
+| ------------------------------ | ------------------------ | ------------------------------------------------------ |
+| GitHub `Atlasez/Admin-Atlesez` | Write以上                | ブランチ、PR、Issue、マージ                            |
+| GitHubリポジトリ設定           | Admin                    | ブランチ保護、Actions、共同管理者の追加                |
+| Cloudflare                     | 担当作業に必要な最小権限 | Builds/Versionの確認。設定変更は管理者が承認範囲で実施 |
+| 独自ドメイン管理サービス       | DNS編集権限              | ドメイン更新、DNS変更                                  |
 
 個人のパスワードやAPIトークンをMarkdownへ書かないでください。権限は各サービスの
 メンバー招待機能で渡します。退任者の個人アカウントだけに本番権限を残さないでください。
@@ -57,7 +58,7 @@ ADMINはmain push後のCIが全成功した後、GitHub `production` Environment
 - [ ] GitHub Actionsのログを閲覧できる
 - [ ] Cloudflareの最新デプロイと環境変数を閲覧できる
 - [ ] ドメインの更新期限と支払方法を確認した
-- [ ] 緊急時に前のデプロイへ戻せる
+- [ ] 障害時の停止条件、連絡先、レビュー済み復旧手順を確認した
 
 ---
 
@@ -531,8 +532,11 @@ PR本文には最低限、次を書きます。
 - 実行した検証
 - 画面変更がある場合はPC・スマホの確認結果
 
-レビューとCIが完了したらマージします。公開サイトは`npm run deploy:public`、
-運営用サイトは`npm run deploy:admin`で正しいCloudflare Workerへ更新します。
+CI成功後は通常のPR手順で確認し、正本repositoryの`main`へ反映します。Workerの本番配信は
+Cloudflare Workers Buildsが行います。`npm run deploy:public`と`npm run deploy:admin`は
+ローカルから本番Workerへ直接配信するコマンドなので、通常の公開作業では使いません。
+ADMINのGitHub Actions Workflowはビルド検証専用です。Workers Builds復旧中にmainが進んでも
+配信成功とみなさず、Issue #509と[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)に従います。
 
 詳細は[EDITORIAL_WORKFLOW.md](EDITORIAL_WORKFLOW.md)と
 [PUBLISH.md](PUBLISH.md)を参照してください。
@@ -541,8 +545,10 @@ PR本文には最低限、次を書きます。
 
 ## 9. Cloudflareと本番環境
 
-本番配信はCloudflare Workersが担当します。GitHub Actionsは検証を行い、
-デプロイは正規のnpmコマンドから実行します。
+本番配信はCloudflare Workers Buildsが担当します。ADMINのGitHub Actions Workflowは検証専用です。
+公開サイト・ADMINとも`main`のみを本番対象とし、ローカル成果物、別branch、Dashboard Editorを
+通常の配信経路として使いません。ADMIN Workers Buildsの復旧が確認できない場合は配信を停止し、
+対象SHAと失敗理由をIssue #509へ記録します。
 
 主な環境変数:
 
@@ -554,7 +560,7 @@ PR本文には最低限、次を書きます。
 環境変数の値、ドメイン設定、ビルド出力先は
 [DEPLOYMENT.md](DEPLOYMENT.md)を参照してください。
 
-本番公開後は最低限、次を確認します。
+配信後は対象main SHA・Build run・固定Worker Version/100%配信・公開`build-info.json`を照合した後、最低限次を確認します。
 
 - 公式トップが開く
 - `/atlas/ja/`が開く
@@ -571,11 +577,11 @@ PR本文には最低限、次を書きます。
 
 ### 本番が開かない
 
-1. Cloudflareの最新ビルド結果を確認
-2. GitHub Actionsの結果を確認
-3. 直前にマージしたPRを確認
-4. ローカルで同じコミットを`npm ci && npm run build`する
-5. 原因がすぐ直せなければ、Cloudflareで直前の正常デプロイへ戻す
+1. 本番への書込・公開操作を止め、発生時刻、URL、Worker、Version、表示SHA、request IDを記録する。本文・個人情報・秘密値は記録しない。
+2. GitHub `main`とCI、Workers Buildsのrun/checkout SHA、固定WorkerのVersion・配信率、公開`build-info.json`を読み取り確認する。
+3. ADMIN障害はIssue #509と[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)、公開サイト障害は公開repositoryの運用手順に記録し、担当者へ引き継ぐ。
+4. SHA/Versionの不一致、Source Unknown、CI失敗、古い画面がある場合は、原因と対象を説明できるまでdeploy、rollback、promote、cache purge、Route変更を行わない。
+5. rollbackが必要な場合も、対象Version・main由来SHA・D1互換性・利用者影響・復旧方法を確認し、別途レビュー済みの手順と明示承認を得る。旧版が共有D1の新しい状態を壊さないことを先に確認する。
 
 ### 表示はできるが検索だけ動かない
 

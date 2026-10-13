@@ -3,7 +3,7 @@ import worker from "../../src/admin-worker";
 import { createAdminTestEnvironment } from "../helpers/admin-test-environment";
 
 describe("independent xAI prototype static route", () => {
-  it("requires developer-mode authorization for the page and every nested asset", async () => {
+  it("limits the page and every nested asset to the primary admin", async () => {
     const { db, env, request } = createAdminTestEnvironment();
     const assets = vi.spyOn(env.ASSETS, "fetch");
     const now = new Date().toISOString();
@@ -24,19 +24,21 @@ describe("independent xAI prototype static route", () => {
     ]) {
       const response = await request(path, "regular-staff@example.test");
       expect(response.status, path).toBe(403);
+      const managerResponse = await request(
+        path,
+        "developer-scope@example.test",
+      );
+      expect(managerResponse.status, path).toBe(403);
     }
 
-    const page = await request(
-      "/xai-prototype/",
-      "developer-scope@example.test",
-    );
+    const page = await request("/xai-prototype/", "global@atlasez.test");
     const asset = await request(
       "/xai-prototype/_astro/site.css",
-      "developer-scope@example.test",
+      "global@atlasez.test",
     );
     const portal = await request(
       "/admin/portal-prototype/",
-      "developer-scope@example.test",
+      "global@atlasez.test",
     );
 
     expect(page.status).toBe(200);
@@ -44,6 +46,35 @@ describe("independent xAI prototype static route", () => {
     expect(portal.status).toBe(200);
     expect(page.headers.get("cache-control")).toContain("no-store");
     expect(assets).toHaveBeenCalledTimes(3);
+  });
+
+  it("reports prototype access only for the primary admin", async () => {
+    const { db, request } = createAdminTestEnvironment();
+    const now = new Date().toISOString();
+    db.prepare(
+      "INSERT INTO report_admin_permissions(email,subject) VALUES (?,'mathematics')",
+    ).run("project-manager@example.test");
+    db.prepare(
+      "INSERT INTO atlasez_project_memberships(project_id,email,role,joined_at) VALUES ('atlas',?,'manager',?)",
+    ).run("project-manager@example.test", now);
+
+    const primaryAdmin = await request(
+      "/api/admin/developer/diagnostics",
+      "global@atlasez.test",
+    );
+    const projectManager = await request(
+      "/api/admin/developer/diagnostics",
+      "project-manager@example.test",
+    );
+
+    expect(primaryAdmin.status).toBe(200);
+    expect(projectManager.status).toBe(200);
+    await expect(primaryAdmin.json()).resolves.toMatchObject({
+      prototypeAccess: true,
+    });
+    await expect(projectManager.json()).resolves.toMatchObject({
+      prototypeAccess: false,
+    });
   });
 
   it("does not serve either prototype before authentication", async () => {

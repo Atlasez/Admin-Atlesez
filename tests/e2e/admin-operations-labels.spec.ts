@@ -1,7 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function mockOperationsApi(page: Page) {
-  const tasks = [
+async function mockOperationsApi(
+  page: Page,
+  taskFixtures?: Record<string, unknown>[],
+) {
+  const tasks: Record<string, unknown>[] = taskFixtures ?? [
     {
       id: "task-1",
       title: "既存のタスク",
@@ -250,6 +253,45 @@ test("権限限定タスクは安全な担当者表示を使い、別人の通�
   ).toBeDisabled();
 });
 
+test("終端失敗したタスクリマインダーを設定欄の外にも知らせる", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/operations**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        scope: { email: "alice@example.com", isManager: false },
+        project: { id: "atlas", slug: "atlas", name: "Atlasez" },
+        tasks: [
+          {
+            id: "failed-reminder-task",
+            title: "期限確認タスク",
+            status: "open",
+            subject: "mathematics",
+            assigned_to_me: true,
+            created_by_me: true,
+            reminders: [],
+            reminder_delivery_failed_count: 1,
+            reminder_delivery_latest_failed_at: "2026-10-12T01:00:00.000Z",
+          },
+        ],
+        events: [],
+        progress: [],
+        members: [],
+        availabilityBlocks: [],
+      }),
+    });
+  });
+
+  await page.goto("admin/operations/?project=atlas");
+  const task = page.locator(".task-item", { hasText: "期限確認タスク" });
+  const warning = task.getByRole("status");
+  await expect(warning).toContainText("メール通知が1件");
+  await expect(warning).toContainText("自動再試行されません");
+  await expect(warning).toBeVisible();
+});
+
 test("進捗報告一覧はカーソルで追加読み込みできる", async ({ page }) => {
   let requests = 0;
   await page.route("**/api/admin/progress**", async (route) => {
@@ -376,4 +418,70 @@ test("進捗報告のいいねは状態と件数を更新できる", async ({ pa
     { reacted: true, pathname: "/api/admin/progress/progress-react/reaction" },
     { reacted: false, pathname: "/api/admin/progress/progress-react/reaction" },
   ]);
+});
+
+test("375px幅のタスク一覧で主要操作のタッチ領域を44px以上に保つ", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await mockOperationsApi(page, [
+    {
+      id: "task-open",
+      title: "進行中タスク",
+      status: "open",
+      subject: "mathematics",
+      assignee_email: "alice@example.com",
+      created_by: "alice@example.com",
+      due_at: null,
+      due_timezone: "Asia/Tokyo",
+      details: "",
+      reminders: [],
+      created_at: "2026-09-01T00:00:00.000Z",
+    },
+    {
+      id: "task-done",
+      title: "完了タスク",
+      status: "done",
+      subject: "mathematics",
+      assigned_to_me: true,
+      created_by_me: true,
+      created_by: "alice@example.com",
+      assignee_display_name: "Alice",
+      created_by_display_name: "Alice",
+      can_update: true,
+      due_at: null,
+      due_timezone: "Asia/Tokyo",
+      details:
+        "記事編集画面: /admin/editor/?document=11111111-1111-4111-8111-111111111111",
+      reminders: [],
+      created_at: "2026-09-02T00:00:00.000Z",
+    },
+  ]);
+  await page.goto("admin/operations/?project=atlas");
+  await page.locator('[data-task-filter="all"]').click();
+  await page.getByLabel("完了済みを表示").check();
+  await expect(page.locator("[data-task-list] .task-item")).toHaveCount(2);
+  await expect(
+    page.locator("[data-task-list] .task-archive-button"),
+  ).toHaveCount(1);
+  await expect(page.locator("[data-task-list] .task-open-editor")).toHaveCount(
+    1,
+  );
+
+  const targets = [
+    page.locator(".task-create-open"),
+    ...(await page.locator(".task-filters button").all()),
+    ...(await page.locator(".task-view-tools label").all()),
+    ...(await page.locator("[data-task-list] .task-archive-button").all()),
+    ...(await page.locator("[data-task-list] .task-open-editor").all()),
+  ];
+  for (const target of targets) {
+    const bounds = await target.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.width).toBeGreaterThanOrEqual(44);
+    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+  }
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(375);
 });

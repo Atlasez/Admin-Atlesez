@@ -207,9 +207,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       <section class="wide" hidden={!calendarPage}>
         <h2>同時作業会・交流会の日程</h2>
         <p>
-          日付をクリック、またはドラッグして、自分が動ける／動けない期間を登録できます。曜日見出しの「一括」を押すと、その曜日の可否を毎週の設定として登録できます。
+          日付をクリック、またはドラッグして、自分が動ける／動けない期間を登録できます。キーボードでは日付に移動して矢印キーで日を移動できます。曜日見出しの「一括」を押すと、その曜日の可否を毎週の設定として登録できます。
         </p>
-        <div class="calendar-actions"><button type="button" data-open-calendar-settings aria-haspopup="dialog">⚙️ 設定</button></div>
+        <div class="calendar-actions"><span class="calendar-settings-status" id="calendar-settings-status" data-calendar-settings-status role="status">カレンダーを準備しています…</span><button type="button" data-open-calendar-settings aria-haspopup="dialog" aria-describedby="calendar-settings-status" disabled>⚙️ 設定</button></div>
         <dialog class="calendar-settings-dialog" data-calendar-settings-dialog aria-labelledby="calendar-settings-heading">
           <div class="calendar-settings-heading"><h2 id="calendar-settings-heading">カレンダー設定</h2><button type="button" data-close-calendar-settings aria-label="設定を閉じる">×</button></div>
           <div class="calendar-settings" aria-label="カレンダー表示設定">
@@ -288,7 +288,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
           3.0）。未対応の地域は公開iCalを追加する方式へ拡張できます。</small
         >
         <div class="event-create" data-event-create hidden>
-          <input data-event-title placeholder="催し名" /><input
+          <input data-event-title placeholder="催し名" aria-label="催し名" /><input
             data-event-start
             type="datetime-local"
             aria-label="開始日時"
@@ -387,8 +387,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     color: var(--text-secondary);
     line-height: 1.6;
   }
-  .calendar-actions { display:flex; justify-content:flex-end; margin:.75rem 0; }
+  .calendar-actions { display:flex; align-items:center; justify-content:flex-end; margin:.75rem 0; }
   .calendar-actions button { margin:0; }
+  .calendar-settings-status { color:var(--text-secondary); font-size:.7rem; margin-right:auto; }
   .calendar-settings-dialog { background:var(--background-primary); border:1px solid var(--border-default); color:var(--text-primary); max-width:44rem; padding:1rem; width:calc(100% - 2rem); }
   .calendar-settings-dialog::backdrop { background:#001a2c73; }
   .calendar-settings-heading { align-items:center; border-bottom:1px solid var(--border-default); display:flex; justify-content:space-between; margin-bottom:1rem; padding-bottom:.7rem; }
@@ -700,6 +701,19 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     padding: 0 !important;
     width: 1.55rem;
   }
+  @media (max-width: 700px) {
+    .calendar-cell-header {
+      height: 2.5rem;
+    }
+    .calendar-date-select {
+      height: 2.375rem;
+      width: 2.375rem;
+    }
+    .calendar-head button {
+      min-height: 2.5rem;
+      min-width: 2.5rem;
+    }
+  }
   .calendar-cell-content {
     display: grid;
     gap: 0.22rem;
@@ -738,7 +752,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   @media (max-width: 700px) {
     .calendar-cell {
       min-height: 4.6rem;
-      padding: 0.25rem;
+      padding: 0.15rem;
     }
     .calendar-event {
       font-size: 0.58rem;
@@ -1306,6 +1320,8 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   .task-meta { align-items: center; color: var(--text-secondary); display: flex; flex-wrap: wrap; font-size: .7rem; gap: .28rem .65rem; line-height: 1.45; margin-top: .62rem; }
   .task-meta > span + span::before { color: var(--text-muted); content: "·"; margin-right: .65rem; }
   .task-details { color: var(--text-secondary); font-size: .74rem; line-height: 1.55; margin: .62rem 0 0; white-space: pre-line; }
+  .task-reminder-failure { background: color-mix(in srgb, var(--danger) 9%, var(--background-secondary)); border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--border-default)); color: var(--text-primary); font-size: .72rem; line-height: 1.5; margin: .65rem 0 0; padding: .55rem .65rem; }
+  .task-reminder-failure strong { color: var(--danger); display: block; margin-bottom: .15rem; }
   .task-open-editor { color: var(--accent-primary); display: inline-block; font-size: .72rem; font-weight: 800; margin-top: .65rem; text-decoration: none; }
   .task-open-editor:hover { text-decoration: underline; }
   .task-empty { color: var(--text-secondary); grid-column: 1 / -1; padding: 1.5rem; text-align: center; }
@@ -1333,9 +1349,12 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     .grid section { padding: 1rem; }
     .task-list-heading { align-items: flex-start; }
     .task-create-label { display: none; }
-    .task-create-open { padding: .5rem !important; }
+    .task-create-open { box-sizing: border-box; flex-basis: 44px; height: 44px; min-height: 44px; min-width: 44px; padding: .5rem !important; width: 44px; }
     .task-filters { width: 100%; }
-    .task-filters button { flex: 1 1 0; }
+    .task-filters button { flex: 1 1 0; min-height: 44px; }
+    .task-view-tools label { min-height: 44px; }
+    .task-archive-button { min-height: 44px; }
+    .task-open-editor { align-items: center; display: inline-flex; min-height: 44px; }
     .task-workspace .task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   }
 </style>
@@ -1388,6 +1407,8 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     const holidayAdd = get<HTMLButtonElement>('[data-holiday-add]');
     const holidaySearch = get<HTMLInputElement>('[data-holiday-search]');
     const calendarSettingsDialog = get<HTMLDialogElement>('[data-calendar-settings-dialog]');
+    const calendarSettingsButton = get<HTMLButtonElement>('[data-open-calendar-settings]');
+    const calendarSettingsStatus = get<HTMLElement>('[data-calendar-settings-status]');
     const timezoneOptions = get<HTMLElement>('[data-timezone-options]');
     const timezoneToggle = get<HTMLButtonElement>('[data-timezone-toggle]');
     const blockEditor = get<HTMLDetailsElement>('[data-block-editor]');
@@ -1458,7 +1479,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       holidayAdd.setAttribute('aria-expanded', String(opening));
       if (opening) holidaySearch.focus();
     });
-    get<HTMLButtonElement>('[data-open-calendar-settings]').addEventListener('click', () => calendarSettingsDialog.showModal());
+    calendarSettingsButton.addEventListener('click', () => calendarSettingsDialog.showModal());
     get<HTMLButtonElement>('[data-close-calendar-settings]').addEventListener('click', () => calendarSettingsDialog.close());
     holidayTags.addEventListener('click', (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-remove-holiday]');
@@ -1561,8 +1582,13 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       const repeat = String(item.reminder_repeat || rules[0]?.repeat || 'none');
       const reminderEmailHidden = item.reminder_email_hidden === true;
       const canUpdateTask = item.can_update !== false;
+      const failedDeliveryCount = Number(item.reminder_delivery_failed_count || 0);
+      const failedAt = String(item.reminder_delivery_latest_failed_at || '');
       const rows = rules.map((rule) => reminderRowHtml(rule)).join('') || '<p class="reminder-empty">リマインダーは設定されていません。</p>';
-      return `<details class="task-reminder-editor"><summary>リマインダーを確認・編集（${rules.length}件）</summary><div data-reminder-editor="${escapeHtml(String(item.id))}" data-reminder-email-hidden="${reminderEmailHidden}"><fieldset ${canUpdateTask ? '' : 'disabled'}><p class="reminder-editor-note">期限基準の相対指定は保存時に日時へ展開されます。メール欄が空欄なら通知ベルに表示します。</p><div class="task-reminder-rules">${rows}</div><button type="button" class="secondary-button" data-add-reminder>リマインダーを追加</button><label class="field-label">指定日時の繰り返し<select data-reminder-repeat><option value="none" ${selected(repeat, 'none')}>1回</option><option value="daily" ${selected(repeat, 'daily')}>毎日</option><option value="weekly" ${selected(repeat, 'weekly')}>毎週</option><option value="monthly" ${selected(repeat, 'monthly')}>毎月</option></select></label><label class="field-label">自分の通知先メールアドレス（任意）<input type="email" maxlength="254" data-reminder-email value="${escapeHtml(String(item.reminder_email || ''))}" placeholder="自分のメールアドレス" ${reminderEmailHidden ? 'disabled' : ''} /></label>${reminderEmailHidden ? '<p class="reminder-editor-note">通知先は別の担当者です。保存しても通知先は変更しません。</p>' : ''}<button type="button" data-save-reminders>このタスクの設定を保存</button></fieldset>${canUpdateTask ? '' : '<p class="reminder-editor-note">閲覧のみのタスクです。担当者または作成者のみ変更できます。</p>'}<output class="operation-feedback" data-reminder-feedback aria-live="polite"></output></div></details>`;
+      const failureNotice = failedDeliveryCount > 0
+        ? `<p class="task-reminder-failure" role="status"><strong>メール通知が${failedDeliveryCount}件、最終失敗：${escapeHtml(failedAt ? formatDate(failedAt) : '時刻不明')}</strong>自動再試行されません。通知設定とメールサービスの配信記録を確認してください。</p>`
+        : '';
+      return `${failureNotice}<details class="task-reminder-editor"><summary>リマインダーを確認・編集（${rules.length}件）</summary><div data-reminder-editor="${escapeHtml(String(item.id))}" data-reminder-email-hidden="${reminderEmailHidden}"><fieldset ${canUpdateTask ? '' : 'disabled'}><p class="reminder-editor-note">期限基準の相対指定は保存時に日時へ展開されます。メール欄が空欄なら通知ベルに表示します。</p><div class="task-reminder-rules">${rows}</div><button type="button" class="secondary-button" data-add-reminder>リマインダーを追加</button><label class="field-label">指定日時の繰り返し<select data-reminder-repeat><option value="none" ${selected(repeat, 'none')}>1回</option><option value="daily" ${selected(repeat, 'daily')}>毎日</option><option value="weekly" ${selected(repeat, 'weekly')}>毎週</option><option value="monthly" ${selected(repeat, 'monthly')}>毎月</option></select></label><label class="field-label">自分の通知先メールアドレス（任意）<input type="email" maxlength="254" data-reminder-email value="${escapeHtml(String(item.reminder_email || ''))}" placeholder="自分のメールアドレス" ${reminderEmailHidden ? 'disabled' : ''} /></label>${reminderEmailHidden ? '<p class="reminder-editor-note">通知先は別の担当者です。保存しても通知先は変更しません。</p>' : ''}<button type="button" data-save-reminders>このタスクの設定を保存</button></fieldset>${canUpdateTask ? '' : '<p class="reminder-editor-note">閲覧のみのタスクです。担当者または作成者のみ変更できます。</p>'}<output class="operation-feedback" data-reminder-feedback aria-live="polite"></output></div></details>`;
     };
     // Task/progress views already receive their timezone options in the
     // server-rendered HTML. Calendar-only enhancement can populate the
@@ -1662,10 +1688,20 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       }
       calendarSelectionSummary.value = `${calendarSelectionDates[0]}〜${calendarSelectionDates[calendarSelectionDates.length - 1]}を選択中。可否を選んで「期間を追加」を押してください。`;
     };
-    const renderCalendar = () => {
+    const renderCalendar = (focusTarget?: { date?: string; weekday?: string }) => {
       // Task/progress pages keep the shared calendar markup for a consistent
       // layout, but do not load or use the calendar runtime.
       if (!calendarPage && !memberPage) return;
+      const focusedControl = document.activeElement instanceof HTMLElement && calendar.contains(document.activeElement)
+        ? document.activeElement
+        : null;
+      const focusedDate = focusTarget?.date ?? focusedControl
+        ?.closest<HTMLButtonElement>('[data-calendar-select]')
+        ?.closest<HTMLElement>('[data-calendar-date]')
+        ?.dataset.calendarDate;
+      const focusedWeekday = focusTarget?.weekday ?? focusedControl
+        ?.closest<HTMLButtonElement>('[data-calendar-weekday]')
+        ?.dataset.calendarWeekday;
       const first = new Date(month.getFullYear(), month.getMonth(), 1), last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
       const selectedRegions = [...holidayCountry.selectedOptions].map((option) => option.value);
       const holidays = holidaysForRegions(selectedRegions, month.getFullYear());
@@ -1704,7 +1740,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         const participants = dayParticipants([...dayBlocks, ...recurringBlocks]);
         const dateLabel = `${month.getFullYear()}年${month.getMonth() + 1}月${day}日`;
         const eventMarkup = dayEvents.map((event) => { const parts = dateParts(event.starts_at); return `<span class="calendar-event" data-calendar-event-id="${escapeHtml(event.id)}" title="${escapeHtml(event.title)}"><span>${parts.hour}:${parts.minute} ${escapeHtml(event.title)}</span>${availabilitySummary(`${event.title}の参加状況`, event.participants ?? [], event.availabilityCounts)}</span>`; }).join('');
-        cells.push(`<div class="calendar-cell${dayHolidays.length ? ' calendar-cell--holiday' : ''}" data-calendar-date="${key}"><div class="calendar-cell-header" data-calendar-date-header><button type="button" class="calendar-date-select" data-calendar-select aria-label="${escapeHtml(dateLabel)}を可否期間に選択"><span class="calendar-day">${escapeHtml(dayFormatter.format(new Date(month.getFullYear(), month.getMonth(), day)))}</span></button></div><div class="calendar-cell-content">${dayHolidays.map((holiday) => `<span class="calendar-holiday" title="${escapeHtml(holiday.regionName)}">${escapeHtml(holiday.region)}: ${escapeHtml(holiday.name)}</span>`).join('')}${eventMarkup}${availabilitySummary(`${dateLabel}の対応可否`, participants)}</div></div>`);
+        cells.push(`<div class="calendar-cell${dayHolidays.length ? ' calendar-cell--holiday' : ''}" data-calendar-date="${key}"><div class="calendar-cell-header" data-calendar-date-header><button type="button" class="calendar-date-select" data-calendar-select tabindex="${day === 1 ? 0 : -1}" aria-label="${escapeHtml(dateLabel)}を可否期間に選択"><span class="calendar-day">${escapeHtml(dayFormatter.format(new Date(month.getFullYear(), month.getMonth(), day)))}</span></button></div><div class="calendar-cell-content">${dayHolidays.map((holiday) => `<span class="calendar-holiday" title="${escapeHtml(holiday.regionName)}">${escapeHtml(holiday.region)}: ${escapeHtml(holiday.name)}</span>`).join('')}${eventMarkup}${availabilitySummary(`${dateLabel}の対応可否`, participants)}</div></div>`);
       }
       calendar.innerHTML = cells.join('');
       const today = dateParts(new Date().toISOString());
@@ -1724,6 +1760,15 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         button.setAttribute('aria-pressed', String(selected));
       });
       renderCalendarSelectionSummary();
+      const restoreFocus = () => {
+        if (document.activeElement && document.activeElement !== document.body && document.activeElement.isConnected) return;
+        if (focusedDate) {
+          calendar.querySelector<HTMLButtonElement>(`[data-calendar-date="${focusedDate}"] [data-calendar-select]`)?.focus();
+        } else if (focusedWeekday !== undefined) {
+          calendar.querySelector<HTMLButtonElement>(`[data-calendar-weekday="${focusedWeekday}"]`)?.focus();
+        }
+      };
+      if (focusedDate || focusedWeekday !== undefined) requestAnimationFrame(restoreFocus);
     };
     const render = () => {
       renderTimezoneOffset();
@@ -2036,7 +2081,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     });
     get<HTMLButtonElement>('[data-calendar-prev]').addEventListener('click', () => { clearCalendarSelection(); month = new Date(month.getFullYear(), month.getMonth() - 1, 1); reloadCalendar(); });
     get<HTMLButtonElement>('[data-calendar-next]').addEventListener('click', () => { clearCalendarSelection(); month = new Date(month.getFullYear(), month.getMonth() + 1, 1); reloadCalendar(); });
-    const selectCalendarRange = (start: string, end: string) => {
+    const selectCalendarRange = (start: string, end: string, focusedDate: string) => {
       const ordered = [start, end].sort();
       const after = new Date(`${ordered[1]}T00:00:00Z`); after.setUTCDate(after.getUTCDate() + 1);
       calendarSelectionMode = 'range';
@@ -2047,7 +2092,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       get<HTMLInputElement>('[data-block-start]').value = `${ordered[0]}T00:00`;
       get<HTMLInputElement>('[data-block-end]').value = `${after.toISOString().slice(0, 10)}T00:00`;
       blockAllDay.checked = true;
-      renderCalendar();
+      renderCalendar({ date: focusedDate });
     };
     const selectCalendarWeekday = (weekday: number) => {
       const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -2067,7 +2112,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       get<HTMLInputElement>('[data-block-end]').value = `${after.toISOString().slice(0, 10)}T00:00`;
       blockAllDay.checked = true;
       blockEditor.open = true;
-      renderCalendar();
+      renderCalendar({ weekday: String(weekday) });
     };
     calendar.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
@@ -2088,7 +2133,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         calendarSelectionEnd = date;
         blockEditor.open = true;
       }
-      selectCalendarRange(calendarSelectionStart, calendarSelectionEnd);
+      selectCalendarRange(calendarSelectionStart, calendarSelectionEnd, date);
     });
     blockAllDay.addEventListener('change', () => { if (!blockAllDay.checked) get<HTMLInputElement>('[data-block-start]').focus(); });
     timezone.addEventListener('input', () => {
@@ -2100,9 +2145,40 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       [...holidayCountry.options].forEach((option) => { option.hidden = Boolean(query) && !`${option.textContent ?? ''} ${option.value}`.toLocaleLowerCase().includes(query); });
     });
     calendarSystem.addEventListener('change', () => { renderCalendar(); });
+    calendarSettingsButton.disabled = false;
+    calendarSettingsStatus.hidden = true;
     // API の応答を待たずに月表示を作る。認証切れや一時的な取得失敗が
     // あっても、カレンダーそのものと月移動は利用できる状態を保つ。
     renderCalendar();
+    calendar.addEventListener('focusin', (event) => {
+      const activeDate = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-calendar-select]');
+      if (!activeDate) return;
+      calendar.querySelectorAll<HTMLButtonElement>('[data-calendar-select]').forEach((button) => {
+        button.tabIndex = button === activeDate ? 0 : -1;
+      });
+    });
+    calendar.addEventListener('keydown', (event) => {
+      const activeDate = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-calendar-select]');
+      if (!activeDate) return;
+      const dateKey = activeDate.closest<HTMLElement>('[data-calendar-date]')?.dataset.calendarDate;
+      if (!dateKey) return;
+      const current = new Date(`${dateKey}T12:00:00Z`);
+      const weekday = current.getUTCDay();
+      let offset: number | null = null;
+      if (event.key === 'ArrowLeft') offset = -1;
+      else if (event.key === 'ArrowRight') offset = 1;
+      else if (event.key === 'ArrowUp') offset = -7;
+      else if (event.key === 'ArrowDown') offset = 7;
+      else if (event.key === 'Home') offset = -weekday;
+      else if (event.key === 'End') offset = 6 - weekday;
+      if (offset === null) return;
+      event.preventDefault();
+      current.setUTCDate(current.getUTCDate() + offset);
+      if (current.getUTCMonth() !== month.getMonth() || current.getUTCFullYear() !== month.getFullYear()) return;
+      const nextKey = current.toISOString().slice(0, 10);
+      const nextDate = calendar.querySelector<HTMLButtonElement>(`[data-calendar-date="${nextKey}"] [data-calendar-select]`);
+      nextDate?.focus();
+    });
     retry = createAdminLoadRetry(root, () => load(), '運営情報を読み込めませんでした。');
     void load().catch((error) => {
       const message = error instanceof Error ? error.message : '進行管理を読み込めませんでした。';

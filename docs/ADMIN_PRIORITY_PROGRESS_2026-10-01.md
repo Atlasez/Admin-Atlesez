@@ -1,5 +1,7 @@
 # ADMIN優先改善の再開記録（2026-10-01）
 
+> 履歴文書です。「必須レビュー」の記録は2026-10-01時点の状態です。2026-10-12時点のrequired approving review countは0であり、レビュー承認のbranch protection必須化は行いません。最新方針は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)を参照してください。
+
 ## 状態
 
 本番へのマージ・デプロイ・migrationは未実行。mainは `b4767cbb23f45b4783a74b837b5e31b70b5d9e84`。本番build-infoとのSHA不一致とWorkers Builds未接続を解消するまで本番反映を停止する。

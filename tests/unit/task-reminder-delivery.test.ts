@@ -22,10 +22,30 @@ class FakeStatement {
       return { results: this.db.legacyRows as T[] };
     if (this.query.includes("SELECT r.id AS reminder_id"))
       return {
-        results: (this.db.recipientActive ? this.db.dueRows : []) as T[],
+        results: (this.db.recipientActive
+          ? this.db.dueRows
+              .filter(
+                (row) =>
+                  !this.query.includes("NOT EXISTS (") ||
+                  !this.db.attemptRows.some(
+                    (attempt) =>
+                      attempt.reminder_id === row.reminder_id &&
+                      attempt.occurrence_at === row.remind_at_utc &&
+                      attempt.recipient_email.toLowerCase() ===
+                        row.recipient_email.toLowerCase(),
+                  ),
+              )
+              .slice(0, 50)
+          : []) as T[],
       };
     if (this.query.includes("SELECT a.delivery_key")) {
-      const results = this.db.recipientActive ? [...this.db.attemptRows] : [];
+      const results = this.db.recipientActive
+        ? this.db.attemptRows.filter((attempt) => {
+            const status = (attempt as typeof attempt & { status?: string })
+              .status;
+            return !status || ["pending", "retry", "sending"].includes(status);
+          })
+        : [];
       if (this.db.flipLifecycleBeforeClaim) {
         this.db.recipientActive = false;
         this.db.flipLifecycleBeforeClaim = false;
@@ -36,6 +56,21 @@ class FakeStatement {
   }
   async run() {
     this.db.queries.push(this.query);
+    this.db.runCalls.push({ query: this.query, values: [...this.values] });
+    if (
+      this.query.includes(
+        "SET status=?,next_attempt_at=?,claim_token=NULL,claimed_at=NULL,error_category=?",
+      )
+    ) {
+      const attempt = this.db.attemptRows.find(
+        (row) => row.delivery_key === this.values[4],
+      );
+      if (attempt) {
+        attempt.status = String(this.values[0]);
+        attempt.attempt_count += 1;
+        attempt.next_attempt_at = String(this.values[1]);
+      }
+    }
     if (
       this.query.startsWith(
         "UPDATE editorial_task_reminder_delivery_attempts AS a",
@@ -50,14 +85,54 @@ class FakeStatement {
       this.query.startsWith(
         "INSERT OR IGNORE INTO editorial_task_reminder_delivery_attempts",
       )
-    )
+    ) {
+      const [
+        deliveryKey,
+        recipientEmail,
+        occurrenceAt,
+        occurrenceTimezone,
+        payload,
+        providerKey,
+        nextAttemptAt,
+        retryDeadline,
+      ] = this.values;
+      const reminderId = this.values[10];
+      const existing = this.db.attemptRows.some(
+        (attempt) =>
+          attempt.reminder_id === reminderId &&
+          attempt.occurrence_at === occurrenceAt &&
+          attempt.recipient_email.toLowerCase() ===
+            String(recipientEmail).toLowerCase(),
+      );
+      if (existing) return { meta: { changes: 0 } };
+      this.db.attemptRows.push({
+        delivery_key: String(deliveryKey),
+        reminder_id: String(reminderId),
+        recipient_email: String(recipientEmail),
+        occurrence_at: String(occurrenceAt),
+        occurrence_timezone: String(occurrenceTimezone),
+        payload_json: String(payload),
+        provider_idempotency_key: String(providerKey),
+        status: "pending",
+        attempt_count: 0,
+        next_attempt_at: String(nextAttemptAt),
+        retry_deadline_at: String(retryDeadline),
+        sent_at: null,
+        claimed_at: null,
+        claim_token: null,
+        repeat: "none",
+        remind_at: "2026-01-15T09:00",
+        timezone: "Asia/Tokyo",
+      });
       return { meta: { changes: 1 } };
+    }
     return { meta: { changes: 1 } };
   }
 }
 
 class FakeDb {
   queries: string[] = [];
+  runCalls: Array<{ query: string; values: unknown[] }> = [];
   legacyRows: Array<{ id: string; remind_at: string; timezone: string }> = [];
   normalizedValues: unknown[][] = [];
   claimChanges = 1;
@@ -78,7 +153,25 @@ class FakeDb {
       recipient_email: "member@example.com",
     },
   ];
-  readonly attemptRows = [
+  readonly attemptRows: Array<{
+    delivery_key: string;
+    reminder_id: string;
+    recipient_email: string;
+    occurrence_at: string;
+    occurrence_timezone: string;
+    payload_json: string;
+    provider_idempotency_key: string;
+    status?: string;
+    attempt_count: number;
+    next_attempt_at?: string | null;
+    retry_deadline_at: string;
+    sent_at?: string | null;
+    claimed_at?: string | null;
+    claim_token?: string | null;
+    remind_at: string;
+    timezone: string;
+    repeat: string;
+  }> = [
     {
       delivery_key: "v1:delivery",
       reminder_id: "reminder-1",
@@ -227,7 +320,7 @@ describe("task reminder delivery", () => {
     const lifecycleGuardedQueries = db.queries.filter((query) =>
       query.includes("atlasez_project_member_lifecycle"),
     );
-    expect(lifecycleGuardedQueries).toHaveLength(4);
+    expect(lifecycleGuardedQueries).toHaveLength(3);
     expect(
       lifecycleGuardedQueries.every(
         (query) =>
@@ -243,6 +336,47 @@ describe("task reminder delivery", () => {
     expect(logs.join(" ")).not.toContain("member@example.com");
   });
 
+  it("skips the first 50 reminders whose current occurrence already has a terminal attempt", async () => {
+    const db = new FakeDb();
+    const rows = Array.from({ length: 51 }, (_, index) => ({
+      ...db.dueRows[0],
+      reminder_id: `reminder-${index + 1}`,
+      remind_at_utc: new Date(now.getTime() - 60_000 + index).toISOString(),
+      recipient_email: `member-${index + 1}@example.test`,
+    }));
+    db.dueRows.splice(0, db.dueRows.length, ...rows);
+    db.attemptRows.splice(
+      0,
+      db.attemptRows.length,
+      ...rows.slice(0, 50).map((row) => ({
+        ...db.attemptRows[0],
+        reminder_id: row.reminder_id,
+        recipient_email: row.recipient_email,
+        occurrence_at: row.remind_at_utc,
+        status: "sent",
+      })),
+    );
+    let sentTo = "";
+
+    const result = await dispatchDueTaskReminders(env(db), {
+      now,
+      fetcher: async (_input, init) => {
+        const body = JSON.parse(String(init?.body)) as { to: string[] };
+        sentTo = body.to[0] ?? "";
+        return new Response(JSON.stringify({ id: "provider-51" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+
+    expect(result).toEqual({ sent: 1, failed: 0 });
+    expect(sentTo).toBe("member-51@example.test");
+    expect(
+      db.queries.find((query) => query.includes("SELECT r.id AS reminder_id")),
+    ).toContain("existing.occurrence_at=r.remind_at_utc");
+  });
+
   it("does not mark a provider failure as sent and leaves a retryable state", async () => {
     const db = new FakeDb();
     const result = await dispatchDueTaskReminders(env(db), {
@@ -256,6 +390,54 @@ describe("task reminder delivery", () => {
     expect(db.queries.some((query) => query.includes("status='sent'"))).toBe(
       false,
     );
+  });
+
+  it("keeps a terminal 4xx visible as failed and never auto-sends that occurrence again", async () => {
+    const db = new FakeDb();
+    let calls = 0;
+    const fetcher = async () => {
+      calls += 1;
+      return new Response("rejected", { status: 400 });
+    };
+    const first = await dispatchDueTaskReminders(env(db), { now, fetcher });
+    expect(first).toEqual({ sent: 0, failed: 1 });
+    expect(db.attemptRows[0]).toMatchObject({
+      status: "failed",
+      attempt_count: 1,
+      next_attempt_at: "2026-01-15T23:00:00.000Z",
+    });
+    expect(db.runCalls.at(-1)?.values.slice(0, 5)).toEqual([
+      "failed",
+      "2026-01-15T23:00:00.000Z",
+      "provider_400",
+      now.toISOString(),
+      "v1:delivery",
+    ]);
+
+    const second = await dispatchDueTaskReminders(env(db), { now, fetcher });
+    expect(second).toEqual({ sent: 0, failed: 0 });
+    expect(calls).toBe(1);
+  });
+
+  it("marks retryable responses failed when the attempt limit is reached", async () => {
+    const db = new FakeDb();
+    db.attemptRows[0].status = "retry";
+    db.attemptRows[0].attempt_count = 4;
+    db.attemptRows[0].next_attempt_at = now.toISOString();
+    const result = await dispatchDueTaskReminders(env(db), {
+      now,
+      fetcher: async () => new Response("still unavailable", { status: 503 }),
+    });
+    expect(result).toEqual({ sent: 0, failed: 1 });
+    expect(db.attemptRows[0]).toMatchObject({
+      status: "failed",
+      attempt_count: 5,
+    });
+    expect(db.runCalls.at(-1)?.values.slice(0, 3)).toEqual([
+      "failed",
+      "2026-01-15T23:00:00.000Z",
+      "provider_503",
+    ]);
   });
 
   it("does not send when no reminder is due", async () => {

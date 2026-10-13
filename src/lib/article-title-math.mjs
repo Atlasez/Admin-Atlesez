@@ -28,6 +28,7 @@ export function renderArticleTitleMath(source, macros = {}) {
       macros,
       strict: "warn",
       throwOnError: false,
+      trust: false,
     });
     cursor = index + match[0].length;
   }
