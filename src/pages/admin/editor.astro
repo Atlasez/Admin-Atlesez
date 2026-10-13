@@ -946,8 +946,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 
 <style is:global>
   /* 公開数学記事の定義・命題枠と同じ見た目を、動的プレビューにも適用する。 */
-  .article-preview .defi,
-  .article-preview .math-definition {
+  .published-article-preview .defi,
+  .published-article-preview .math-definition {
     background:color-mix(in srgb,#6cb4c2 10%,var(--surface));
     border:1px solid color-mix(in srgb,#6cb4c2 35%,var(--border));
     border-left:3px solid #6cb4c2;
@@ -959,11 +959,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     padding:1.1rem 1.25rem;
     box-shadow:0 2px 5px rgb(0 0 0 / .04);
   }
-  .article-preview .prop,
-  .article-preview .thm,
-  .article-preview .lemma,
-  .article-preview .cor,
-  .article-preview .math-theorem {
+  .published-article-preview .prop,
+  .published-article-preview .thm,
+  .published-article-preview .lemma,
+  .published-article-preview .cor,
+  .published-article-preview .math-theorem {
     background:color-mix(in srgb,#e0c375 12%,var(--surface));
     border:1px solid #e0c375;
     border-left-width:3px;
@@ -975,7 +975,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     padding:1.1rem 1.25rem;
     box-shadow:0 2px 5px rgb(0 0 0 / .04);
   }
-  .article-preview .example {
+  .published-article-preview .example {
     background:transparent;
     border:0;
     border-radius:0;
@@ -983,19 +983,19 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     padding:0;
     box-shadow:none;
   }
-  .article-preview .defi > p,
-  .article-preview .prop > p,
-  .article-preview .thm > p,
-  .article-preview .lemma > p,
-  .article-preview .cor > p,
-  .article-preview .example > p,
-  .article-preview .math-definition > p,
-  .article-preview .math-theorem > p {
+  .published-article-preview .defi > p,
+  .published-article-preview .prop > p,
+  .published-article-preview .thm > p,
+  .published-article-preview .lemma > p,
+  .published-article-preview .cor > p,
+  .published-article-preview .example > p,
+  .published-article-preview .math-definition > p,
+  .published-article-preview .math-theorem > p {
     margin:0;
     overflow-wrap:anywhere;
     text-indent:0;
   }
-  .article-preview .thmtitle {
+  .published-article-preview .thmtitle {
     background:#6cb4c2;
     border:3px solid #6cb4c2;
     border-bottom:0;
@@ -1010,17 +1010,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     margin:-51.4px 0 0 -23px;
     padding:4px 14px;
   }
-  .article-preview .prop .thmtitle,
-  .article-preview .thm .thmtitle,
-  .article-preview .lemma .thmtitle,
-  .article-preview .cor .thmtitle,
-  .article-preview .example .thmtitle,
-  .article-preview .math-theorem .thmtitle {
+  .published-article-preview .prop .thmtitle,
+  .published-article-preview .thm .thmtitle,
+  .published-article-preview .lemma .thmtitle,
+  .published-article-preview .cor .thmtitle,
+  .published-article-preview .example .thmtitle,
+  .published-article-preview .math-theorem .thmtitle {
     background:#e0c375;
     border-color:#e0c375;
     color:#4b3a12;
   }
-  .article-preview .example .thmtitle {
+  .published-article-preview .example .thmtitle {
     border:3px solid #e0c375;
     border-radius:6px;
     float:none;
@@ -1028,48 +1028,48 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     max-width:100%;
     width:fit-content;
   }
-  .article-preview .defi > p:first-child::after,
-  .article-preview .prop > p:first-child::after,
-  .article-preview .thm > p:first-child::after,
-  .article-preview .lemma > p:first-child::after,
-  .article-preview .cor > p:first-child::after,
-  .article-preview .example > p:first-child::after {
+  .published-article-preview .defi > p:first-child::after,
+  .published-article-preview .prop > p:first-child::after,
+  .published-article-preview .thm > p:first-child::after,
+  .published-article-preview .lemma > p:first-child::after,
+  .published-article-preview .cor > p:first-child::after,
+  .published-article-preview .example > p:first-child::after {
     clear:both;
     content:"";
     display:table;
   }
-  .article-preview .defi > :first-child,
-  .article-preview .prop > :first-child,
-  .article-preview .thm > :first-child,
-  .article-preview .lemma > :first-child,
-  .article-preview .cor > :first-child,
-  .article-preview .example > :first-child,
-  .article-preview .math-definition > :first-child,
-  .article-preview .math-theorem > :first-child { margin-top:0; }
-  .article-preview .defi > :last-child,
-  .article-preview .prop > :last-child,
-  .article-preview .thm > :last-child,
-  .article-preview .lemma > :last-child,
-  .article-preview .cor > :last-child,
-  .article-preview .example > :last-child,
-  .article-preview .math-definition > :last-child,
-  .article-preview .math-theorem > :last-child { margin-bottom:0; }
+  .published-article-preview .defi > :first-child,
+  .published-article-preview .prop > :first-child,
+  .published-article-preview .thm > :first-child,
+  .published-article-preview .lemma > :first-child,
+  .published-article-preview .cor > :first-child,
+  .published-article-preview .example > :first-child,
+  .published-article-preview .math-definition > :first-child,
+  .published-article-preview .math-theorem > :first-child { margin-top:0; }
+  .published-article-preview .defi > :last-child,
+  .published-article-preview .prop > :last-child,
+  .published-article-preview .thm > :last-child,
+  .published-article-preview .lemma > :last-child,
+  .published-article-preview .cor > :last-child,
+  .published-article-preview .example > :last-child,
+  .published-article-preview .math-definition > :last-child,
+  .published-article-preview .math-theorem > :last-child { margin-bottom:0; }
 </style>
 
 <style is:global>
-  .article-preview .proof-details { margin:1.2rem 0; }
-  .article-preview .proof-details > summary { align-items:center; background:var(--background-secondary); border:1px solid var(--border); border-radius:.4rem; cursor:pointer; display:inline-flex; font-weight:800; gap:.45rem; list-style:none; padding:.35rem .8rem .35rem 2rem; position:relative; }
-  .article-preview .proof-details > summary::-webkit-details-marker { display:none; }
-  .article-preview .proof-details > summary::marker { content:""; }
-  .article-preview .proof-details > summary::before { border-bottom:2px solid var(--muted); border-right:2px solid var(--muted); content:""; height:.45rem; left:.8rem; position:absolute; top:.65rem; transform:rotate(45deg); transition:transform .15s ease; width:.45rem; }
-  .article-preview .proof-details[open] > summary::before { transform:rotate(225deg); }
-  .article-preview .proof-details > summary:hover { border-color:var(--accent); }
-  .article-preview .supp-details { border:0; margin:1rem 0; }
-  .article-preview .supp-details > summary { align-items:center; background:var(--background-secondary); border:1px solid var(--border); border-radius:.45rem; cursor:pointer; font-weight:800; list-style:none; padding:.55rem 2rem .55rem .8rem; position:relative; text-align:center; }
-  .article-preview .supp-details > summary::-webkit-details-marker { display:none; }
-  .article-preview .supp-details > summary::after { content:"+"; position:absolute; right:.8rem; }
-  .article-preview .supp-details[open] > summary::after { content:"−"; }
-  .article-preview .supp-details-inner { border:1px solid var(--border); border-top:0; border-bottom:0; padding:.8rem 1rem; }
+  .published-article-preview .proof-details { margin:1.2rem 0; }
+  .published-article-preview .proof-details > summary { align-items:center; background:var(--background-secondary); border:1px solid var(--border); border-radius:.4rem; cursor:pointer; display:inline-flex; font-weight:800; gap:.45rem; list-style:none; padding:.35rem .8rem .35rem 2rem; position:relative; }
+  .published-article-preview .proof-details > summary::-webkit-details-marker { display:none; }
+  .published-article-preview .proof-details > summary::marker { content:""; }
+  .published-article-preview .proof-details > summary::before { border-bottom:2px solid var(--muted); border-right:2px solid var(--muted); content:""; height:.45rem; left:.8rem; position:absolute; top:.65rem; transform:rotate(45deg); transition:transform .15s ease; width:.45rem; }
+  .published-article-preview .proof-details[open] > summary::before { transform:rotate(225deg); }
+  .published-article-preview .proof-details > summary:hover { border-color:var(--accent); }
+  .published-article-preview .supp-details { border:0; margin:1rem 0; }
+  .published-article-preview .supp-details > summary { align-items:center; background:var(--background-secondary); border:1px solid var(--border); border-radius:.45rem; cursor:pointer; font-weight:800; list-style:none; padding:.55rem 2rem .55rem .8rem; position:relative; text-align:center; }
+  .published-article-preview .supp-details > summary::-webkit-details-marker { display:none; }
+  .published-article-preview .supp-details > summary::after { content:"+"; position:absolute; right:.8rem; }
+  .published-article-preview .supp-details[open] > summary::after { content:"−"; }
+  .published-article-preview .supp-details-inner { border:1px solid var(--border); border-top:0; border-bottom:0; padding:.8rem 1rem; }
   .editor-split { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pane-controls { align-items:center; display:flex; flex:0 0 auto; flex-wrap:wrap; gap:.35rem; }
   .math-preset-control { align-items:center; color:var(--muted); display:flex; flex:1 1 10rem; font-size:.68rem; font-weight:800; gap:.35rem; justify-content:space-between; min-width:0; }
