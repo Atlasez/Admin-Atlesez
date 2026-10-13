@@ -631,41 +631,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         dialog.style.backdropFilter = filter;
         dialog.style.setProperty('-webkit-backdrop-filter', filter);
       };
-      const syncGlassSlider = () => {
-        if (!glassSlider) return;
-        const computedOpacity = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--command-glass-opacity'));
-        const opacity = Number.isFinite(computedOpacity) ? Math.max(0, Math.min(100, computedOpacity)) : 60;
-        const transparency = 100 - opacity;
-        glassSlider.value = String(transparency);
-        if (glassOutput) glassOutput.textContent = `${transparency}%`;
-        glassSlider.setAttribute('aria-valuetext', `背景の透け感 ${transparency}%`);
-      };
-      glassSlider?.addEventListener('input', () => {
-        const transparency = Math.max(0, Math.min(100, Number(glassSlider.value)));
-        const opacity = 100 - transparency;
-        const root = document.documentElement;
-        root.style.setProperty('--command-glass-opacity', `${opacity}%`);
-        root.style.setProperty('--command-glass-blur', `${Math.round(opacity * 0.1)}px`);
-        
-        try {
-          const stored = JSON.parse(localStorage.getItem('atlasez-prefs') ?? '{}') as Record<string, unknown> | null;
-          const prefs = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
-          if (opacity === 60) delete prefs.glass;
-          else prefs.glass = `${opacity}%`;
-          localStorage.setItem('atlasez-prefs', JSON.stringify(prefs));
-        } catch { /* ストレージなしでも表示は切り替える */ }
-        window.dispatchEvent(new CustomEvent('atlasez-glass-change'));
-      });
       const applyCommandMode = (mode: 'command' | 'action') => {
         openMode = mode;
         dialog.dataset.commandMode = mode;
-        
-        if (glassSlider) {
-          glassSlider.disabled = reducedTransparency.matches;
-          glassSlider.title = reducedTransparency.matches
-            ? 'OSの「透明度を下げる」設定が優先されています。'
-            : '背景の透け感を0〜100%で調整';
-        }
         
         applyGlassFilter();
       };
