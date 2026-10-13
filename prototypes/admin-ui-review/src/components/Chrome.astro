@@ -1,5 +1,6 @@
 ---
 import { breadcrumbLabels } from "../labels";
+import { prototypePath } from "../paths";
 
 interface Props {
   variant: "before" | "after";
@@ -11,11 +12,11 @@ const showBreadcrumb = screen === "notifications";
 ---
 
 <header class="admin-nav" data-admin-nav>
-  <a class="admin-nav-brand-logo" href="/portal/before/" aria-label="Atlasezメンバー用サイトのトップへ戻る">
-    <img src="/images/atlasez-logo.png" alt="" width="34" height="34" />
+  <a class="admin-nav-brand-logo" href={prototypePath("/portal/before/")} aria-label="Atlasezメンバー用サイトのトップへ戻る">
+    <img src={prototypePath("/images/atlasez-logo.png")} alt="" width="34" height="34" />
   </a>
   <div class="admin-project-switcher">
-    <a class="admin-project-switcher-title" href="/portal/before/">Atlasezメンバー用サイト</a>
+    <a class="admin-project-switcher-title" href={prototypePath("/portal/before/")}>Atlasezメンバー用サイト</a>
   </div>
   <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav" aria-label="メニュー">
     <span aria-hidden="true">☰</span><span>メニュー</span>
@@ -63,7 +64,7 @@ const showBreadcrumb = screen === "notifications";
 {
   showBreadcrumb && (
     <nav class="admin-breadcrumbs" aria-label="パンくず">
-      <a href="/portal/before/">Atlasezメンバー用サイト</a>
+      <a href={prototypePath("/portal/before/")}>Atlasezメンバー用サイト</a>
       <span aria-hidden="true">›</span>
       {variant === "before" ? (
         <>

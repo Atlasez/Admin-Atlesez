@@ -1,6 +1,18 @@
 # ADMIN operations UI prototype
 
-Static before/after prototype for the ADMIN portal and notifications screens. It is not wired into the ADMIN Worker, D1, or the production pages. Fonts, colors, and control styles follow the current light theme in `src/styles/tokens.css`.
+Static before/after prototype for the ADMIN portal, notifications, and action-center dialog. The ADMIN production build copies it to `dist/admin/ui-review-prototype/` and the Worker serves that directory at `/admin/ui-review-prototype/` only after developer-mode authorization. It does not change production pages, shared components, shared styles, or D1. Fonts, colors, and control styles follow the current light theme in `src/styles/tokens.css`.
+
+Deployed URLs, for a developer-mode account:
+
+| Screen                  | URL                                                                         |
+| ----------------------- | --------------------------------------------------------------------------- |
+| Index                   | `https://admin.atlasez.org/admin/ui-review-prototype/`                      |
+| Portal, current         | `https://admin.atlasez.org/admin/ui-review-prototype/portal/before/`        |
+| Portal, proposal        | `https://admin.atlasez.org/admin/ui-review-prototype/portal/after/`         |
+| Notifications, current  | `https://admin.atlasez.org/admin/ui-review-prototype/notifications/before/` |
+| Notifications, proposal | `https://admin.atlasez.org/admin/ui-review-prototype/notifications/after/`  |
+| Action center, current  | `https://admin.atlasez.org/admin/ui-review-prototype/action-center/before/` |
+| Action center, proposal | `https://admin.atlasez.org/admin/ui-review-prototype/action-center/after/`  |
 
 ## View
 

@@ -1,6 +1,7 @@
 ---
 import Prototype from "../layouts/Prototype.astro";
 import { breadcrumbLabels } from "../labels";
+import { prototypePath } from "../paths";
 
 const examples = ["notifications", "action-center", "member-tasks", "member-calendar", "procedures"];
 ---
@@ -9,15 +10,15 @@ const examples = ["notifications", "action-center", "member-tasks", "member-cale
   <main class="review-index">
     <h1>運営サイト UIプロトタイプ</h1>
     <p>
-      ポータルと通知の現行画面と案を並べて確認するための静的プロトタイプです。書体、色、ボタンの見た目は現行のライトテーマのままです。本番のページ、Worker、D1には接続していません。
+      ポータルと通知の現行画面と案を並べて確認するための静的プロトタイプです。書体、色、ボタンの見た目は現行のライトテーマのままです。開発者モードの専用URLだけで配信し、本番の画面・共有スタイル・D1は変えていません。
     </p>
     <div class="review-links">
-      <a href="/portal/before/">ポータル · 現行</a>
-      <a href="/portal/after/">ポータル · 案</a>
-      <a href="/notifications/before/">通知 · 現行</a>
-      <a href="/notifications/after/">通知 · 案</a>
-      <a href="/action-center/before/">要対応 · 現行</a>
-      <a href="/action-center/after/">要対応 · 案</a>
+      <a href={prototypePath("/portal/before/")}>ポータル · 現行</a>
+      <a href={prototypePath("/portal/after/")}>ポータル · 案</a>
+      <a href={prototypePath("/notifications/before/")}>通知 · 現行</a>
+      <a href={prototypePath("/notifications/after/")}>通知 · 案</a>
+      <a href={prototypePath("/action-center/before/")}>要対応 · 現行</a>
+      <a href={prototypePath("/action-center/after/")}>要対応 · 案</a>
     </div>
     <h2>案で変えていること</h2>
     <ul>

@@ -1,5 +1,6 @@
 ---
 import "../styles/review.css";
+import { prototypePath } from "../paths";
 
 interface Props {
   title: string;
@@ -36,11 +37,11 @@ const screenLabel =
     data-pref-bg={theme === "dark" ? "dark" : undefined}
   >
     <p class="review-bar">
-      <a href="/">UIプロトタイプ</a>
+      <a href={prototypePath("/")}>UIプロトタイプ</a>
       <span aria-hidden="true"> · </span>
       <span>{screenLabel} / {variantLabel}</span>
       <span aria-hidden="true"> · </span>
-      未承認。本番の画面ではありません。
+      開発者モード専用。本番の画面ではありません。
     </p>
     <slot />
   </body>
