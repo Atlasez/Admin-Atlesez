@@ -623,6 +623,19 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const glassSlider = dialog.querySelector<HTMLInputElement>('[data-admin-command-glass-range]');
       const glassOutput = dialog.querySelector<HTMLOutputElement>('[data-admin-command-glass-output]');
       const reducedTransparency = window.matchMedia('(prefers-reduced-transparency: reduce)');
+      const applyGlassFilter = () => {
+        if (openMode !== 'action' || reducedTransparency.matches) {
+          dialog.style.backdropFilter = '';
+          dialog.style.removeProperty('-webkit-backdrop-filter');
+          return;
+        }
+        const opacity = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--command-glass-opacity'));
+        const blur = Number.isFinite(opacity) ? Math.round(Math.max(0, Math.min(100, opacity)) * 0.1) : 6;
+        // Apply the filter directly: dynamically interpolated CSS blur alone is not reliable on this dialog.
+        const filter = blur > 0 ? `blur(${blur}px) saturate(1.1)` : 'none';
+        dialog.style.backdropFilter = filter;
+        dialog.style.setProperty('-webkit-backdrop-filter', filter);
+      };
       const syncGlassSlider = () => {
         if (!glassSlider) return;
         const computedOpacity = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--command-glass-opacity'));
@@ -659,7 +672,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
             : '背景の透け感を0〜100%で調整';
         }
         if (mode === 'action') syncGlassSlider();
+        applyGlassFilter();
       };
+      window.addEventListener('atlasez-glass-change', () => {
+        syncGlassSlider();
+        applyGlassFilter();
+      });
       reducedTransparency.addEventListener('change', () => applyCommandMode(openMode));
       let activeIndex = 0;
       let searchTimer: number | undefined;

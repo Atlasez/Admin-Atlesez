@@ -519,11 +519,11 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   await expect(slider).toHaveValue("60");
   await expect(value).toHaveText("40%");
 
-  // Strongest: 90% see-through (10% panel opacity).
+  // Strongest: 100% see-through (0% panel opacity).
   await slider.focus();
   await slider.press("Home");
-  await expect(value).toHaveText("90%");
-  await expect(slider).toHaveAttribute("aria-valuetext", "要対応の透け感 90%");
+  await expect(value).toHaveText("100%");
+  await expect(slider).toHaveAttribute("aria-valuetext", "要対応の透け感 100%");
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -532,26 +532,25 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
           .trim(),
       ),
     )
-    .toBe("10%");
+    .toBe("0%");
   expect(
     await page.evaluate(
       () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
     ),
-  ).toBe("10%");
+  ).toBe("0%");
   await page.keyboard.press("Escape");
   await page.getByRole("link", { name: "アクションセンター" }).click();
   const dialog = page.locator("[data-admin-command-dialog]");
   await expect(dialog).toHaveAttribute("data-command-mode", "action");
   const strong = await readCommandPanel(dialog);
-  expect(strong.alpha).toBeGreaterThanOrEqual(0.08);
-  expect(strong.alpha).toBeLessThanOrEqual(0.12);
-  expect(strong.backdropAlpha).toBeLessThanOrEqual(0.05);
+  expect(strong.alpha).toBe(0);
+  expect(strong.backdropAlpha).toBe(0);
   await page.keyboard.press("Escape");
 
   await page.reload();
   await menu.locator("> summary").click();
-  await expect(slider).toHaveValue("10");
-  await expect(value).toHaveText("90%");
+  await expect(slider).toHaveValue("0");
+  await expect(value).toHaveText("100%");
 
   // Weakest: opaque panel.
   await slider.focus();
@@ -605,7 +604,7 @@ test("ポップアップ内のスライダーで背景・ぼかし・暗幕・�
   expect(transparent.alpha).toBe(0);
   expect(transparent.backdropAlpha).toBe(0);
   expect(transparent.row.alpha).toBe(0);
-  expect(transparent.filter).toContain("blur(0px)");
+  expect(transparent.filter).not.toContain("blur");
   const savedOpacity = await page.evaluate(
     () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
   );

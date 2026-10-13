@@ -602,11 +602,13 @@ const groups = [
       glassRange?.addEventListener("input", () => {
         syncGlassValue();
         savePrefs(false);
+        window.dispatchEvent(new CustomEvent("atlasez-glass-change"));
       });
       form.addEventListener("change", (event) => {
         if (event.target === glassRange) {
           syncGlassValue();
           savePrefs(false);
+          window.dispatchEvent(new CustomEvent("atlasez-glass-change"));
           return;
         }
         savePrefs(true);
