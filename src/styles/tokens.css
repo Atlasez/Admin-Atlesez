@@ -18,6 +18,8 @@
   --text-scale: 1;
   --line-height-body: 1.75;
   --font-size-body: calc(1rem * var(--text-scale));
+  /* 要対応ダイアログの透過。表示設定が 60%（標準）／100%／40% に上書きする。 */
+  --command-glass-opacity: 60%;
 
   /* 色（ライト＝紙のような白） */
   --text-primary: #182027;

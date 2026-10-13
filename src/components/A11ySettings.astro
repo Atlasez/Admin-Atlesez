@@ -15,8 +15,10 @@ interface Props {
    * ヘッダーの「表示設定」ポップオーバー（SettingsMenu）から使う。
    */
   bare?: boolean;
+  /** 運営ヘッダーだけ。要対応ダイアログの透過を切り替える。 */
+  showGlass?: boolean;
 }
-const { locale = "ja", bare = false } = Astro.props;
+const { locale = "ja", bare = false, showGlass = false } = Astro.props;
 const L =
   locale === "ja"
     ? {
@@ -40,6 +42,10 @@ const L =
         gothic: "標準ゴシック",
         readable: "可読性重視",
         reset: "初期設定に戻す",
+        glass: "要対応の透過",
+        glassSolid: "不透明",
+        glassStandard: "標準",
+        glassStrong: "強め",
       }
     : {
         title: "Display settings",
@@ -62,6 +68,10 @@ const L =
         gothic: "Default",
         readable: "Readable",
         reset: "Reset to defaults",
+        glass: "Action glass",
+        glassSolid: "Solid",
+        glassStandard: "Standard",
+        glassStrong: "Strong",
       };
 
 /**
@@ -177,6 +187,25 @@ const groups = [
           </div>
         </fieldset>
       ))}
+      {showGlass && (
+        <fieldset>
+          <legend>{L.glass}</legend>
+          <div class="a11y-options a11y-options-3">
+            <label class="a11y-option">
+              <input type="radio" name="glass" value="100%" />
+              <span>{L.glassSolid}</span>
+            </label>
+            <label class="a11y-option">
+              <input type="radio" name="glass" value="default" checked />
+              <span>{L.glassStandard}</span>
+            </label>
+            <label class="a11y-option">
+              <input type="radio" name="glass" value="40%" />
+              <span>{L.glassStrong}</span>
+            </label>
+          </div>
+        </fieldset>
+      )}
       <button type="button" class="button button-secondary" data-a11y-reset>
         {L.reset}
       </button>
@@ -222,6 +251,25 @@ const groups = [
             </div>
           </fieldset>
         ))}
+        {showGlass && (
+          <fieldset>
+            <legend>{L.glass}</legend>
+            <div class="a11y-options a11y-options-3">
+              <label class="a11y-option">
+                <input type="radio" name="glass" value="100%" />
+                <span>{L.glassSolid}</span>
+              </label>
+              <label class="a11y-option">
+                <input type="radio" name="glass" value="default" checked />
+                <span>{L.glassStandard}</span>
+              </label>
+              <label class="a11y-option">
+                <input type="radio" name="glass" value="40%" />
+                <span>{L.glassStrong}</span>
+              </label>
+            </div>
+          </fieldset>
+        )}
         <button type="button" class="button button-secondary" data-a11y-reset>
           {L.reset}
         </button>
@@ -317,6 +365,9 @@ const groups = [
   .a11y-options:has(> :nth-child(2):last-child) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .a11y-options-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   /*
    * 丸を隠せるのは :has() で選択状態を面に反映できる場合だけ。
    * 非対応のブラウザでは丸を残さないと、どれを選んでいるか分からなくなる。
@@ -384,6 +435,8 @@ const groups = [
 
   function apply(prefs: Record<string, string>): void {
     const d = document.documentElement;
+    const glass = prefs.glass === "100%" || prefs.glass === "40%" ? prefs.glass : "60%";
+    d.style.setProperty("--command-glass-opacity", glass);
     for (const [k, attr] of Object.entries(ATTRS)) {
       const v = prefs[k];
       if (k === "bg" && v === "black") {

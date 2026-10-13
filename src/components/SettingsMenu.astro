@@ -10,8 +10,9 @@ import A11ySettings from "./A11ySettings.astro";
 
 interface Props {
   locale?: "ja" | "en";
+  showGlass?: boolean;
 }
-const { locale = "ja" } = Astro.props;
+const { locale = "ja", showGlass = false } = Astro.props;
 const title = locale === "ja" ? "表示設定" : "Display settings";
 const close = locale === "ja" ? "閉じる" : "Close";
 ---
@@ -25,7 +26,7 @@ const close = locale === "ja" ? "閉じる" : "Close";
       明暗の切り替えは A11ySettings の「背景」（白／低刺激色／暗色／ブラック）と
       重なるので置かない。設定の入口をひとつに絞る。
     */}
-    <A11ySettings locale={locale} bare />
+    <A11ySettings locale={locale} bare showGlass={showGlass} />
     <button type="button" class="settings-close" data-settings-close>
       {close}
     </button>
