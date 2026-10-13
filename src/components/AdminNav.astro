@@ -217,6 +217,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
 <script>
   import { navigate } from "astro:transitions/client";
   import { formatNotificationTimestamp, notificationKindLabel, safeNotificationHref } from "../lib/admin-notification-features";
+  import { fetchAdminAuthStatus } from "../scripts/admin-auth-status";
 
   (() => {
     const preferencesKey = 'atlasez-prefs';
@@ -324,30 +325,6 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         item.hidden = !(isManager || managerProjects.length > 0) || item.dataset.adminSite !== state.site;
       });
     };
-    type AuthStatus = { canAccessAdmin?: boolean; email?: string; isManager?: boolean; managerProjects?: string[]; error?: string };
-    type AuthStatusResult = { ok: boolean; status: number; contentType: string; data: AuthStatus };
-    let authStatusRequest: Promise<AuthStatusResult> | null = null;
-    let authStatusCache: { value: AuthStatusResult; expiresAt: number } | null = null;
-    const fetchAuthStatus = () => {
-      if (authStatusCache && authStatusCache.expiresAt > Date.now()) return Promise.resolve(authStatusCache.value);
-      if (!authStatusRequest) {
-        const request = fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' })
-          .then(async (response) => {
-            const contentType = response.headers.get('content-type') ?? '';
-            const data = contentType.includes('application/json') ? await response.json() as AuthStatus : {};
-            return { ok: response.ok, status: response.status, contentType, data };
-          })
-          .catch(() => ({ ok: false, status: 0, contentType: '', data: {} }));
-        authStatusRequest = request.then((result) => {
-          // Both the manager visibility and account widgets need the same
-          // response during startup. Keep it briefly without changing the
-          // existing no-store request or longer-term permission freshness.
-          if (result.ok || result.status === 401) authStatusCache = { value: result, expiresAt: Date.now() + 1_000 };
-          return result;
-        }).finally(() => { authStatusRequest = null; });
-      }
-      return authStatusRequest;
-    };
     const refreshManagerVisibility = async () => {
       // 遷移後も保持されるナビの権限表示を、毎回サーバーの最新状態へ戻す。
       // 取得に失敗したときは安全側（非表示）にし、次の再試行で復元する。
@@ -355,7 +332,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       document.documentElement.dataset.adminNavRequest = requestId;
       applyManagerVisibility(false);
       try {
-        const response = await fetchAuthStatus();
+        const response = await fetchAdminAuthStatus();
         if (requestId !== document.documentElement.dataset.adminNavRequest || !response.contentType.includes('application/json') || !response.ok) return;
         const status = response.data;
         if (requestId !== document.documentElement.dataset.adminNavRequest) return;
@@ -428,7 +405,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       if (cachedProfile) applyProfile(cachedProfile);
       const loadAccount = async () => {
         try {
-          const statusResponse = await fetchAuthStatus();
+          const statusResponse = await fetchAdminAuthStatus();
           if (statusResponse.status === 401) {
             const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
             window.location.assign(`/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`);
@@ -565,6 +542,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
 </style>
 <script>
   import { navigate } from "astro:transitions/client";
+  import { fetchAdminAuthStatus } from "../scripts/admin-auth-status";
 
   (() => {
     const initializeCommandCenter = () => {
@@ -626,7 +604,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       };
       const recordCurrentRoute = () => {
         if ((window.location.pathname.replace(/\/$/, '') || '/') !== '/admin/action-center') return;
-        const actionCenter = paletteCommands().find((command) => command.href === '/admin/action-center/');
+        const actionCenter = adminCommands.find((command) => command.href === '/admin/action-center/');
         if (!actionCenter) return;
         const alreadyRecorded = readHistory().some((item) => item.href === actionCenter.href && Date.now() - item.lastUsed < 1500);
         if (!alreadyRecorded) recordUsage(actionCenter);
@@ -711,9 +689,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         useAdminCommands = admin;
         if (dialog.open && openMode === 'command') open();
       };
-      void fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
-        if (!response.ok) return;
-        const status = await response.json().catch(() => ({})) as { canAccessAdmin?: boolean; isManager?: boolean };
+      void fetchAdminAuthStatus().then((result) => {
+        if (!result.ok) return;
+        const status = result.data;
         applyCommandAudience(status.canAccessAdmin === true || (status.canAccessAdmin !== false && status.isManager === true));
       }).catch(() => undefined);
       async function openActionCenter() {
