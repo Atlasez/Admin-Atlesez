@@ -29,7 +29,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       <details class="member-admin__add action-card action-card--primary">
         <summary><span class="action-card__step">01</span><span class="action-card__summary-copy"><small>参加者を追加</small><strong id="add-member-title">運営権限の付与</strong></span><span class="action-card__chevron" aria-hidden="true">⌄</span></summary>
         <div class="action-card__body">
-          <p class="action-card__description">メールアドレスと担当範囲を選択してください。</p>
+          <p class="action-card__description">メールアドレスと担当範囲を選択してください。初めて運営権限を付ける相手は、運営外の自己紹介とプロジェクト内自己紹介の両方を保存済みである必要があります。すでに権限がある人の変更と、権限の削除はこの確認を待たずに行えます。</p>
           <form data-add-form>
             <label>メールアドレス<input type="email" name="email" required maxlength="320" placeholder="editor@example.com" /></label>
             <label>担当権限（複数選択可）<select name="subject" multiple required size="4"><option value="*">全分野管理者</option>{subjects.map(s => <option value={s.data.slug}>{s.data.name.ja}（担当）</option>)}</select></label>

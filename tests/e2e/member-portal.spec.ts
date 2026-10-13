@@ -198,9 +198,10 @@ test("横断タスク管理で複数プロジェクトを一覧・更新でき�
 
   await page.goto("admin/member-tasks/");
   await expect(page.locator("[data-scroll-create]")).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: /未対応を確認/ }),
-  ).toHaveAttribute("href", "/admin/action-center/");
+  await expect(page.getByRole("link", { name: /通知を確認/ })).toHaveAttribute(
+    "href",
+    "/admin/notifications/",
+  );
   await page.locator("[data-scroll-create]").click();
   await expect(page.locator("[data-title]")).toBeFocused();
   await expect(page.locator("[data-summary-total]")).toHaveText("2");

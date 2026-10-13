@@ -56,6 +56,9 @@ test("開発者向け診断は状態を一覧表示し、再確認できる", as
     page.getByRole("link", { name: "ポータル UIプロトタイプ" }),
   ).toBeVisible();
   await expect(
+    page.getByRole("link", { name: "ログイン・エラー画面案" }),
+  ).toBeVisible();
+  await expect(
     page.getByRole("link", { name: "運営UIレビュー" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "再確認" }).click();
@@ -84,12 +87,15 @@ test("主管理者でない場合は試作ページへのリンクを表示し�
   await page.goto("admin/developer/?mode=developer");
   await expect(page.getByText(/最終確認：/)).toBeVisible();
   const prototypeLinks = page.locator("[data-prototype-link]");
-  await expect(prototypeLinks).toHaveCount(3);
+  await expect(prototypeLinks).toHaveCount(4);
   await expect(
     prototypeLinks.filter({ hasText: "XAI UIプロトタイプ" }),
   ).toBeHidden();
   await expect(
     prototypeLinks.filter({ hasText: "ポータル UIプロトタイプ" }),
+  ).toBeHidden();
+  await expect(
+    prototypeLinks.filter({ hasText: "ログイン・エラー画面案" }),
   ).toBeHidden();
   await expect(
     prototypeLinks.filter({ hasText: "運営UIレビュー" }),

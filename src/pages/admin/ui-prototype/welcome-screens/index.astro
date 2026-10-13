@@ -1,0 +1,44 @@
+---
+import AdminScreenPrototype from "../../../../layouts/AdminScreenPrototype.astro";
+
+const screens = [
+  { href: "/admin/ui-prototype/welcome-login/", title: "ログイン", detail: "未ログイン、またはセッション切れのときに出す運営サイト自身の入口です。" },
+  { href: "/admin/ui-prototype/welcome-not-found/", title: "ページが見つからない", detail: "公開サイトの「Google Sitesから移行した」404の代わりに出す運営サイトの404です。" },
+  { href: "/admin/ui-prototype/welcome-auth-error/", title: "Googleログインの失敗", detail: "ブラウザのOAuth失敗を、JSONのまま見せない案内です。" },
+  { href: "/admin/ui-prototype/welcome-server-error/", title: "ページのエラー", detail: "API以外の500を、受付番号つきの案内にする案です。" },
+  { href: "/admin/ui-prototype/welcome-logged-out/", title: "ログアウト後", detail: "ログアウト後に管理サイトへ戻るリンクを置く案です。" },
+  { href: "/admin/ui-prototype/welcome-operations-error/", title: "進行管理の読み込み失敗", detail: "英語の例外文の代わりに出す日本語の案内です。" },
+];
+---
+
+<AdminScreenPrototype title="ログインとエラー画面の案" description="承認前の画面案一覧">
+  <main class="catalog">
+    <header>
+      <p>UIプロトタイプ</p>
+      <h1>ログインとエラー画面の案</h1>
+      <p>全分野管理者が確認するための画面です。承認されるまで、実際のログイン・404・ログアウト・進行管理には接続しません。</p>
+    </header>
+    <ul>
+      {screens.map((screen) => (
+        <li>
+          <a href={screen.href}>
+            <strong>{screen.title}</strong>
+            <span>{screen.detail}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </main>
+</AdminScreenPrototype>
+
+<style>
+  .catalog { margin: 0 auto; max-width: 40rem; padding: 2rem 1.25rem 4rem; }
+  .catalog header p:first-child { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin: 0; }
+  .catalog h1 { font-size: clamp(1.6rem, 3vw, 2.1rem); letter-spacing: -.03em; margin: .35rem 0 .6rem; }
+  .catalog header p:last-child { color: var(--text-secondary); line-height: 1.7; margin: 0; }
+  .catalog ul { display: grid; gap: .7rem; list-style: none; margin: 1.5rem 0 0; padding: 0; }
+  .catalog a { border: 1px solid var(--border-default); color: inherit; display: grid; gap: .3rem; padding: .9rem 1rem; text-decoration: none; }
+  .catalog a:hover { border-color: var(--accent-primary); }
+  .catalog strong { font-size: 1rem; }
+  .catalog span { color: var(--text-secondary); font-size: .82rem; line-height: 1.6; }
+</style>
