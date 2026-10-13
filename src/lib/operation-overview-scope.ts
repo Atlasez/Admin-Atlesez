@@ -12,9 +12,10 @@ export type OperationOverviewScope = {
  * 画面側が英語の例外文を出さないようにする。
  */
 export const readOperationScope = (
-  data: { scope?: unknown } | null | undefined,
+  data: unknown,
 ): OperationOverviewScope | null => {
-  const scope = data?.scope;
+  if (!data || typeof data !== "object") return null;
+  const scope = (data as { scope?: unknown }).scope;
   if (!scope || typeof scope !== "object") return null;
   const record = scope as {
     isManager?: unknown;
