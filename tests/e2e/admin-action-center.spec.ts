@@ -512,7 +512,7 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   await mockShell(page);
   await page.goto("admin/articles/");
   const menu = page.locator("[data-settings-menu]");
-  const glassSetting = menu.locator("fieldset", { hasText: "要対応の透け感" });
+  const glassSetting = menu.locator("fieldset", { hasText: "要対応・操作検索の透け感" });
   await menu.locator("> summary").click();
   const slider = glassSetting.getByRole("slider", { name: "要対応・操作検索の透け感" });
   const value = glassSetting.locator("[data-glass-value]");
@@ -564,7 +564,7 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
 
   await menu.locator("> summary").click();
   await menu.locator("[data-a11y-reset]").click();
-  await expect(slider).toHaveValue("60");
+  await expect(slider).toHaveValue("40");
   await expect(value).toHaveText("40%");
   const resetGlass = await page.evaluate(
     () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
