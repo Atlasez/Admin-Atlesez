@@ -388,6 +388,81 @@ describe("discord notification delivery", () => {
     expect(JSON.stringify(calls)).not.toContain("bot-secret-token");
   });
 
+  it("honors the Retry-After header and backs off after a server error", async () => {
+    const db = dbWithQueue();
+    const logs: string[] = [];
+    const env = notificationEnv(db, {
+      DISCORD_ATLAS_WEBHOOK_URL: atlasWebhook,
+    });
+    const input = {
+      reportId: "report-backoff",
+      subject: null,
+      body: progressBody,
+    };
+    const logger = {
+      info: (message?: unknown) => logs.push(String(message)),
+      error: (message?: unknown) => logs.push(String(message)),
+    };
+    const started = new Date("2026-10-13T00:00:00.000Z");
+    await deliverProgressDiscordNotification(env, input, {
+      now: started,
+      logger,
+      fetcher: async () =>
+        new Response(null, { status: 429, headers: { "retry-after": "600" } }),
+    });
+    const rateLimited = notificationRow(
+      db,
+      "progress:report-backoff:webhook:DISCORD_ATLAS_WEBHOOK_URL",
+    );
+    expect(rateLimited).toMatchObject({
+      status: "retry",
+      last_error: "http_429",
+    });
+    expect(
+      Date.parse(
+        (
+          db
+            .prepare(
+              "SELECT next_attempt_at FROM discord_notifications WHERE dedupe_key=?",
+            )
+            .get(
+              "progress:report-backoff:webhook:DISCORD_ATLAS_WEBHOOK_URL",
+            ) as {
+            next_attempt_at: string;
+          }
+        ).next_attempt_at,
+      ),
+    ).toBe(Date.parse("2026-10-13T00:10:00.000Z"));
+
+    const serverErrorAt = new Date("2026-10-13T00:10:00.000Z");
+    await dispatchDueDiscordNotifications(env, {
+      now: serverErrorAt,
+      logger,
+      fetcher: async () => new Response("upstream", { status: 503 }),
+    });
+    const backedOff = db
+      .prepare(
+        "SELECT status,attempt_count,last_error,next_attempt_at FROM discord_notifications WHERE dedupe_key=?",
+      )
+      .get("progress:report-backoff:webhook:DISCORD_ATLAS_WEBHOOK_URL") as {
+      status: string;
+      attempt_count: number;
+      last_error: string;
+      next_attempt_at: string;
+    };
+    expect(backedOff).toMatchObject({
+      status: "retry",
+      attempt_count: 2,
+      last_error: "http_503",
+    });
+    expect(Date.parse(backedOff.next_attempt_at)).toBe(
+      serverErrorAt.getTime() + 10 * 60_000,
+    );
+    expect(logs.join("\n")).not.toContain(atlasWebhook);
+    expect(logs.join("\n")).not.toContain(progressBody);
+    expect(logs.join("\n")).not.toContain("upstream");
+  });
+
   it("returns no notification when Discord is not configured", async () => {
     const db = dbWithQueue();
     let fetches = 0;

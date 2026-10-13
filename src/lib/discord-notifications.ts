@@ -80,6 +80,35 @@ const retryableStatus = (status: number) =>
   status === 429 ||
   status >= 500;
 
+const finiteSeconds = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : null;
+
+const retryAfterDelayMs = (response: Response, raw: string) => {
+  const header = response.headers.get("retry-after");
+  const headerSeconds =
+    header === null ? null : finiteSeconds(Number(header.trim()));
+  let bodySeconds: number | null = null;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as { retry_after?: unknown };
+      bodySeconds = finiteSeconds(parsed.retry_after);
+    } catch {
+      bodySeconds = null;
+    }
+  }
+  const seconds = headerSeconds ?? bodySeconds;
+  if (seconds === null) return RETRY_DELAY_MS;
+  return Math.min(
+    60 * 60_000,
+    Math.max(RETRY_DELAY_MS, Math.ceil(seconds * 1000)),
+  );
+};
+
+const serverErrorBackoffMs = (attempt: number) =>
+  Math.min(60 * 60_000, RETRY_DELAY_MS * 2 ** Math.max(0, attempt - 1));
+
 const webhookUrl = (env: DiscordNotificationEnv, ref: string) => {
   const raw =
     ref === "DISCORD_ATLAS_WEBHOOK_URL"
@@ -255,28 +284,14 @@ const sendDiscordMessage = async (
     });
     const raw = await response.text().catch(() => "");
     if (response.ok) return { ok: true };
-    let retryDelayMs = RETRY_DELAY_MS;
-    if (response.status === 429 && raw) {
-      try {
-        const parsed = JSON.parse(raw) as { retry_after?: unknown };
-        if (
-          typeof parsed.retry_after === "number" &&
-          Number.isFinite(parsed.retry_after) &&
-          parsed.retry_after >= 0
-        )
-          retryDelayMs = Math.min(
-            60 * 60_000,
-            Math.max(RETRY_DELAY_MS, Math.ceil(parsed.retry_after * 1000)),
-          );
-      } catch {
-        retryDelayMs = RETRY_DELAY_MS;
-      }
-    }
     return {
       ok: false,
       retryable: retryableStatus(response.status),
       error: `http_${response.status}`,
-      retryDelayMs,
+      retryDelayMs:
+        response.status === 429
+          ? retryAfterDelayMs(response, raw)
+          : RETRY_DELAY_MS,
     };
   } catch (error) {
     const aborted = error instanceof Error && error.name === "AbortError";
@@ -338,6 +353,9 @@ const claimAndSend = async (
       return "sent";
     }
     const canRetry = result.retryable && attempt < MAX_ATTEMPTS;
+    const retryDelayMs = /^http_5\d\d$/.test(result.error)
+      ? serverErrorBackoffMs(attempt)
+      : result.retryDelayMs;
     await env.REPORTS.prepare(
       `UPDATE discord_notifications
           SET status=?,next_attempt_at=?,last_error=?,claim_token=NULL,claimed_at=NULL,updated_at=?
@@ -346,7 +364,7 @@ const claimAndSend = async (
       .bind(
         canRetry ? "retry" : "failed",
         canRetry
-          ? new Date(nowDate.getTime() + result.retryDelayMs).toISOString()
+          ? new Date(nowDate.getTime() + retryDelayMs).toISOString()
           : now,
         result.error,
         now,
