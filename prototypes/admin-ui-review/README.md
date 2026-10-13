@@ -2,7 +2,7 @@
 
 Static before/after prototype for the ADMIN portal, notifications, and action-center dialog. The ADMIN production build copies it to `dist/admin/ui-review-prototype/` and the Worker serves that directory at `/admin/ui-review-prototype/` only after developer-mode authorization. It does not change production pages, shared components, shared styles, or D1. Fonts, colors, and control styles follow the current light theme in `src/styles/tokens.css`.
 
-Deployed URLs, for a developer-mode account:
+Open 開発者モード at `/admin/developer/?mode=developer`, then choose 「運営UIレビュー」 under 検証用ページ. Direct URLs, for a developer-mode account:
 
 | Screen                  | URL                                                                         |
 | ----------------------- | --------------------------------------------------------------------------- |
