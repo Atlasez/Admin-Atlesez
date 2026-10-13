@@ -74,7 +74,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
     const progressTitle = root.querySelector<HTMLElement>("[data-progress-title]");
     const progressCopy = root.querySelector<HTMLElement>("[data-progress-copy]");
     const progressBar = root.querySelector<HTMLElement>("[data-progress-bar]");
-    const mathOptions = { delimiters: [{ left: "$$", right: "$$", display: true }, { left: "$", right: "$", display: false }], throwOnError: false, strict: "ignore" as const };
+    const mathOptions = { delimiters: [{ left: "$$", right: "$$", display: true }, { left: "$", right: "$", display: false }], throwOnError: false, strict: "ignore" as const, trust: false };
     let created = false;
     let practiceStep = 0;
     let practiceComplete = false;

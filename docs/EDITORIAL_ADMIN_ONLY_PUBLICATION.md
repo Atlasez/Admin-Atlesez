@@ -14,7 +14,7 @@
 
 1. GitHub Appを作成し、`Atlasez/Atlasez01`だけへインストールする。
 2. AppにはMetadata read、Contents read/write、Pull requests read/writeを付与する。Checks readは推奨（未付与でも、公開リポジトリのCommit statusesをフォールバックしてCI判定を継続する）。
-3. `main`のルールセットで、公開専用Appを対象リポジトリだけのBypass actorに追加する。承認必須数は0に変更しない。
+3. `main`のbranch protection / rulesetは読み取り専用で確認する。この公開フローからrequired approving reviews、Bypass actor、その他のbranch protection設定を追加・変更しない。現在のルールで公開専用Appやレビュー用認証情報が処理できない場合は、権限を広げたり手動mergeで迂回したりせず、`needs-operator`として停止し、設定変更が必要な理由・対象・影響・復旧方法を別途レビューする。
 4. 管理Workerへ次のSecretを登録する。
 
    - `GITHUB_APP_ID`

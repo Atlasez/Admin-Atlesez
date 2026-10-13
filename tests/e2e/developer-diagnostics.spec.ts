@@ -14,6 +14,7 @@ test("開発者向け診断は状態を一覧表示し、再確認できる", as
       json: {
         generatedAt: "2026-09-10T00:00:00.000Z",
         build: { commit: "test-sha" },
+        prototypeAccess: true,
         checks: [
           {
             id: "database",
@@ -48,6 +49,49 @@ test("開発者向け診断は状態を一覧表示し、再確認できる", as
   await expect(
     page.getByRole("link", { name: "状態遷移・整合性" }),
   ).toHaveAttribute("href", "/admin/workflow/");
+  await expect(
+    page.getByRole("link", { name: "XAI UIプロトタイプ" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "ポータル UIプロトタイプ" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "ログイン・エラー画面案" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "再確認" }).click();
   await expect.poll(() => requests).toBe(2);
+});
+
+test("主管理者でない場合は試作ページへのリンクを表示しない", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/auth-status", (route) =>
+    route.fulfill({ json: { email: "manager@example.com", isManager: true } }),
+  );
+  await page.route("**/api/admin/notifications", (route) =>
+    route.fulfill({ json: { notifications: [] } }),
+  );
+  await page.route("**/api/admin/developer/diagnostics", (route) =>
+    route.fulfill({
+      json: {
+        prototypeAccess: false,
+        generatedAt: "2026-09-10T00:00:00.000Z",
+        checks: [],
+      },
+    }),
+  );
+
+  await page.goto("admin/developer/?mode=developer");
+  await expect(page.getByText(/最終確認：/)).toBeVisible();
+  const prototypeLinks = page.locator("[data-prototype-link]");
+  await expect(prototypeLinks).toHaveCount(3);
+  await expect(
+    prototypeLinks.filter({ hasText: "XAI UIプロトタイプ" }),
+  ).toBeHidden();
+  await expect(
+    prototypeLinks.filter({ hasText: "ポータル UIプロトタイプ" }),
+  ).toBeHidden();
+  await expect(
+    prototypeLinks.filter({ hasText: "ログイン・エラー画面案" }),
+  ).toBeHidden();
 });

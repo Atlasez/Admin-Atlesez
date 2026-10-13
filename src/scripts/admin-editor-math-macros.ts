@@ -101,6 +101,7 @@ function initializeDocumentMacros(): void {
             macros: { ...macros },
             strict: "ignore",
             throwOnError: false,
+            trust: false,
           });
           const replacement = wrapper.firstElementChild as HTMLElement | null;
           if (!replacement) continue;

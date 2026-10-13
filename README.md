@@ -69,17 +69,20 @@ versions/           # 過去バージョンのスナップショット（ビル�
 1. `src/content/articles/ja/<分野>/<カテゴリ>/<slug>.md` を追加（`npm run new:article` が楽）
 2. `status: published` にして PR
 3. CI が検証（スキーマ・概念参照・循環・リンク・型・lint・テスト・E2E・axe）
-4. CI成功後、正規のCloudflare Workerへデプロイして公開
+4. 通常のPR手順で`main`へ反映し、Cloudflare Workers Buildsの対象Worker・checkout SHA・配信Versionを確認して公開完了とする
 
 `draft` と `in-review` の記事はビルドから除外されるため、
 main にマージされていても公開されません。
 
 ## デプロイ
 
-本番はCloudflare Workersの `atlasez01`（公開サイト）と
-`atlasez-admin`（運営用サイト）へ配信します。正しいアカウント・Worker・ルート・D1を
-検査する `npm run verify:deploy-config` を通してから、`npm run deploy:public` または
-`npm run deploy:admin` を使ってください。詳細は [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+本番はCloudflare Worker `atlasez01`（公開サイト）と`atlasez-admin`（運営用サイト）です。
+通常配信は各リポジトリの`main`に固定したCloudflare Workers Buildsから行います。
+このリポジトリの`.github/workflows/deploy-admin-from-github.yml`は検証専用で、配信しません。
+`npm run deploy:public`と`npm run deploy:admin`はローカルからWorkerへ直接配信するため、通常運用では実行しません。
+ADMINの緊急例外は、Workers Buildsが利用できず、レビュー済みmain SHAへの別途明示承認がある場合だけです。
+手順は[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)、[docs/ADMIN_DEPLOYMENT_POLICY.md](docs/ADMIN_DEPLOYMENT_POLICY.md)、
+[docs/ADMIN_WORKERS_BUILDS_RECONCILIATION.md](docs/ADMIN_WORKERS_BUILDS_RECONCILIATION.md)を参照してください。
 
 ## 多言語について
 

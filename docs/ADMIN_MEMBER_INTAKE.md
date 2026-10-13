@@ -4,7 +4,7 @@
 
 ## 募集・招待を開始する条件
 
-まず[実運用監査のP0](ADMIN_READINESS_AUDIT_2026-10-02.md)と[本番受入試験](ADMIN_READINESS_ACCEPTANCE.md)を確認する。main反映、配信SHA一致、権限、新規Googleログイン、実通知到達、公開・訂正・非公開化、復旧運用の証拠が揃うまで、試験運用開始を完了扱いにしない。
+参加案内を開始する前に、[最新の実運用準備監査](ADMIN_OPERATIONAL_READINESS_2026-10-12.md)と[本番受入試験](ADMIN_READINESS_ACCEPTANCE.md)を確認する。2026-10-02/10-03の監査記録は当時の状態を示す履歴であり、現在のIssue・main・Worker状態の代用にしない。main反映、配信SHA一致、権限、新規Googleログイン、実通知到達、公開・訂正・非公開化、復旧運用の証拠が揃うまで、試験運用開始を完了扱いにしない。
 
 2026-10-03のこの作業では、ADMINのmain `c90ad358`に対し、本番build-infoは`74084dc6147490fef228b6a1f68ae3fedae79ba7`（2026-09-29ビルド）のままだった。[Issue #407](https://github.com/Atlasez/Admin-Atlesez/issues/407)の復旧対応が必要。この記録は確認時点のもので、開始判断の前に再照合する。
 
@@ -69,4 +69,4 @@
 
 新画面は`/admin/getting-started/`。会員ページの認証ゲートを通し、未参加者へ会員アクセスを付与しない。初回タスク例は静的な入力補助で、既存のテンプレート保存・作成APIと権限を使う。migration、定期実行、メール送信、Discord変更、Cloudflare設定変更は追加しない。
 
-PRのCI・レビュー後にmainへ統合し、main pushのCI全成功とGitHub `production` Environment承認を経て反映する。SHA不一致時は停止しIssue #407に照合結果を残す。問題があればこの変更のrevertをPRでレビューし、同じ経路で戻す。既に作成したテンプレート・タスクは削除せず、担当者が必要性を確認する。
+コード変更は通常のPR/CI・レビュー手順に載せる。ADMIN本番の通常配信はGitHub `main`をProduction branchに固定したCloudflare Workers Buildsだけで行い、GitHub Actionsの`production` Environment経由で配信しない。Workers Buildsが未復旧・失敗・SHA不一致なら配信を止め、既存Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509)へ最新証拠を記録する。2026-10-03のIssue #407記述は履歴であり現在の復旧手順ではない。問題があればレビュー済みmainへのrevert PRと同じ通常配信経路で戻す。既に作成したテンプレート・タスクは削除せず、担当者が必要性を確認する。

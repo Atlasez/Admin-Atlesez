@@ -46,11 +46,11 @@ Markdownが `status: published` となる。draft / in-review はビルドから
 
 公開審査の完了後、原稿は「公開準備完了」になり、運営管理者へ公開待ち通知が届く。運営管理者が編集画面の「公開する」を押すと、Workerが
 `Atlasez/Atlasez01` に公開用PRを作成する。公開ボタンはmainやCloudflareへ直接書き込まない。
-学習サイトの本番は同リポジトリの`main`をProduction branchとするCloudflare Workers Buildsで自動ビルドされるため、CI・差分確認後にPRをMergeすると反映される。公開状態は5分ごとにGitHubのmainと同期する。
+公開側の専用GitHub App連携が設定されている場合、対象PRのCI成功後にシステムが公開用技術処理を行います。公開サイト本番は同リポジトリの`main`をProduction branchとするCloudflare Workers Buildsが配信し、ADMIN側の公開Runはbuild-infoと記事URLの反映を確認します。公開状態は定期同期でもGitHub `main`を照合します。CI失敗、SHA不一致、App/権限エラーは運営画面で確認が必要な状態として止め、手動merge・branch protection変更で回避しません。
 
 ## 5. 修正・報告対応
 
-- 読者からの報告は記事ページ「問題を報告」→ GitHub Issue
+- 読者からの報告は記事ページ内の「問題を報告」フォーム
 - 軽微な修正（誤字）は直接PR。内容の変更は再査読を必要とする
 - 修正時は `updatedAt` を更新する
 

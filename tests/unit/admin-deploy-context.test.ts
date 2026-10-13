@@ -109,6 +109,13 @@ afterEach(() => {
 });
 
 describe("admin local deploy context guard", () => {
+  it("does not expose an unguarded production deploy script for the collaboration Worker", () => {
+    expect(packageJson.scripts["deploy:admin:collaboration"]).toBeUndefined();
+    expect(packageJson.scripts["dry-run:admin:collaboration"]).toContain(
+      "wrangler deploy --dry-run --config wrangler.editorial-collaboration.jsonc",
+    );
+  });
+
   it("wires the guard and ADMIN build identity before the deploy command", () => {
     const deploy = packageJson.scripts["deploy:admin"];
 
