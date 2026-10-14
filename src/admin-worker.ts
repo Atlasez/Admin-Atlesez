@@ -29,6 +29,16 @@ import {
 } from "./lib/admin-routes";
 import { applicationAcceptanceEmail } from "./lib/application-acceptance-email";
 import {
+  adminAuthErrorPage,
+  adminGateResponse,
+  adminLoggedOutPage,
+  adminLoginPage,
+  adminNotFoundPage,
+  adminServerErrorPage,
+  prefersAdminHtml,
+  safeRetryPath,
+} from "./lib/admin-gate-pages";
+import {
   canAccess,
   getUserStage,
   stageHome,
@@ -22463,8 +22473,12 @@ async function completeGoogleLogin(
   request: Request,
   env: Env,
 ): Promise<Response> {
+  const loginFailure = (error: string, status: number) =>
+    prefersAdminHtml(request)
+      ? adminGateResponse(adminAuthErrorPage(error), status)
+      : json({ error }, status);
   if (!googleOAuthEnabled(env) || !googleOAuthConfigured(env))
-    return json({ error: "Googleログインはまだ有効ではありません。" }, 404);
+    return loginFailure("Googleログインはまだ有効ではありません。", 404);
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code") ?? "";
   const state = requestUrl.searchParams.get("state") ?? "";
@@ -22502,8 +22516,8 @@ async function completeGoogleLogin(
     // 不正なCookieはログイン失敗として扱う。
   }
   if (!code || !state || state !== savedState.state)
-    return json(
-      { error: "Googleログインの確認に失敗しました。もう一度お試しください。" },
+    return loginFailure(
+      "Googleログインの確認に失敗しました。もう一度お試しください。",
       400,
     );
 
@@ -22523,10 +22537,10 @@ async function completeGoogleLogin(
     if (!tokenResponse.ok) throw new Error("token exchange failed");
     token = (await tokenResponse.json()) as { access_token?: string };
   } catch {
-    return json({ error: "Googleログインを完了できませんでした。" }, 502);
+    return loginFailure("Googleログインを完了できませんでした。", 502);
   }
   if (!token.access_token)
-    return json({ error: "Googleログインを完了できませんでした。" }, 502);
+    return loginFailure("Googleログインを完了できませんでした。", 502);
 
   let user: { email?: string; email_verified?: boolean; sub?: string };
   try {
@@ -22537,20 +22551,20 @@ async function completeGoogleLogin(
     if (!userResponse.ok) throw new Error("userinfo failed");
     user = (await userResponse.json()) as typeof user;
   } catch {
-    return json({ error: "Googleアカウントを確認できませんでした。" }, 502);
+    return loginFailure("Googleアカウントを確認できませんでした。", 502);
   }
   const email = user.email?.trim().toLowerCase() ?? "";
   const subject = user.sub?.trim() ?? "";
   if (!user.email_verified || !subject || !EMAIL_PATTERN.test(email))
-    return json({ error: "確認済みのGoogleメールアドレスが必要です。" }, 403);
+    return loginFailure("確認済みのGoogleメールアドレスが必要です。", 403);
 
   let account: { id: string; canonical_email: string };
   try {
     account = await resolveGoogleAccount(env, subject, email);
   } catch (error) {
     if (error instanceof GoogleIdentityConflictError)
-      return json({ error: error.message }, 409);
-    return json({ error: "Atlasezアカウントを作成できませんでした。" }, 500);
+      return loginFailure(error.message, 409);
+    return loginFailure("Atlasezアカウントを作成できませんでした。", 500);
   }
 
   const sessionToken = `${crypto.randomUUID()}${crypto.randomUUID()}`;
@@ -22678,19 +22692,7 @@ async function logoutGoogleSession(
   return new Response(null, { status: 303, headers });
 }
 
-const loggedOutPage = () =>
-  new Response(
-    '<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>ログアウトしました</title><main><h1>ログアウトしました</h1><p>再度利用する場合は、管理サイトへアクセスして認証してください。</p></main></html>',
-    {
-      status: 200,
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "no-store",
-        "content-security-policy":
-          "default-src 'none'; style-src 'none'; base-uri 'none'; frame-ancestors 'none'",
-      },
-    },
-  );
+const loggedOutPage = () => adminGateResponse(adminLoggedOutPage());
 
 async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
   let memberScope = await getMemberProfileScope(request, env);
@@ -23610,8 +23612,19 @@ async function handleAdminRequest(
       302,
     );
   }
-  if (url.pathname === "/auth/google/login" && request.method === "GET")
-    return startGoogleLogin(request, env);
+  if (url.pathname === "/auth/google/login" && request.method === "GET") {
+    // ブラウザには承認済みのログイン画面を出す。start=1 と、HTML を求めていないクライアントは従来どおり Google へ進む。
+    if (url.searchParams.get("start") === "1" || !prefersAdminHtml(request))
+      return startGoogleLogin(request, env);
+    if (!googleOAuthEnabled(env) || !googleOAuthConfigured(env))
+      return adminGateResponse(
+        adminAuthErrorPage("Googleログインはまだ有効ではありません。"),
+        404,
+      );
+    return adminGateResponse(
+      adminLoginPage(userReturnPath(url.searchParams.get("returnTo"))),
+    );
+  }
   if (url.pathname === "/auth/native-app/start" && request.method === "GET")
     return startNativeAppLogin(request, env);
   if (
@@ -24454,7 +24467,9 @@ async function handleAdminRequest(
   ) {
     return env.ASSETS.fetch(request);
   }
-  return new Response("Not found", { status: 404 });
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/internal/"))
+    return json({ error: "Not found" }, 404);
+  return adminGateResponse(adminNotFoundPage(), 404);
 }
 
 const COMPLETED_TASK_ARCHIVE_AFTER_DAYS = 30;
@@ -24540,7 +24555,11 @@ export default {
         pathname: new URL(request.url).pathname,
         error,
       });
-      if (new URL(request.url).pathname.startsWith("/api/"))
+      const failedUrl = new URL(request.url);
+      if (
+        failedUrl.pathname.startsWith("/api/") ||
+        failedUrl.pathname.startsWith("/internal/")
+      )
         return json(
           {
             error:
@@ -24549,7 +24568,10 @@ export default {
           },
           500,
         );
-      return new Response("Internal Server Error", { status: 500 });
+      return adminGateResponse(
+        adminServerErrorPage(requestId, safeRetryPath(failedUrl)),
+        500,
+      );
     }
   },
   async scheduled(

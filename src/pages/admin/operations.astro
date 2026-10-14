@@ -32,6 +32,12 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       <h1 data-project-title>{initialPageTitle}</h1>
     </header>
     <AdminRetryNotice />
+    <section class="operation-scope-alert" data-operation-scope-error hidden role="alert">
+      <h2>進行管理の情報を読み込めませんでした</h2>
+      <p>再読み込みしてください。担当の判別に必要な情報が応答に含まれていないため、画面は途中で止めています。</p>
+      <button type="button" data-operation-scope-retry>再読み込み</button>
+      <p class="help">改善しない場合は、開いていたURLと時刻を添えて<a href="https://atlasez.org/contact/">お問い合わせ</a>へ連絡してください。</p>
+    </section>
     <div class="grid" data-admin-load-surface>
       <section hidden={calendarPage || !progressOnly}>
         <h2>進捗を報告</h2>
@@ -382,6 +388,13 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     font-size: 2rem;
     margin: 0.25rem 0;
   }
+  .operation-scope-alert { border: 1px solid var(--border-default); border-left: 3px solid var(--danger, #a03123); margin-top: 1.25rem; padding: 1rem 1.1rem 1.15rem; }
+  .operation-scope-alert[hidden] { display: none; }
+  .operation-scope-alert h2 { font-size: 1.05rem; margin: 0 0 .45rem; }
+  .operation-scope-alert p { line-height: 1.7; margin: 0; }
+  .operation-scope-alert button { background: var(--accent-primary); border: 0; color: var(--on-accent); cursor: pointer; font: inherit; font-weight: 800; margin: 1rem 0 .8rem; padding: .7rem 1rem; }
+  .operation-scope-alert .help { font-size: .82rem; }
+  .operation-scope-alert .help a { color: var(--accent-primary); }
   .operations > header span,
   .operations section > p {
     color: var(--text-secondary);
@@ -1430,6 +1443,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     const taskTitle = get<HTMLInputElement>('[data-task-title]');
     const taskDetails = get<HTMLTextAreaElement>('[data-task-details]');
     const eventFeedback = get<HTMLOutputElement>('[data-event-feedback]');
+    const scopeError = get<HTMLElement>('[data-operation-scope-error]');
     const blockFeedback = get<HTMLOutputElement>('[data-block-feedback]');
     const calendarSelectionSummary = get<HTMLOutputElement>('[data-calendar-selection-summary]');
     const createBlockButton = get<HTMLButtonElement>('[data-create-block]');
@@ -1771,13 +1785,23 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       };
       if (focusedDate || focusedWeekday !== undefined) requestAnimationFrame(restoreFocus);
     };
+    const showScopeError = () => {
+      scopeError.hidden = false;
+      eventFeedback.value = '';
+      retry?.fail(new Error(OPERATION_SCOPE_MISSING_MESSAGE));
+      const notice = root.querySelector<HTMLElement>('[data-admin-load-error]');
+      if (notice) notice.hidden = true;
+    };
+    const clearScopeError = () => {
+      scopeError.hidden = true;
+    };
     const render = () => {
       const scope = readOperationScope(data);
       if (!scope) {
-        eventFeedback.value = OPERATION_SCOPE_MISSING_MESSAGE;
-        retry?.fail(new Error(OPERATION_SCOPE_MISSING_MESSAGE));
+        showScopeError();
         return;
       }
+      clearScopeError();
       renderTimezoneOffset();
       const members = new Map((data.members ?? []).map((member) => [member.email, member.display_name || '表示名未設定']));
       projectTitle.textContent = memberPage ? 'カレンダー' : `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : progressOnly ? '進捗報告' : 'タスク管理'}`;
@@ -1874,6 +1898,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       const controller = new AbortController();
       loadController = controller;
       const requestVersion = ++loadVersion;
+      clearScopeError();
       retry?.begin();
       try {
         const url = overviewUrl();
@@ -1903,6 +1928,11 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       } catch (error) {
         if (controller.signal.aborted || requestVersion !== loadVersion) return;
         const message = error instanceof Error ? error.message : '進行管理を読み込めませんでした。';
+        if (message === OPERATION_SCOPE_MISSING_MESSAGE) {
+          showScopeError();
+          return;
+        }
+        clearScopeError();
         eventFeedback.value = `予定を読み込めませんでした。${message}`;
         retry?.fail(error);
       }
@@ -2188,8 +2218,13 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       nextDate?.focus();
     });
     retry = createAdminLoadRetry(root, () => load(), '運営情報を読み込めませんでした。');
+    get<HTMLButtonElement>('[data-operation-scope-retry]').addEventListener('click', () => { void load(); });
     void load().catch((error) => {
       const message = error instanceof Error ? error.message : '進行管理を読み込めませんでした。';
+      if (message === OPERATION_SCOPE_MISSING_MESSAGE) {
+        showScopeError();
+        return;
+      }
       tasks.textContent = message;
       events.textContent = message;
       reports.textContent = message;
