@@ -74,6 +74,40 @@
   color: var(--background-primary);
   font-weight: 600;
 }
+[data-pref-bg="dark"]
+  [data-admin-shell]
+  .member-admin
+  :is(.button-primary, .member-modal__save),
+[data-pref-mode="black"]
+  [data-admin-shell]
+  .member-admin
+  :is(.button-primary, .member-modal__save),
+[data-pref-bg="dark"]
+  [data-admin-shell]
+  .member-admin
+  .action-card--primary
+  > summary,
+[data-pref-mode="black"]
+  [data-admin-shell]
+  .member-admin
+  .action-card--primary
+  > summary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--on-accent);
+}
+[data-pref-bg="dark"]
+  [data-admin-shell]
+  .member-admin
+  .member-action-menu
+  > summary,
+[data-pref-mode="black"]
+  [data-admin-shell]
+  .member-admin
+  .member-action-menu
+  > summary {
+  background: transparent;
+}
 .member-admin .member-action--remove {
   color: var(--danger);
 }
@@ -919,6 +953,28 @@
   .member-admin :is(.button-primary, .member-modal__save):not(:disabled):hover {
     background: var(--text-secondary);
     border-color: var(--text-secondary);
+  }
+  [data-pref-bg="dark"]
+    [data-admin-shell]
+    .member-admin
+    .action-card--primary
+    > summary:hover,
+  [data-pref-bg="dark"]
+    [data-admin-shell]
+    .member-admin
+    :is(.button-primary, .member-modal__save):not(:disabled):hover,
+  [data-pref-mode="black"]
+    [data-admin-shell]
+    .member-admin
+    .action-card--primary
+    > summary:hover,
+  [data-pref-mode="black"]
+    [data-admin-shell]
+    .member-admin
+    :is(.button-primary, .member-modal__save):not(:disabled):hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    color: var(--on-accent);
   }
   .member-admin .member-card:hover {
     background: var(--background-secondary);

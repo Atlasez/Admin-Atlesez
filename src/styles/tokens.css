@@ -154,6 +154,62 @@
   --warning: #f4c84e;
   --task-count: #52a450;
 }
+
+/*
+ * 運営サイトの暗色テーマは、Codex参考画像とDESIGN.mdのニュートラル階層に
+ * 合わせる。設定属性はhtml、運営サイトの境界はbody[data-admin-shell]なので、
+ * 学習サイトや公開サイトの既存テーマには影響させない。
+ */
+[data-pref-bg="dark"] body[data-admin-shell] {
+  --text-primary: rgb(255 255 255 / 0.92);
+  --text-secondary: rgb(255 255 255 / 0.63);
+  --text-muted: rgb(255 255 255 / 0.44);
+  --background-primary: #151515;
+  --background-secondary: #191919;
+  --background-inset: #1d1d1d;
+  --border-default: rgb(255 255 255 / 0.08);
+  --border-strong: rgb(255 255 255 / 0.12);
+  --accent-primary: oklch(75% 0.16 255);
+  --accent-hover: oklch(82% 0.14 255);
+  --accent-subtle: #242424;
+  --on-accent: #151515;
+  --link: oklch(82% 0.14 255);
+  --focus-ring: oklch(82% 0.14 255);
+  --surface: var(--background-primary);
+  --surface-alt: var(--background-secondary);
+  --surface-inset: var(--background-inset);
+  --border: var(--border-default);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --accent: var(--accent-primary);
+}
+
+/* OLED表示でも面を分け、広い範囲が完全な黒にならないようにする。 */
+[data-pref-mode="black"] body[data-admin-shell] {
+  --background-primary: #101010;
+  --background-secondary: #171717;
+  --background-inset: #1c1c1c;
+  --border-default: rgb(255 255 255 / 0.08);
+  --border-strong: rgb(255 255 255 / 0.12);
+  --accent-subtle: #242424;
+  --surface: var(--background-primary);
+  --surface-alt: var(--background-secondary);
+  --surface-inset: var(--background-inset);
+  --border: var(--border-default);
+}
+
+/* 高コントラスト設定は暗色テーマ側のニュートラル文字色より優先する。 */
+[data-pref-contrast="high"][data-pref-bg="dark"] body[data-admin-shell] {
+  --text-primary: #ffffff;
+  --text-secondary: #f0f0f0;
+  --text-muted: #d0d0d0;
+  --border-default: #bbbbbb;
+  --border-strong: #ffffff;
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --border: var(--border-default);
+}
+
 [data-site="atlas"][data-pref-bg="dark"],
 [data-pref-bg="dark"] [data-site="atlas"] {
   --accent-primary: #79bce6;

@@ -1898,10 +1898,10 @@ test("E-6b: ダークモードで編集ツールバーの状態UIを読み分け
     });
 
   expect(toolbarColors.toolbarBackground).not.toBe("rgb(255, 255, 255)");
-  expect(toolbarColors.statusBackground).toBe("rgb(35, 36, 39)");
-  expect(toolbarColors.statusText).toBe("rgb(232, 230, 225)");
-  expect(toolbarColors.engineBackground).toBe("rgb(25, 26, 28)");
-  expect(toolbarColors.engineText).toBe("rgb(232, 230, 225)");
+  expect(toolbarColors.statusBackground).toBe("rgb(25, 25, 25)");
+  expect(toolbarColors.statusText).toBe("rgba(255, 255, 255, 0.92)");
+  expect(toolbarColors.engineBackground).toBe("rgb(21, 21, 21)");
+  expect(toolbarColors.engineText).toBe("rgba(255, 255, 255, 0.92)");
 });
 
 test("E-6c: ダークモード解除時に公開連携の状態UIをライト配色へ戻す", async ({
