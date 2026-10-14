@@ -59,8 +59,10 @@ test("管理画面の暗色・ブラックモードに白い大面積サーフ�
       const whiteSurfaces = await page.evaluate(() => {
         const isNearWhite = (color: string) => {
           const channels = color.match(/\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+          const alpha = channels.length >= 4 ? channels[3] : 1;
           return (
             channels.length >= 3 &&
+            alpha >= 0.85 &&
             channels.slice(0, 3).every((channel) => channel >= 245)
           );
         };

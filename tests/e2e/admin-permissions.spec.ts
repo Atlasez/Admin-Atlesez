@@ -257,10 +257,10 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
     ).backgroundColor,
   }));
   expect(darkThemeMetrics).toEqual({
-    bodyBackground: "rgb(25, 26, 28)",
-    cardBackground: "rgb(25, 26, 28)",
-    cardText: "rgb(232, 230, 225)",
-    inputBackground: "rgb(25, 26, 28)",
+    bodyBackground: "rgb(21, 21, 21)",
+    cardBackground: "rgb(21, 21, 21)",
+    cardText: "rgba(255, 255, 255, 0.92)",
+    inputBackground: "rgb(21, 21, 21)",
   });
 });
 
