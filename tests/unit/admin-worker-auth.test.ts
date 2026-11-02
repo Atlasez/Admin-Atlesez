@@ -2166,10 +2166,12 @@ describe("applicant stage server-side access", () => {
         APPLICATION_OPERATIONS_EMAILS: "operator@atlasez.test",
         REPORTS: {
           prepare: (query: string) => {
-            let values: unknown[] = [];
+            type SqliteBoundValue =
+              null | number | bigint | string | NodeJS.ArrayBufferView;
+            let values: SqliteBoundValue[] = [];
             return {
               bind(...nextValues: unknown[]) {
-                values = nextValues;
+                values = nextValues as SqliteBoundValue[];
                 return this;
               },
               async run() {
