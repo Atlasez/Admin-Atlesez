@@ -14,6 +14,60 @@
 
 **一項目でも未完了なら外部サービスを使う試験を開始しない。** ローカルSQLite/Mock試験は本番・stagingへの接続なしで継続できる。
 
+## 専用stagingと合成サービスを用意する手順
+
+ここに記す名称は環境分離用の例であり、Cloudflare上の既存Worker、DNS、OAuth client、Resend project、Discord guildを示さない。環境所有者が専用識別子を決め、承認記録へ記入する。作業中に本番 `atlasez-admin`、本番D1、`admin.atlasez.org` のroute/secretを参照・変更しない。
+
+### 1. Cloudflare WorkerとD1
+
+1. Cloudflare管理者がstaging用hostname（例: `admin-staging.atlasez.org`）、専用Worker（例: `atlasez-admin-staging`）、専用D1を選び、所有者・cleanup担当・Cloudflare account識別子を運営保管先へ記録する。実環境のIDやsecret値はこのrepo、Issue、PRへ書かない。
+2. ADMIN maintainerが専用config（例: `wrangler.admin.staging.jsonc`）を別PRで追加する。`name`、route、`ADMIN_PUBLIC_ORIGIN`、`SITE_URL`、D1 `database_name` / `database_id` はstaging専用値にし、`wrangler.admin.jsonc`の本番Worker名・route・D1 IDをコピーしない。staging D1を公開サイト、本番ADMIN、他のWorkerと共有しない。
+3. Cloudflare管理者が専用Worker/D1 bindingと環境変数名だけをread-onlyで確認する。stagingのCronは専用DBだけを使い、メールproviderはsink、Discord providerはtest guildにしか到達しないよう確認する。隔離を証明できなければ停止する。
+4. config PRでADMIN buildとdry-runを確認する。専用configが用意された後の例:
+
+   ```bash
+   npm run verify:deploy-config
+   ATLASEZ_BUILD_TARGET=admin SITE_URL=https://<STAGING_HOST> BASE_PATH=/ npm run build
+   npm run verify:build-info
+   npx wrangler deploy --dry-run --config wrangler.admin.staging.jsonc
+   ```
+
+   `<STAGING_HOST>`は承認済みのstaging hostnameへ置き換える。dry-runのWorker名とD1 bindingを二名で確認する。Stagingへの配信は専用staging手順で別途承認し、本番Deploy手順を流用しない。
+
+5. 空の隔離D1へ全migrationをstaging専用configで適用する。先に一覧を記録し、対象名・D1識別子を二名で確認してから実行する。
+
+   ```bash
+   npx wrangler d1 migrations list <STAGING_D1_NAME> --remote --config wrangler.admin.staging.jsonc
+   npx wrangler d1 migrations apply <STAGING_D1_NAME> --remote --config wrangler.admin.staging.jsonc
+   npx wrangler d1 migrations list <STAGING_D1_NAME> --remote --config wrangler.admin.staging.jsonc
+   ```
+
+   stagingでのmigration適用記録と`0134_application_intake_reconciliation.sql`を含む対象SHAを保存する。本番名 `atlasez-reports`、本番config `wrangler.admin.jsonc`、本番D1 UUIDはコマンドへ指定しない。
+
+### 2. Google OAuthの合成アカウント
+
+1. Google Cloud管理者が専用OAuth clientをstaging専用projectに作り、承認済みstaging originだけをAuthorized JavaScript originへ、`https://<STAGING_HOST>/auth/google/callback`だけをAuthorized redirect URIへ登録する。コードのcallback routeは `/auth/google/callback`。
+2. 管理されたsynthetic Google accountを用意する。個人・運営者の通常アカウントを試験用に転用しない。test account pseudonym、OAuth client pseudonym、cleanup ownerだけを台帳へ記録する。
+3. Client ID/Secretはstaging Workerの専用secret storeへだけ登録する。secret値、OAuth `state`、認証code、Cookieを記録しない。OAuth同意・callback・logout後の再login・取消からの回復をSTG-01で確認する。
+
+### 3. Resendのtest sink
+
+1. Resend担当者がstaging専用project/API keyと、合成宛先だけを受け取るtest sinkまたは隔離mailboxを用意する。staging senderはsinkで受信確認できるものにし、本番API key・本番宛先リスト・一般応募者へ到達できないことを確認する。
+2. staging Workerには専用 `RESEND_API_KEY` と `EMAIL_FROM` だけを登録する。通知先を設定する場合も合成運営アドレスだけに限定する。値はsecret storeに置き、`wrangler` config・PR・テスト証跡へ書かない。
+3. STG-07でAPI受理、sink受信、provider最終イベントを別々に記録する。API 2xxだけを受信成功としない。503/timeout時は同一delivery IDのidempotency keyとqueue状態を照合し、実メールは送信しない。
+
+### 4. Discordのtest guild
+
+1. Discord管理者が本番guildから分離したtest guildとsynthetic Discord userを用意する。Botには試験に必要な権限だけを与え、対象test roleより上位に置く。role ID・user IDはpseudonymで記録する。
+2. 専用OAuth applicationのredirect URIを `https://<STAGING_HOST>/auth/discord/callback` に設定する。staging Workerの `DISCORD_OAUTH_REDIRECT_URI` を同じURIにする。Guild ID、OAuth client ID、client secret、Bot token、token encryption keyはstaging専用値とする。
+3. secretと32-byte暗号化鍵はstaging secret storeへ登録し、鍵/tokenの値を証跡に含めない。本人同意を得たsynthetic userだけでSTG-08を行う。grant/revoke前にOPSD-08を承認し、失効後はサイトAPIとDiscord側read-backを別に確認する。
+
+### 5. 実行者と環境境界の最終確認
+
+STG-01〜09の開始前に、Cloudflare管理者はWorker名・route・D1 binding、Google管理者はOAuth client/callback、Resend担当者はsink到達先、Discord管理者はtest guild/roleをそれぞれ識別子だけで読み合わせる。ADMIN maintainerは対象SHA・CI・migration statusを確認し、運営責任者はsynthetic account・試験範囲・cleanupを承認する。いずれかのowner、資格情報、分離証拠が不足すれば、該当する外部試験を**BLOCKED**にし、SQLite/Mock試験を別に記録する。
+
+この文書はstagingを作成・設定・deployする権限を付与しない。専用Worker/D1/OAuth/providerの作成や設定はCloudflare/Google/Resend/Discordの各管理者が個別の変更手順と承認に従って行う。本番設定値を流用したり、本番migrationを適用したりしない。
+
 ## 運営責任者が記入する決定票（OPSD-01〜09）
 
 チェックした選択肢だけで決定を確定しない。必須欄を記入し、決定者が承認した後に状態を`APPROVED`へ変更する。空欄・複数選択・署名なしは`PENDING`のままとする。保存期間、上限、SLAなどの未承認値はWeb画面や公開文面へ表示しない。
@@ -66,6 +120,21 @@
 | STG-07 Resend / `applicant-fresh`                                                   | staging credentialとResend sandbox/test sinkを確認し、受付・面談・採否の各templateを試験。503、timeout、同一idempotency再送、queue滞留/枯渇を注入。                            | queue作成・provider受理・配達イベントを別状態で表示。重複送信がない。provider失敗はqueueにretryable/failed状態で残る。受信箱で検証する場合もsynthetic宛先と承認済みtest sinkのみ。                                                    | queue pseudonym ID、attempt/status、provider event ID、sinkでの受信確認時刻。recipientや本文なし。                                         |
 | STG-08 Discord grant/revoke / 専用test guildのsynthetic user                        | OPSD-08承認後のみ、Discord consentを行い、project roleを付与。bot権限・role hierarchyを確認。失敗・timeout・再試行を注入し、その後に承認済みの休止/退会role処理と復帰を行う。  | provider応答またはread-backでgrant/revokeを検証。サイト側権限失効をDiscord成功と推測しない。失敗時は`pending/failed`で原因と再試行案内を表示し、管理権限を誤付与しない。重複操作は安全。                                              | test guild pseudonym、synthetic user pseudonym、role ID pseudonym、HTTP/provider status、同期記録IDと時刻。access token/guild招待URLなし。 |
 | STG-09 通信・DB・queue障害 / 上記各role                                             | read-only失敗、DB transaction error、500/timeout、session期限切れ、空データ、通知queue滞留を注入。操作再読込・戻る・再試行・運営案内を確認。                                   | 未確定状態を成功表示しない。保存済みか不明なら重複防止と状態確認へ誘導。権限拒否、空状態、通信失敗、保存失敗が別表示。次の運営連絡先が分かる。                                                                                        | injection種別、status/code、request correlation ID、再試行回数、状態前後の件数、PIIなしの画面画像。                                        |
+
+### 現行APIとの対応
+
+下記はWorker router上で確認した経路。stagingではURLを対象Worker originへ相対指定し、各roleのsessionからUIと同じAPIを直接呼び出す。IDは同じ隔離DBから得た合成fixtureだけを使う。
+
+| 試験      | 画面 / API                                                                                                                                                                                                                     | 実行内容・境界                                                                                                                                                                                                                                                                                                                                                                                |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| STG-01    | `/admin/login/` → `GET /auth/google/login` → `GET /auth/google/callback`                                                                                                                                                       | OAuth開始・callback。未認証の `/api/applicant/me` は401、採用前に管理APIへアクセスしても拒否されることを確認する。                                                                                                                                                                                                                                                                            |
+| STG-02    | `GET/POST /api/application-profile`、`POST /api/apply`、`GET /api/applicant/me`                                                                                                                                                | `POST /api/apply` の正常結果は `applicationState=saved`、`responseTaskCreated=true`、queue件数を返す。`emailDeliveryStatus=queued` はprovider配達完了を意味しない。保存後の応答喪失を再送すると409 `APPLICATION_ALREADY_EXISTS`となり、`/applicant/?submission=already-received`で自分の状態を確認できる。pendingマーカーとqueue/tasksの照合・修復はPR #545のmigration 0134適用後に確認する。 |
+| STG-03/04 | `GET /api/admin/applications?project=<slug>`、`PATCH /api/admin/applications/<application-uuid>?project=<slug>`、`GET/PUT /api/admin/applications/<uuid>/interview`、`GET/PUT /api/admin/applications/<uuid>/interview-review` | managerは対象project内だけで応募・面談・審査を行う。状態更新は期待状態が古い場合に409となる。受入後は `/api/applicant/me` と `/api/user/status`、隔離D1でproject別membershipを確認する。                                                                                                                                                                                                      |
+| STG-05    | `GET/POST /api/onboarding/me`、`GET/POST /api/onboarding/project`、`GET/POST /api/onboarding/tutorial`、`GET /api/admin/member-tasks`、`PATCH /api/admin/operations/tasks/<task-uuid>`                                         | 本人の初回profile/自己紹介/onboarding状態を保存し、所属・担当範囲内のtaskだけopen→doing→doneへ更新する。別project・他人のtask IDを直接指定し403/404とDB不変を確認する。                                                                                                                                                                                                                       |
+| STG-06    | `GET/POST /api/admin/member-procedures?project=<slug>`、reviewは `?project=<slug>&view=review`                                                                                                                                 | 本人がpause/withdrawal/restartを申請・取下げし、別の権限者が承認/却下する。予定適用は専用staging Cronで確認し、旧sessionのAPIを再呼出しする。Discord grant/revokeはOPSD-08承認後のSTG-08だけで扱う。                                                                                                                                                                                          |
+| STG-07/08 | `GET /api/admin/discord-readiness`、`GET /auth/discord/start`、`GET /auth/discord/callback`、`POST /api/admin/applications/<uuid>/discord-retry`                                                                               | readinessの設定表示を接続成功とみなさず、専用Resend sinkの受信イベントと専用Discord guildのread-backを別々に確認する。STG-08は本人同意とOPSD-08承認後に限る。                                                                                                                                                                                                                                 |
+
+path/roleを変更するPRが入った場合は、この対応表を実装と再照合してからstaging手順を実施する。確認用のD1クエリは専用staging D1へread-onlyで行い、本番名・production configを指定しない。
 
 ### API/UI role matrix
 
