@@ -112,9 +112,11 @@ describe("admin editor subject preview", () => {
     expect(
       body?.querySelector('[data-directive="theorem"].thm'),
     ).not.toBeNull();
-    expect(
-      body?.querySelector('details.proof-details[data-directive="proof"]'),
-    ).not.toBeNull();
+    const proof = body?.querySelector<HTMLDetailsElement>(
+      'details.proof-details[data-directive="proof"]',
+    );
+    expect(proof).not.toBeNull();
+    expect(proof?.open).toBe(true);
     expect(
       body?.querySelector(
         '[data-directive="custom-box"] .article-directive-title',
