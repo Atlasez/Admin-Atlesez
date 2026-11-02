@@ -1,6 +1,8 @@
 export const ADMIN_STAGING_TEMPLATE_PATH =
   "wrangler.admin.staging.example.jsonc";
 export const ADMIN_STAGING_LOCAL_CONFIG_PATH = "wrangler.admin.staging.jsonc";
+export const ADMIN_STAGING_COMPAT_CONFIG_PATH =
+  "wrangler.admin.staging.compat.jsonc";
 
 const PRODUCTION_IDENTIFIERS = [
   "admin.atlasez.org",
@@ -164,7 +166,11 @@ function isStagingEmail(value) {
 
 export function validateAdminStagingConfig(
   config,
-  { allowExample = false, allowResendTestSink = false } = {},
+  {
+    allowExample = false,
+    allowResendTestSink = false,
+    compatibilityNoCron = false,
+  } = {},
 ) {
   const failures = [];
   add(
@@ -368,12 +374,33 @@ export function validateAdminStagingConfig(
     }
   }
 
-  const crons = config.triggers?.crons;
-  add(
-    failures,
-    Array.isArray(crons) && crons.length === 1 && crons[0] === "*/5 * * * *",
-    "only the guarded five-minute intake reconciliation Cron is allowed",
-  );
+  const triggers = config.triggers;
+  const triggerKeys =
+    triggers && typeof triggers === "object" && !Array.isArray(triggers)
+      ? Object.keys(triggers)
+      : [];
+  const crons = triggers?.crons;
+  if (compatibilityNoCron) {
+    add(
+      failures,
+      triggers === undefined ||
+        (triggerKeys.length === 1 &&
+          triggerKeys[0] === "crons" &&
+          Array.isArray(crons) &&
+          crons.length === 0),
+      "old-Worker compatibility config must contain no scheduled triggers",
+    );
+  } else {
+    add(
+      failures,
+      triggerKeys.length === 1 &&
+        triggerKeys[0] === "crons" &&
+        Array.isArray(crons) &&
+        crons.length === 1 &&
+        crons[0] === "*/5 * * * *",
+      "only the guarded five-minute intake reconciliation Cron is allowed",
+    );
+  }
   add(
     failures,
     !config.queues,

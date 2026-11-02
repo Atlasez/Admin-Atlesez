@@ -9,6 +9,7 @@
 
 - `wrangler.admin.staging.example.jsonc` は意図的に無効なAccount ID、D1 ID、OAuth/Discord IDを含む雛形です。deployに使わないでください。
 - ローカル設定は雛形を `wrangler.admin.staging.jsonc` へコピーして作成します。このファイルは `.gitignore` 対象です。secret値、synthetic recipient一覧、Cookie、OAuth state/code/tokenをGitへ追加しないでください。
+- 0134以前のWorker互換性をCloudflare上で確認する場合は、通常設定を複製した `wrangler.admin.staging.compat.jsonc` から `triggers` を削除し、`npm run verify:admin-staging-config:compat` で検査します。これは旧Worker用の一時設定であり、staging WorkerのスケジュールもDashboardで無効化・read-backしてから使います。
 - `npm run verify:admin-staging-config:template` は雛形に対し静的検査をします。実設定は `npm run verify:admin-staging-config` で確認します。
 - 検査はWorker名を `atlasez-admin-staging`、D1名を `atlasez-admin-staging-reports`、`workers.dev` originのみ、Custom Routeなし、Preview URLなし、専用Google/Discord ID、test送信元/通知先に固定します。本番Worker、D1、route、Discord guild/client ID、secrets in `vars`、production Cron群を拒否します。
 - stagingの `*/5 * * * *` CronはWorker側でstaging `workers.dev` originまたはstaging変数を認識した場合に `ATLASEZ_STAGING_MODE=true` と `ATLASEZ_STAGING_CRON_MODE=intake-only` を確認してから応募受付の照合だけを実行します。staging mode欠落・誤値・別scheduleではCron全体を停止します。GitHub同期、公開処理、タスクリマインダー、Discord role同期、通知dispatchは呼びません。Resend dispatchはAPI経由も含め `ATLASEZ_STAGING_EMAIL_DELIVERY=test-sink` とCloudflare Secretの正確な宛先allowlistがある場合だけで、`disabled`時はqueueのdispatch自体をしません。allowlistはstaging/test宛先、Resendの予約済みtest recipientだけを受け付け、その他の配信rowはproviderへ送信しません。
@@ -103,7 +104,20 @@ Cloudflare D1 Time Travelは現在のbookmarkをread-onlyで取得できます�
 
    Read-backで全体権限が専用staging operatorの1行だけ、他2表が0行であることを確認します。この初期化は新規staging D1限定で、後続の試験roleを作成した後に再実行しません。失敗/途中成功時はrole試験を開始せず、operatorが同じ初期化を再実行して上記状態を確認します。SQL結果やメールアドレスをIssueへ貼らず、匿名fixture key・row counts・実施者role・UTC時刻を記録します。
 
-7. migration ledgerに0134が一度だけ記録され、応募/queue件数、backfill、送信済み状態、default markerをread-onlyで確認します。旧Workerを維持した状態で既存SELECT/旧列INSERTが通ることをsynthetic accountで確認後、新Workerをstagingだけへ配信し応募/API/E2Eを行います。
+7. 0134後の旧Worker互換性は、migration前のADMIN main SHAをrelease ownerが固定し、そのSHAをtemporary worktreeへcheckoutしてCloudflareのstaging Workerだけへ一時配信して検証します。旧コードはstaging Cron markerを解釈しないため、旧Workerの配信前にDashboardでそのWorkerの全scheduled triggersを無効化し、配信後も0件であることをread-backします。`wrangler.admin.staging.compat.jsonc` は専用staging Worker/D1/originだけを含むローカル設定から `triggers` を削除して作成し、通常worktreeで `npm run verify:admin-staging-config:compat` を通した後、対象旧SHAのworktreeへコピーします。旧SHA側でAdmin build・build-infoを検証し、次のdry-runまでを行います。
+
+   ```bash
+   git worktree add --detach ../admin-staging-pre-0134 <PRE_0134_ADMIN_MAIN_SHA>
+   cp wrangler.admin.staging.compat.jsonc ../admin-staging-pre-0134/wrangler.admin.staging.compat.jsonc
+   cd ../admin-staging-pre-0134
+   npm ci
+   ATLASEZ_BUILD_TARGET=admin SITE_URL=https://<staging-worker-host> BASE_PATH=/ npm run build
+   npm run verify:build-info
+   npx wrangler deploy --dry-run --config wrangler.admin.staging.compat.jsonc --keep-vars
+   ```
+
+   Cloudflare staging operatorがWorker名・D1 ID・Cron 0件を二名確認した後だけ、同じdirectory/configで `npx wrangler deploy --config wrangler.admin.staging.compat.jsonc --keep-vars` を実行します。旧互換性の間はDiscord/Resend secretを外し、OAuth以外のprovider操作をしない専用アカウントで応募/queueの旧列書込み・読取りとrow countsだけを確認します。Cronが0件のread-backを残してから新Workerを通常のstage config/wrapperで配信し、guarded intake-only Cronを有効化します。旧コード、D1、Worker version、実施者、Cronの0件/1件read-backを証跡に記録します。
+
 8. Time Travel restoreの実証は他のSTG dataが存在しない使い捨てD1で行います。migration前bookmarkへのrestore後に0134列/ledgerがなく、synthetic legacy rowsが保たれたことをread-only検証し、その後必要なら0134を再適用して最終ledgerを確認します。共有staging D1を無断でrestoreしません。
 
 実行前にD1の `version` がTime Travelをサポートしない場合、backup手段とrestore権限が未確認の場合、migration listに0134以外の予期しない項目がある場合、backup/bookmarkが確認できない場合は停止します。適用失敗時はworker配信とCronを止め、migration SQL・D1 query error・ledgerを保存し、再applyやrestoreを推測で行わずD1 operatorへエスカレーションします。コードを戻す場合も0134の列/indexは残し、down migrationでschema/dataを削除しません。
@@ -119,8 +133,9 @@ Cloudflare D1 Time Travelは現在のbookmarkをread-onlyで取得できます�
 1. **Staging owner / Cloudflare Account admin:** 専用Worker・D1を作成し、`wrangler.admin.staging.jsonc` をignored local configとして完成。`npm run verify:admin-staging-config` と `npm run deploy:admin:staging -- --dry-run` が通るまでdeployしません。Resource ID、worker.dev URL、binding/secret名だけを二名でread-backします。
 2. **Google Cloud admin:** 専用OAuth clientにstaging worker.dev originと `/auth/google/callback` を登録し、運営が管理する合成Google test usersを用意します。アカウントのメール/secretはGitHubに記録せず、内部の権限台帳でfixture keyに対応付けます。
 3. **D1 operator:** migration/backup手順に従い全migrationを専用D1だけへ適用し、上記のbootstrap SQLでmigrationに埋め込まれた本番role seedを除去してsynthetic global operatorだけを作成します。operatorがGoogle OAuthでログインでき、global route/APIにだけscopeを持つ read-only 確認が終わるまで他roleをseedしません。
-4. **Staging owner + QA/role owner:** applicant/accepted/member/manager/coordinator/suspended/withdrawn用の合成Google accountsを管理台帳で各fixture keyへ割当てます。`@atlasez.test` fixtureはローカル専用なので実Google loginに流用しません。応募者と受入memberはUI/APIから作り、権限fixtureはglobal operatorでstaging API経由に作成します。直接SQL seedする場合は対象role・必要最小行・cleanupを別途レビューし、全API権限は付与しません。
-5. **Release owner:** staging Worker deployとSTG-01 OAuth smokeを開始します。Resend/DiscordはOPSD-08を含む承認・test sink/guildのread-backが完了するまで無効のままとし、STG-02〜09はそれぞれ表の事前条件を満たしてから開始します。
+4. **Cloudflare staging operator + release owner:** 0134後の旧Worker互換性試験を開始する時は、DashboardのScheduled Triggersを0件にし、専用worker.dev URL・D1だけのcompat configで固定したpre-0134 main SHAを一時配信します。試験APIとrow countsのread-backが終わったら同SHA/Versionを記録し、staging-only新Workerをguarded Cron付きの通常config/wrapperから配信します。Cronの0件化と後続の1件化をそれぞれread-backするまで次へ進みません。
+5. **Staging owner + QA/role owner:** applicant/accepted/member/manager/coordinator/suspended/withdrawn用の合成Google accountsを管理台帳で各fixture keyへ割当てます。`@atlasez.test` fixtureはローカル専用なので実Google loginに流用しません。応募者と受入memberはUI/APIから作り、権限fixtureはglobal operatorでstaging API経由に作成します。直接SQL seedする場合は対象role・必要最小行・cleanupを別途レビューし、全API権限は付与しません。
+6. **Release owner:** staging Worker deployとSTG-01 OAuth smokeを開始します。Resend/DiscordはOPSD-08を含む承認・test sink/guildのread-backが完了するまで無効のままとし、STG-02〜09はそれぞれ表の事前条件を満たしてから開始します。
 
 したがって、現時点ではSTG-01から開始できません。最初に必要なのはCloudflare Account adminが隔離Worker/D1を作成し、Staging ownerが匿名化したresource metadataを揃えることです。Google/Resend/Discordの担当者はそのstaging hostnameが確定した後に専用client/sink/guildを紐付けます。
 

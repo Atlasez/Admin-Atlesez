@@ -43,6 +43,24 @@ describe("ADMIN staging isolation preflight", () => {
     expect(validateAdminStagingConfig(safeStagingConfig())).toEqual([]);
   });
 
+  it("accepts an old-Worker compatibility config only when scheduled triggers are absent", () => {
+    const noCron = safeStagingConfig();
+    delete noCron.triggers;
+    expect(
+      validateAdminStagingConfig(noCron, { compatibilityNoCron: true }),
+    ).toEqual([]);
+    expect(validateAdminStagingConfig(noCron)).toContain(
+      "only the guarded five-minute intake reconciliation Cron is allowed",
+    );
+
+    const scheduled = safeStagingConfig();
+    expect(
+      validateAdminStagingConfig(scheduled, { compatibilityNoCron: true }),
+    ).toContain(
+      "old-Worker compatibility config must contain no scheduled triggers",
+    );
+  });
+
   it("rejects the production Worker, D1, route, or Discord guild/client", () => {
     const cases = [
       (config: ReturnType<typeof safeStagingConfig>) => {

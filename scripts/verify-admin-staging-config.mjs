@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
+  ADMIN_STAGING_COMPAT_CONFIG_PATH,
   ADMIN_STAGING_LOCAL_CONFIG_PATH,
   ADMIN_STAGING_TEMPLATE_PATH,
   parseAdminStagingConfig,
@@ -10,13 +11,18 @@ import {
 const args = process.argv.slice(2);
 const example = args.includes("--example");
 const allowResendTestSink = args.includes("--allow-resend-test-sink");
+const compatibilityNoCron = args.includes("--compatibility-no-cron");
 const configFlag = args.indexOf("--config");
 const requestedPath = configFlag >= 0 ? args[configFlag + 1] : null;
 const allowedFlags = new Set([
   "--example",
   "--allow-resend-test-sink",
+  "--compatibility-no-cron",
   "--config",
 ]);
+const expectedConfigPath = compatibilityNoCron
+  ? ADMIN_STAGING_COMPAT_CONFIG_PATH
+  : ADMIN_STAGING_LOCAL_CONFIG_PATH;
 const unknown = args.filter(
   (arg, index) =>
     !allowedFlags.has(arg) && !(index > 0 && args[index - 1] === "--config"),
@@ -25,10 +31,11 @@ const unknown = args.filter(
 if (
   unknown.length ||
   (example && requestedPath) ||
-  (!example && requestedPath !== ADMIN_STAGING_LOCAL_CONFIG_PATH)
+  (example && compatibilityNoCron) ||
+  (!example && requestedPath !== expectedConfigPath)
 ) {
   console.error(
-    `Usage: node scripts/verify-admin-staging-config.mjs --example | --config ${ADMIN_STAGING_LOCAL_CONFIG_PATH}`,
+    `Usage: node scripts/verify-admin-staging-config.mjs --example | --config ${ADMIN_STAGING_LOCAL_CONFIG_PATH} | --config ${ADMIN_STAGING_COMPAT_CONFIG_PATH} --compatibility-no-cron`,
   );
   process.exit(2);
 }
@@ -59,6 +66,7 @@ try {
 const failures = validateAdminStagingConfig(config, {
   allowExample: example,
   allowResendTestSink,
+  compatibilityNoCron,
 });
 if (failures.length) {
   console.error("ADMIN staging isolation preflight failed:");
@@ -69,5 +77,7 @@ if (failures.length) {
 console.log(
   example
     ? "Staging template safety checks passed. The placeholders are intentionally non-deployable."
-    : "Staging config identity checks passed. Provider credentials and Cloudflare resource ownership still require operator read-back.",
+    : compatibilityNoCron
+      ? "Staging old-Worker compatibility config passed with no scheduled triggers. Provider credentials and Cloudflare resource ownership still require operator read-back."
+      : "Staging config identity checks passed. Provider credentials and Cloudflare resource ownership still require operator read-back.",
 );

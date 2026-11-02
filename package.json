@@ -12,6 +12,7 @@
     "verify:deploy-config": "node scripts/verify-deployment-config.mjs",
     "verify:admin-staging-config": "node scripts/verify-admin-staging-config.mjs --config wrangler.admin.staging.jsonc",
     "verify:admin-staging-config:template": "node scripts/verify-admin-staging-config.mjs --example",
+    "verify:admin-staging-config:compat": "node scripts/verify-admin-staging-config.mjs --config wrangler.admin.staging.compat.jsonc --compatibility-no-cron",
     "deploy:admin:staging": "node scripts/deploy-admin-staging.mjs",
     "verify:admin-staging-migration": "node scripts/verify-admin-staging-migration.mjs",
     "test:admin-staging:isolated": "npm run verify:admin-staging-config:template && node scripts/verify-admin-staging-test-env.mjs && vitest run tests/unit/admin-staging-safety.test.ts tests/unit/admin-staging-migration-drill.test.ts tests/unit/admin-staging-scheduled-cron.test.ts tests/unit/admin-readiness-integration.test.ts",
