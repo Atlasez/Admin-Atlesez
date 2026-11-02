@@ -44,101 +44,91 @@
 
 公開側正本は `Atlasez/Atlasez01`、公開Workerは `atlasez01`、URLは `https://atlasez.org`。ADMIN側と公開側のSHAを混同しない。公開PRがCI失敗・レビュー未完了・main未反映、公開WorkerがBuilds未接続、または本文・SHA不一致なら、公開済みへの強制変更を行わず、そのrunを調査する。推測のmerge、Version promote、cache purge、直接deployは行わない。
 
-## 2026-11-03 最新の隔離検証・判定
+## 2026-11-03 最新確認（過去スナップショットを更新）
 
-この節は過去の受入記録を上書きせず、最新main `5e8dd7533e417b9237c232102856bfecd026e2c0`を基点にPR #545 exact head `e5d60003a1cbc14fa5a2bf685b93717c2e041c5e`とPR #546 exact head `e08d07b6177ec72309c5272505b5464f3942659b`を統合した隔離branch `a05814a6713b87c0ed9d4a4193e2453e78a75d6b`上の検証を記録する。実Google OAuth、実メール到達、Discord API、共有staging、本番への書込みは行っていない。
+この記録は2026-11-03 JSTにGitHub、公開build-info、read-only Worker情報と隔離統合worktreeを確認した結果である。ローカル/CI成功をstaging・本番受入の証拠にしない。秘密値、実会員情報、OAuth stateは記録しない。
 
-### 実装・検証結果
+### 対象SHA・自動検証
 
-| 項目                                   | 状態                     | 証拠と範囲                                                                                                                                                                                                                                                          |
-| -------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 応募保存と後続処理                     | PASS                     | 応募行・運営対応タスク・メールdelivery queueをD1 `batch` 内で作成するよう修正。task SQLを失敗させる隔離integration testで3種すべてrollbackし、同じ入力の再送で成功することを実SQLiteと実Worker routerで確認。provider設定の有無と実queue追加数をAPI応答で区別する。 |
-| 二重応募・同時応募                     | PASS                     | 既存の実Worker/実SQL integration testを継続し、同時要求は1応募に収束し、負けた要求からtask/メールqueueが生まれないことを確認。                                                                                                                                      |
-| 応募後の再試行UI                       | PASS                     | 375px Playwrightで503を成功表示せず、入力を保持して再試行できること、成功時だけ応募状況画面へ進むことを確認。API応答は仮データ。                                                                                                                                    |
-| 採用・複数プロジェクト所属             | PASS                     | 実Worker Workflow APIと隔離SQLiteで既存Atlas membershipを保ったままThinking Cafe応募を審査・採用し、対象membershipだけ追加されることを確認。                                                                                                                        |
-| 初回設定・初回タスク                   | PASS                     | 応募者から採用、初回プロフィール保存、ポータル到達後に担当者が初回タスクを割り当て、本人が`open → doing → done`へ更新。DB状態と監査イベントを確認。                                                                                                                 |
-| 不採用後のアクセス                     | PASS                     | 既存integration testで応募状況は本人に表示し、会員API・会員画面を拒否しmembershipを作らないことを確認。                                                                                                                                                             |
-| 役割境界・直接API                      | PASS（限定範囲）         | 実Worker integration testは全体管理者・プロジェクト責任者・分野担当・一般会員・応募者・不採用者・membership除去済み利用者の主要な対象scopeと、別プロジェクト応募/プロフィール/運営API拒否を確認。全ルート・全role matrixの網羅を意味しない。                        |
-| 既存セッションの失効、休止・退会・復帰 | NOT TESTED（完全な受入） | membership除去・archived状態を扱う既存の隔離テストはあるが、全ロールで同じsessionを維持した休止/適用/復帰フローと外部role同期を一連で受け入れていない。                                                                                                             |
-| Google OAuth / Cookie / CSRF           | BLOCKED                  | 実OAuth callback、アカウント選択、専用検証アカウントでのCookie属性・state再利用検証は未実施。                                                                                                                                                                       |
-| メール・Discord                        | BLOCKED（実サービス）    | Mock/隔離テストは既存。今回の応募transaction試験ではprovider未設定時にも実際のqueue件数を区別。実メール到達、Discord連携・role付与/削除、timeout後の外部状態照合は未実施。                                                                                          |
-| モバイル・アクセシビリティ             | PASS（自動検査範囲）     | `getting-started` E2Eを360/375/390/1280pxへ拡張し、axeを含む全Playwright suiteを実行。実機、200%拡大、スクリーンリーダーによる全画面受入は未実施。                                                                                                                  |
-| ローカルDB migration                   | PASS（隔離環境のみ）     | 実Worker integration suiteは新規in-memory SQLiteへ全migrationを順番に適用。コード変更にschema/migrationはない。                                                                                                                                                     |
-| 本番DB・backup/restore                 | BLOCKED                  | 今回のread-only migration status照会はCloudflare API code 7403（account unauthorized）で取得できず、現在の適用状態を確認できない。D1への書込み、migration、export、restoreは実施していない。過去のmigration一覧は最新確認を代替しない。                             |
+- 現在のADMIN `main`: `5e8dd7533e417b9237c232102856bfecd026e2c0`。
+- PR [#545](https://github.com/Atlasez/Admin-Atlesez/pull/545): HEAD `eba29378eada1cdf202ee0384d1e1f0039bd70fa`、exact-head `verify` run [41510323361](https://github.com/Atlasez/Admin-Atlesez/actions/runs/41510323361) success。`0134` migration、応募後のread/response喪失の状態区別、partial batch commitの検出・idempotent補完・運営向け再照合、PIIを含めない相関ログを含む。
+- PR [#546](https://github.com/Atlasez/Admin-Atlesez/pull/546): HEAD `e08d07b6177ec72309c5272505b5464f3942659b`、exact-head `verify` run [41480187492](https://github.com/Atlasez/Admin-Atlesez/actions/runs/41480187492) success。Wrangler 4.156.2とlockfile更新。
+- PR [#547](https://github.com/Atlasez/Admin-Atlesez/pull/547): HEAD `3281a7b05f7b566cc2acc0ace62277428b9deef2`。限定受入ゲートを含むstaging checklist/runbookを追加。exact-head run [41515735513](https://github.com/Atlasez/Admin-Atlesez/actions/runs/41515735513) はこの記録時点で進行中。旧HEADの成功は新HEADの証拠にしない。
+- #545→#546の順に適用した隔離統合worktree commit `6b85e4afb15eebf44ec467d3a7d72cbf47b98bdc`で `npm ci`、deploy-config、deploy-cli、check、lint、unit、format、ADMIN build、build-info、Wrangler dry-run、Playwright/axeを確認。unitは73 files / 596 tests pass。E2E/axeは414件中401 passed / 14 skipped / 0 failed。2 workersと5 workersの試験を行った。5-worker試験の初回catalog一覧失敗は初期catalog ready前のdispatch競合で、ready待ちを加えた後に通過。既存editorの30秒timeoutは増やしていない。live OAuth/provider/production smokeは行っていない。
+- `verify:deploy-config`、TypeScript `check`、lint、unit、format、ADMIN build、`verify:build-info`、Wrangler dry-runは隔離統合worktreeでpass。共有build成果物をE2Eと並行生成していない。これらはPR exact-head CIまたは隔離検証の結果であって、main統合後のCIを代替しない。
 
-### 実行した検証コマンド
+### 応募状態・D1
 
-基点SHAに対するローカルworktreeで次が成功した。
+| 項目                       | 状態                 | 証拠と制限                                                                                                                                                                                                    |
+| -------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 通常応募・同時送信         | PASS（隔離）         | Worker routerと実SQLiteで応募行、運営対応task、メールqueueのtransaction件数を照合。同時/重複送信は一応募へ収束。201は全件作成とcommit後readが一致するときだけ返る。                                           |
+| 応答喪失・保存状態read失敗 | PASS（隔離）         | `applicationSaved:false`の互換フィールドと`applicationState:unknown`を区別。409再送時は応募者本人の状態確認へ誘導し、誤った失敗表示を避ける。                                                                 |
+| batch後の部分commit        | PASS（隔離）         | SQLite `RAISE(IGNORE)`で応募行のみが残る状態を作り、検出、pending marker、idempotent task/queue補完を確認。sent済みメールは再送しない。通常の再応募409だけに依存せず照合/Cronと限定管理者の再実行経路を用意。 |
+| PII・相関ログ              | PASS（自動検査範囲） | attempt相関IDとエラー分類のみ。応募本文、email、OAuth secretをログへ記録しないテストを含む。                                                                                                                  |
+| migration 0134             | PASS（localのみ）    | 新規隔離SQLiteへ全migrationを順番に適用。#545は0134を追加するため「schema変更なし」ではない。共有/本番D1への適用・書込みはしていない。                                                                        |
+| 本番D1 migration status    | BLOCKED              | 固定ADMIN D1への最新read-only migration status照会はCloudflare API 7403 (`unauthorized`)。過去の一覧には0134 pendingの記録があるが、現状値として扱わない。                                                    |
+| backup/restore             | NOT TESTED（本番）   | 本番export/restoreは行っておらず、実測RPO/RTO、暗号化copy、保持・復元手順は未承認/未実証。                                                                                                                    |
 
-| コマンド                                                                                  | 結果                                                                                                                                                       |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm ci`                                                                                  | 成功。combined branchでWrangler 4.156.2を導入。auditは13件（low 3 / moderate 10 / high 0 / critical 0）。                                                  |
-| `npm run verify:deploy-config`                                                            | 成功。固定ADMIN本番ターゲット設定を検証。deployは実行していない。                                                                                          |
-| `npm run verify:deploy-cli`                                                               | 成功。Wrangler 4.156.2。                                                                                                                                   |
-| `npm run check`                                                                           | 成功。358 files、0 errors / 0 warnings / 10 hints。                                                                                                        |
-| `npm run lint`                                                                            | 成功。                                                                                                                                                     |
-| `npm test`                                                                                | 成功。73 files / 590 tests。                                                                                                                               |
-| `npm run format:check`                                                                    | 成功。                                                                                                                                                     |
-| `ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ npm run build` | 成功。ADMIN 302 page(s)とprototype build。chunk size 500 kB超過等のwarningあり。                                                                           |
-| `npm run verify:build-info`                                                               | 成功。隔離combined branchのsource SHAは`a05814a6713b87c0ed9d4a4193e2453e78a75d6b`。                                                                        |
-| `npx wrangler deploy --dry-run --config wrangler.admin.jsonc`                             | 成功。Worker/D1/DO bindingsと1236 assetsを確認。dry-runのみで配信・Cloudflare書込みなし。                                                                  |
-| `npm run test:e2e`                                                                        | 成功。414件中400 passed / 14 skipped / 0 failed。axeを含み、live production smokeは行っていない。E-5とCodeMirror ready待ちは追加後に各10回（計20回）成功。 |
-| `git diff --check`                                                                        | 成功。                                                                                                                                                     |
+### 本番配信・provenance
 
-実装変更と統合検証は隔離branchで行った。上記のローカル成功はmain反映、staging受入、本番受入の証拠にしない。PR #545 exact-head CI run `41491240193`とPR #546 exact-head CI run `41480187492`はいずれも成功。
+- 公開 `https://admin.atlasez.org/build-info.json` はrepository `Atlasez/Admin-Atlesez`、ref `main`、commit `5e8dd7533e417b9237c232102856bfecd026e2c0`、builtAt `2026-10-14T07:54:26.721Z`を報告。
+- read-onlyで取得した固定Worker `atlasez-admin` の最新DeploymentはVersion `ea236de8-3458-421c-a9ba-4030a9d86674`、100%配信、`2026-10-14T07:55:28.329877Z`、source `wrangler` / deployment annotation。Workers Builds runのcheckout SHAとこのVersionの対応は確認できない。
+- production sync run [41420726517](https://github.com/Atlasez/Admin-Atlesez/actions/runs/41420726517) successはbuild-info/main照合のみ。Version provenance、認証済みChromeの主要画面受入、最新Cloudflare Builds設定を証明しない。
+- Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509)の最終更新記録は2026-10-13。コメントには10/11にProduction `main`・Preview OFF・Build cache OFFのWorkers Builds設定が保存された記録と、Deploy段階でWorkers Routes permissionによりBuildが失敗した記録がある。従って「未接続」と断定しない。一方、現在のDashboard設定はread-onlyで取得できておらず、現在接続/自動deploy状態はUNKNOWN。現在の100% Worker VersionとBuild runのprovenanceも未照合。
+- 2026-11-03の最新Cloudflare API read-only D1照会はcode 7403で失敗。Workers Builds UIの現在値も読み出せていない。Cloudflare設定・Worker・D1の変更はしていない。
+- Branch protectionはrequired check `verify`、strict=true、required approving reviews=0、admin enforcement=true。値は変更していない。
 
-### 2026-11-03 production / GitHub 読み取り確認
+### staging / 外部サービス / 運営決定
 
-- 公開`https://admin.atlasez.org/build-info.json`はmain SHA `5e8dd7533e417b9237c232102856bfecd026e2c0`、ref `main`、target `admin`を報告した。公開buildの時刻は`2026-10-14T07:54:26.721Z`。
-- 固定Worker `atlasez-admin`のread-only Deployment listはVersion `ea236de8-3458-421c-a9ba-4030a9d86674`が100%配信、created `2026-10-14T07:55:28.329877Z`、source `wrangler`、annotation `workers/triggered_by=deployment`。versions viewはSource Unknown（version_upload）を返し、Workers Buildsの成功run/checkout SHAとの関連は確認できない。
-- Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509)はOPEN、68 comments、最終更新2026-10-13。11-02の成功runはbuild-info/main一致のみ。Worker VersionのWorkers Builds provenance未確認のため、復旧済みとは判定しない。
-- 2026-11-02のproduction sync run `41420726517`は成功。これはbuild-infoとmainの照合であり、Cloudflare VersionのBuild provenanceを証明しない。認証済みChromeで主要画面を確認していない。
-- Branch protectionの確認値はrequired check `verify`、strict=true、required approving reviews=0、admin enforcement有効。今回この値は変更していない。
+PR #547の `docs/ADMIN_MEMBER_INTAKE_STAGING_CHECKLIST.md` は専用Cloudflare Worker/D1、Google OAuth client/callback、合成Google account、Resend test sink、Discord test guildの設定要件、STG-01〜09の実施手順・期待結果・PIIなし証拠形式、API/role matrix、停止条件を記録する。環境・credential・実アカウントはまだ用意されていないため各項目はBLOCKED。STG-08 Discord grant/revokeは本人consentとOPSD-08承認後のみ行う。
 
-### 受入阻害要因の分類
+- 実Google OAuth login/callback/state/Cookie/CSRF: NOT TESTED（専用client/account待ち）。
+- Resend実sink到達・providerイベント・再送/timeout: NOT TESTED（test sink/credential待ち）。queue作成と配達を混同しない。
+- Discord test guild grant/revoke/read-back・timeout後状態: NOT TESTED（test guild/botとOPSD-08判断待ち）。
+- UIと直接APIの全role matrix、旧sessionでの休止/退会・復帰、認証済みChrome、実機/スクリーンリーダー: NOT TESTED（専用staging/合成role account待ち）。隔離テストは限定scopeのみpass。
+- OPSD-01〜09はすべて未承認。候補・推奨案は決定ではない。担当と完了証拠は [運営決定チェックリスト](ADMIN_MEMBER_INTAKE_STAGING_CHECKLIST.md) と [決定票](ADMIN_OPERATIONAL_DECISIONS.md) に記入する。
 
-| 優先度                          | 状態                     | 根拠 / 必要な次の処置                                                                                                                                                                                  |
-| ------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| P0: 応募データの部分成功        | 修正済み・隔離テストPASS | 以前は応募insert後のtask/email設定失敗を握りつぶし、HTTP 201と誤った`emailQueued`を返し得た。transaction化と失敗後再試行を実装。PR CI・レビュー・通常のmain配信後に再照合する。                        |
-| P0: 本番provenance              | BLOCKED                  | 最新Worker Deployment sourceは`wrangler`で、Workers Builds provenanceを確認できない。Issue #509を継続し、成功runのcheckout SHAと固定Worker Versionを照合する。手動deployや設定変更で迂回しない。       |
-| P0: 実認証・全role matrix       | BLOCKED                  | 未認証/応募者/採用前/一般member/各scope担当/global admin/休止/退会済みで、専用隔離アカウントを使うUIと直接APIのexact-head確認が必要。                                                                  |
-| P0: 外部状態                    | BLOCKED                  | 承認済みsandboxでResend/Discordの失敗・再試行・重複・権限失効を実測し、実受信/実role状態とqueue記録を照合する必要がある。                                                                              |
-| P1: 受入体制                    | BLOCKED                  | OPSD-01/02/06/07について担当/代理/返信目安、受入上限/停止条件、queue確認頻度、停止・再開承認者が未決定。運営責任者の記録が必要。                                                                       |
-| P1: 個人情報                    | BLOCKED                  | OPSD-03/04と公開repo PR [#140](https://github.com/Atlasez/Atlasez01/pull/140)の募集・privacy説明が未確定。目的、保持期間、削除、監査ログアクセス/保持を運営・privacy責任者が承認し公開説明に反映する。 |
-| P1: backup / incident / Discord | BLOCKED                  | OPSD-05/08/09について暗号化backupのアクセス・保持・restore drill/RPO/RTO、Discord休止・退会時のrole方針、専用sandbox accountを運営/セキュリティ/SREが決定・検証する。                                  |
+| ID      | 決定事項                                                | 責任roleと必要な完了証拠                                                    |
+| ------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
+| OPSD-01 | queue別主担当/代理、連絡先、返信目安                    | 運営責任者。記名担当表と代理者の引継ぎ記録。                                |
+| OPSD-02 | 限定人数/project/期間、未対応上限、受付停止・再開基準   | 運営代表・各project lead。数値入り募集計画と停止時案内。                    |
+| OPSD-03 | 応募/profile/運営メモ/backupの目的・保持・削除窓口      | Privacy責任者・運営責任者。承認済み保持/削除表と公開文。180日候補は未承認。 |
+| OPSD-04 | 監査ログのPII、閲覧scope、用途・保管/削除               | Privacy責任者・ADMIN管理者。log schema/閲覧権限と公開説明の対応表。         |
+| OPSD-05 | backupの暗号化copy、閲覧/保持/削除、実測RPO/RTO         | D1運用担当・Security。隔離restore証拠、時間、手順、権限記録。               |
+| OPSD-06 | provider/Cron queueの監視頻度、滞留閾値、alert先        | 運営責任者・provider担当。失敗注入から通知受信・引継ぎまでの記録。          |
+| OPSD-07 | 本番停止権限、停止順、連絡先、復旧承認者                | 運営責任者・Cloudflare管理者・D1運用担当。署名済み停止/再開手順と机上演習。 |
+| OPSD-08 | 休止/project離脱/退会時のDiscord role保持/削除、復帰    | 運営責任者・Discord管理者。状態別方針、本人案内、test guild受入。           |
+| OPSD-09 | staging/Chrome role別受入の環境、account owner、cleanup | Security・staging owner。隔離環境台帳、合成account一覧、cleanup証拠。       |
 
-### GitHub open PR・Issueの現況
+### GitHub整理・依存順
 
-2026-11-03にGitHubのPR/APIとhead SHAのcheck-runsをread-only取得した。過去のCI成功は、そのPRの古いhead/baseに対する証拠としてのみ扱う。
+| PR   | 最新状態                                                                                         | 評価                                                                                                                 |
+| ---- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| #545 | OPEN, HEAD `eba29378eada1cdf202ee0384d1e1f0039bd70fa`, exact `verify` success                    | #546統合後にbase追従・CI再実行。0134の本番適用/確認が先行条件。                                                      |
+| #546 | OPEN, HEAD `e08d07b6177ec72309c5272505b5464f3942659b`, exact `verify` success                    | 独立した依存/Wrangler更新。main mergeはWorkers Builds自動deploy可否の確認後のみ。                                    |
+| #547 | OPEN, HEAD `3281a7b05f7b566cc2acc0ace62277428b9deef2`, run `41515735513` in progress at snapshot | 運営受入checklist/runbook。docs-onlyでもmain mergeでbuild/deployが動くなら同じrelease gate。                         |
+| #536 | OPEN, base stale, exact prior `verify` success                                                   | ログイン/error/404 UIの別目的。現mainへrebase後、auth/API互換性とexact CIを再確認。                                  |
+| #528 | OPEN, CONFLICTING                                                                                | portal unread summaryは現mainに同等以上の実装あり。obsolete/重複候補、再実装しない。                                 |
+| #527 | OPEN Draft, CONFLICTING                                                                          | backup scan変更は独立。rebase後のcheckpoint互換性・隔離検証が必要。                                                  |
+| #517 | OPEN, stale base                                                                                 | Workers Builds outage説明が古い。Issue #509の最新状況と照合してから扱う。                                            |
+| #505 | OPEN, docs-only deployment sync, no check run                                                    | main SHA/build-infoは一致するがprovenance証拠ではない。branch protection required checkなしのためmerge-readyでない。 |
 
-| PR / Issue                                                        | 現在状態                                                                                                                                                                                                                                                                                                                                                                                                                             | 判定                                                                                                                                                                                        |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [#536](https://github.com/Atlasez/Admin-Atlesez/pull/536)         | OPEN・mergeable。exact head `e27e9833eadc82af22266fe9e7eeec29f1e5ec48`のverify成功。base SHA `074be85ff1fc5fd34952c49440dfa553270aa025`は古い。統合branchとのmerge-treeはcleanだが、admin-worker.tsを含むためmainへ追従後にCI再実行が必要。                                                                                                                                                                                          | ログイン/error/404 UIとfeature gate。#545と用途は独立し、現状コード差分で競合しない。rebaseと認証/API互換性確認後にレビューする。                                                           |
-| [#528](https://github.com/Atlasez/Admin-Atlesez/pull/528)         | OPEN・CONFLICTING。exact head `4f039648823e7a0860f5741235e20a629b69d78d`のverify成功、base SHA `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`は古い。統合branchとのmerge-treeはAdminNavとportalで競合。                                                                                                                                                                                                                                  | 現mainはportalUnreadSummary()とnotificationStatus/動的aria-labelで同等以上のfallbackを提供し、unit/e2e coverageもある。#528はobsolete/重複で新規修正不要。maintainerがcloseするまで未統合。 |
-| [#527](https://github.com/Atlasez/Admin-Atlesez/pull/527)         | OPEN Draft・CONFLICTING。exact head `2f0386a5cb2f2efd14d3e7443311c61b71a83c06`のverify成功、base SHA `e63ab8b8ecca0dbe042e982fc19e9c3dffc7e370`は古い。統合branchとのmerge-treeはscheduled-sync testで競合。                                                                                                                                                                                                                         | backup scan最適化案。checkpoint形式と中断再開の互換性をrebase後に隔離テストし、Draftのまま運用レビュー待ち。                                                                                |
-| [#517](https://github.com/Atlasez/Admin-Atlesez/pull/517)         | OPEN・mergeable。exact head `39737a458451c2fe7c1bd4bba0f4677e8855ecc4`のverify成功。base SHA `28b5f321af4bdd7177c92038935d0a5f1dc2f285`は古い。統合branchとのmerge-treeはclean。                                                                                                                                                                                                                                                     | Workers Builds outage diagnosisのdocs-only。#509の現状・11-02 read-only証拠と重複/古い説明を更新してから扱う。                                                                              |
-| [#505](https://github.com/Atlasez/Admin-Atlesez/pull/505)         | OPEN・mergeable。head `7831f8c272e3329b7daa767d0de45cf98199c611`、base/current main `5e8dd7533e417b9237c232102856bfecd026e2c0`。diffはdocs/deployments/cloudflare-latest.jsonのみ、merge-baseはcurrent main、ADMIN build-info SHAも同main SHA。required check runなし。                                                                                                                                                              | 内容は監査記録だけでコード配信影響なし。ただしsource=wranglerを記録するだけでBuild provenanceは証明しない。required check/review前のmergeはしない。                                         |
-| [#526](https://github.com/Atlasez/Admin-Atlesez/pull/526)         | MERGED 2026-10-13。                                                                                                                                                                                                                                                                                                                                                                                                                  | 受入機能・運用監査の内容はmainに含まれる。既に実装済みの機能を再構築しない。                                                                                                                |
-| [#545](https://github.com/Atlasez/Admin-Atlesez/pull/545)         | OPEN。code/test head `e5d60003a1cbc14fa5a2bf685b93717c2e041c5e`はexact-head run [41491240193](https://github.com/Atlasez/Admin-Atlesez/actions/runs/41491240193) success。受入記録を含むhead `be71659388cf3208b8067389ce7fe6f865b32af8`もexact-head run [41492522823](https://github.com/Atlasez/Admin-Atlesez/actions/runs/41492522823) success。base/current main `5e8dd7533e417b9237c232102856bfecd026e2c0`。review/merge未完了。 | 応募・task・メールqueueのatomicityと応答喪失後の状態確認。#546との統合branchでも全local checks/e2eが成功。                                                                                  |
-| [#546](https://github.com/Atlasez/Admin-Atlesez/pull/546)         | OPEN。exact head `e08d07b6177ec72309c5272505b5464f3942659b`、base/current main `5e8dd7533e417b9237c232102856bfecd026e2c0`、exact-head verify run [41480187492](https://github.com/Atlasez/Admin-Atlesez/actions/runs/41480187492) success。review/merge未完了。                                                                                                                                                                      | Wrangler 4.156.2とlockfile更新。#545と変更範囲は独立し、統合branchでbuild/dry-run/unit/e2e compatibilityを確認。                                                                            |
-| Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509) | OPEN、68 comments、最終更新2026-10-13。                                                                                                                                                                                                                                                                                                                                                                                              | Workers Builds provenance停止条件は未解消。mainとbuild-infoが一致してもクローズ/成功扱いしない。                                                                                            |
+#545/#546/#547のPR本文とexact-head CIを再確認した。依存順は、まず#546→新main上で#545と#547をrebase→exact-head CI→0134の本番適用/検証を別の承認済みreleaseで実施してから#545のmerge判断とする。ただし現在はWorkers Buildsの自動deploy状態がUNKNOWNで、main mergeによる本番変更を排除できないため、どのPRもmergeしない。#546が先に統合された場合も#545/#547の旧CIを流用せず、新base上で全required checkを再実行する。D1の変更/merge/deploy許可は別途必要。
 
-公開repo `Atlasez/Atlasez01` のmainとopen PRはread-onlyで確認した。PR #140の募集/privacy説明は未承認保持期間や運営判断に依存し、PR #141は問い合わせ導線等を扱う。ADMINの限定受入を行う前に、募集対象・応募先・目的・窓口が運営方針と一致するかを公開側責任者が確認する。別repoへの変更は行っていない。
+### 受入判定
 
-### 5段階のGo / No-Go
+| Gate                  | 判定    | 根拠                                                                                                                                                       |
+| --------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code Ready            | BLOCKED | #545/#546の自動検証と統合隔離試験はpass。ただしPR未統合、role/API matrixとlifecycle session失効の全網羅がなく、0134も本番未確認。                          |
+| Staging Ready         | BLOCKED | 専用Worker/D1/OAuth/Resend/Discord環境・合成accountが未準備。チェックリストは実行前手順であって受入結果ではない。                                          |
+| Production Verified   | BLOCKED | build-info SHAはmainと一致するが、Worker VersionとWorkers Builds runのprovenance、最新Build設定、認証済みChrome受入が欠落。D1 migration statusも取得不可。 |
+| Limited Intake GO     | NO-GO   | 0134、production provenance、staging OAuth/provider/role tests、OPSD-01/02/03/05/06/07/08/09の決定・証跡が未完了。                                         |
+| Public Recruitment GO | NO-GO   | 限定受入実績、受付容量/停止基準、privacy公開文、backup/incident/provider受入、公開側PR #140の判断が未完了。                                                |
 
-| 判定                  | 状態                                                    | 理由                                                                                                                                         |
-| --------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Code Ready            | BLOCKED（応募〜初回タスクと応募再送経路は隔離検証PASS） | full role/API matrix、実OAuth/provider、専用sandboxとPR reviewが未完了。                                                                     |
-| Staging Ready         | BLOCKED                                                 | この作業では共有staging・実OAuth/providerを利用していない。隔離SQLiteとPlaywright mockはstagingの代替ではない。                              |
-| Production Verified   | BLOCKED                                                 | 公開build-infoとmain SHAは一致するが、Cloudflare sourceは`wrangler`でWorkers Builds provenanceを確認できず、認証済みChromeの画面証拠もない。 |
-| Limited Intake GO     | BLOCKED                                                 | OPSD-01/02/03/05/06/07/08/09、専用sandbox、production provenanceと権限・外部連携受入が未完了。                                               |
-| Public Recruitment GO | BLOCKED                                                 | 限定受入が未承認。募集処理能力、プライバシー、返信目安、backup/incident準備、公開repo PR #140の判断が未完了。                                |
+### 次の作業と責任者
 
-### Limited Intakeへ進む最短手順
-
-1. ADMIN開発担当がこの修正PRのreview/CIを完了し、承認後にmainへ統合する。統合・本番配信は別の明示承認に従う。
-2. SRE/Cloudflare担当がWorkers Buildsの成功run、checkout SHA、Worker `atlasez-admin`のVersion/100%配信、公開build-info SHAを照合し、Issue #509の停止条件を解消する。復旧失敗時は配信を停止する。
-3. 運営責任者・privacy責任者がOPSD-01/02/03/04/05/06/07/08/09を決定票へ記録し、募集・privacy説明を公開repoの既存PRへ反映する。Discord roleの保持/削除を未決定のまま実操作しない。
-4. 運営担当が専用の応募者/会員/各role sandbox accountを用意し、承認済みstagingで応募から採用、初回設定、タスク完了、不採用、複数所属、退会/復帰、外部連携失敗をexact-headで実行する。DB/APIと通知の状態を照合し、実メール・Discordの到達確認は別途承認済み検証宛先で行う。
-5. 運営責任者が限定人数・受付停止条件・対応担当/代理・連絡窓口を確定し、判定記録と証跡がそろった後にLimited Intakeを再判定する。承認前に本番招待や募集を開始しない。
+1. Cloudflare/release ownerはDashboardでWorkers Builds接続・Production branch・Preview・commandsをread-only記録し、main mergeがproduction deployを起動するか判定する。成功Build run→checkout SHA→Worker `atlasez-admin` Version→100%配信→公開build-infoを証拠で結ぶ。
+2. D1 operator/Securityは固定本番D1のmigration ledgerをread-only再取得し、0134の状態を記録する。未適用ならbackupとrollbackを含む承認済み手順を作り、別途明示承認後にのみ適用する。mergeより前に適用済みを検証し、local successで代用しない。
+3. Staging owner/Google admin/Resend admin/Discord adminは隔離Worker/D1、OAuth clientとsynthetic account、test sink、test guild/botを作成し、秘密値は管理対象secret storeに入れる。STG-01〜09を実施して証拠を添付する。Discord操作はOPSD-08の承認前に行わない。
+4. 運営・Privacy・Security・SRE責任者はOPSD-01〜09の記入欄を承認し、限定人数・担当/代理・保持/削除・backup/restore・incident停止/再開・Discord方針を決める。候補値を承認済みとして扱わない。
+5. 各PR担当は#546を先行させる統合計画に合わせてrebase/exact CIを実行する。mainへのmergeはBuildsの自動deploy挙動と0134を含むリリース順が承認され、未承認の本番変更が発生しない状態になってから実施する。
