@@ -1287,7 +1287,21 @@ it("仮の新規利用者の基本情報保存・応募・二重応募防止・�
   };
   const applied = await request("/api/apply", email, application);
   expect(applied.status, await applied.clone().text()).toBe(201);
-  expect((await request("/api/apply", email, application)).status).toBe(409);
+  const appliedResult = await applied.json();
+  expect(appliedResult).toMatchObject({
+    applicationCreated: true,
+    responseTaskCreated: true,
+    emailDeliveryStatus: "queued",
+    emailProviderConfigured: false,
+  });
+  expect(appliedResult.emailQueueCount).toBeGreaterThan(0);
+  expect(appliedResult).not.toHaveProperty("emailDelivered");
+  const duplicate = await request("/api/apply", email, application);
+  expect(duplicate.status).toBe(409);
+  expect(await duplicate.json()).toMatchObject({
+    code: "APPLICATION_ALREADY_EXISTS",
+    statusUrl: "/applicant/?submission=already-received",
+  });
   const otherProfile = await request(
     "/api/application-profile",
     "other@atlasez.test",
@@ -1383,6 +1397,12 @@ it("同一利用者の同時応募は1件だけ保存し、副作用も一組だ
   expect(responses.map((response) => response.status).sort()).toEqual([
     201, 409,
   ]);
+  const duplicate = responses.find((response) => response.status === 409);
+  expect(duplicate).toBeDefined();
+  expect(await duplicate!.json()).toMatchObject({
+    code: "APPLICATION_ALREADY_EXISTS",
+    statusUrl: "/applicant/?submission=already-received",
+  });
   expect(
     db
       .prepare(
@@ -1398,6 +1418,175 @@ it("同一利用者の同時応募は1件だけ保存し、副作用も一組だ
       .get(),
   ).toMatchObject({ count: 1 });
   expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+});
+
+it("応募保存後にHTTP応答だけが失われた再送は409となり、本人が既存状況を確認できる", async () => {
+  const { db, request } = environment();
+  const email = "lost-response@atlasez.test";
+  const profile = {
+    familyName: "応答",
+    givenName: "喪失",
+    familyNameKana: "おうとう",
+    givenNameKana: "そうしつ",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+  const application = {
+    projectSlug: "thinking-cafe",
+    interests: "対話の場づくり",
+    message: "保存後に応答だけが失われるケース",
+    referralSource: "隔離テスト",
+    interviewAvailability: "平日18時 Asia/Tokyo",
+    projectAnswers: { theme: "安全な再送" },
+  };
+  expect(
+    (await request("/api/application-profile", email, profile)).status,
+  ).toBe(200);
+
+  const sendWithLostResponse = async () => {
+    const committedResponse = await request("/api/apply", email, application);
+    expect(committedResponse.status).toBe(201);
+    await committedResponse.body?.cancel();
+    throw new TypeError("simulated response loss after committed request");
+  };
+  await expect(sendWithLostResponse()).rejects.toThrow(TypeError);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE lower(email)=lower(?) AND project_slug='thinking-cafe'",
+      )
+      .get(email),
+  ).toEqual({ count: 1 });
+
+  const retry = await request("/api/apply", email, application);
+  expect(retry.status).toBe(409);
+  expect(await retry.json()).toMatchObject({
+    code: "APPLICATION_ALREADY_EXISTS",
+    statusUrl: "/applicant/?submission=already-received",
+  });
+  const statusResponse = await request("/api/applicant/me", email);
+  expect(statusResponse.status).toBe(200);
+  expect(await statusResponse.json()).toMatchObject({
+    stage: "APPLICANT",
+    applications: [
+      expect.objectContaining({ project: "考えるカフェ", status: "new" }),
+    ],
+  });
+
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE lower(email)=lower(?) AND project_slug='thinking-cafe'",
+      )
+      .get(email),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM editorial_tasks WHERE created_by='応募フォーム'",
+      )
+      .get(),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries",
+      )
+      .get(),
+  ).toEqual({ count: 2 });
+  expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+});
+
+it("応募行・運営タスク・メールqueueの変更数が一致しない場合は201を返さずPIIなしの相関ログを残す", async () => {
+  const { db, request, env } = environment();
+  const email = "write-count-mismatch@atlasez.test";
+  const profile = {
+    familyName: "変更数",
+    givenName: "不整合",
+    familyNameKana: "へんこうすう",
+    givenNameKana: "ふせいごう",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+  const application = {
+    projectSlug: "thinking-cafe",
+    interests: "対話",
+    message: "変更数整合性を確認",
+    referralSource: "隔離テスト",
+    interviewAvailability: "平日18時 Asia/Tokyo",
+    projectAnswers: { theme: "データ整合性" },
+  };
+  await request("/api/application-profile", email, profile);
+  const logger = vi.spyOn(console, "error").mockImplementation(() => {});
+  const originalBatch = env.REPORTS.batch;
+  env.REPORTS.batch = async (statements) => {
+    const results = await originalBatch(statements);
+    const responseTaskResult = results[1];
+    if (!responseTaskResult || !("meta" in responseTaskResult)) return results;
+    return results.map((result, index) =>
+      index === 1
+        ? {
+            ...responseTaskResult,
+            meta: { ...responseTaskResult.meta, changes: 0 },
+          }
+        : result,
+    );
+  };
+
+  const response = await request("/api/apply", email, application);
+  expect(response.status).toBe(503);
+  const result = (await response.json()) as {
+    code: string;
+    correlationId: string;
+    statusUrl: string;
+  };
+  expect(result).toMatchObject({
+    code: "APPLICATION_RESULT_UNCONFIRMED",
+    statusUrl: "/applicant/?submission=check",
+  });
+  expect(result.correlationId).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(logger).toHaveBeenCalledTimes(1);
+  const logLine = String(logger.mock.calls[0]?.[0]);
+  expect(logLine).toContain(result.correlationId);
+  expect(logLine).toContain("application_write_count_mismatch");
+  expect(logLine).not.toContain(email);
+  expect(logLine).not.toContain("変更数整合性");
+  expect(logLine).not.toContain("検証");
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE email=?",
+      )
+      .get(email),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM editorial_tasks WHERE created_by='応募フォーム'",
+      )
+      .get(),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries",
+      )
+      .get(),
+  ).toEqual({ count: 2 });
 });
 
 it("応募・運営対応タスク・メールキューを同じbatchで確定し、失敗時は再応募可能にする", async () => {

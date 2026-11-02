@@ -14617,6 +14617,27 @@ async function submitMemberApplication(
   source: "same-origin" | "public-worker" = "same-origin",
   ctx?: WorkerExecutionContext,
 ): Promise<Response> {
+  const correlationId = crypto.randomUUID();
+  const alreadyApplied = () =>
+    json(
+      {
+        error:
+          "このプロジェクトの応募または参加情報はすでに登録されています。応募状況を確認してください。",
+        code: "APPLICATION_ALREADY_EXISTS",
+        ...(source === "same-origin"
+          ? { statusUrl: "/applicant/?submission=already-received" }
+          : {}),
+      },
+      409,
+    );
+  const logSubmissionFailure = (category: string) =>
+    console.error(
+      JSON.stringify({
+        event: "application_submission_failed",
+        correlationId,
+        category,
+      }),
+    );
   let authenticatedEmail = "";
   if (source === "public-worker") {
     const configuredToken = env.PUBLIC_APPLICATION_INGEST_TOKEN?.trim();
@@ -14801,8 +14822,7 @@ async function submitMemberApplication(
     )
       .bind(authenticatedEmail, projectSlug, authenticatedEmail, onboardingProjectId(projectSlug))
       .first<{ found: number }>();
-    if (existingProject)
-      return json({ error: "このプロジェクトにはすでに応募済み、または参加中です。" }, 409);
+    if (existingProject) return alreadyApplied();
   }
   const projectAnswerRecord: Record<string, string> = {};
   if (
@@ -14945,14 +14965,7 @@ async function submitMemberApplication(
   )
     .bind(email, projectSlug)
     .first<{ id: string }>();
-  if (duplicate)
-    return json(
-      {
-        error:
-          "このメールアドレスの応募はすでに確認中です。結果の連絡をお待ちください。",
-      },
-      409,
-    );
+  if (duplicate) return alreadyApplied();
   const now = new Date().toISOString();
   if (authenticatedEmail) {
     await env.REPORTS.prepare(
@@ -15051,9 +15064,23 @@ async function submitMemberApplication(
     createdAt: now,
   };
   let emailStatements: Awaited<ReturnType<Env["REPORTS"]["prepare"]>>[];
-  let applicationResults: Awaited<ReturnType<Env["REPORTS"]["batch"]>>;
   try {
     emailStatements = await applicationEmailDeliveryStatements(env, followup);
+  } catch {
+    logSubmissionFailure("notification_queue_prepare_failed");
+    return json(
+      {
+        error:
+          "応募の処理を完了できませんでした。時間をおいて応募状況を確認してください。",
+        code: "APPLICATION_RESULT_UNCONFIRMED",
+        correlationId,
+        statusUrl: "/applicant/?submission=check",
+      },
+      503,
+    );
+  }
+  let applicationResults: Awaited<ReturnType<Env["REPORTS"]["batch"]>>;
+  try {
     applicationResults = await env.REPORTS.batch([
       applicationInsert,
       applicationResponseTaskStatement(env, followup),
@@ -15062,35 +15089,66 @@ async function submitMemberApplication(
   } catch {
     // 応募本文・運営対応タスク・通知キューは同一batchで確定させる。
     // どれかに失敗した場合はbatch全体がrollbackされ、再送できる。
-    console.error("application submission transaction failed");
+    logSubmissionFailure("application_batch_failed");
     return json(
       {
         error:
-          "応募を保存できませんでした。入力内容を保ったまま、時間をおいてもう一度お試しください。",
+          "応募を保存できたか確認できませんでした。二重送信を避けるため、まず応募状況を確認してください。",
+        code: "APPLICATION_RESULT_UNCONFIRMED",
+        correlationId,
+        statusUrl: "/applicant/?submission=check",
       },
       503,
     );
   }
-  if (applicationResults[0]?.meta?.changes !== 1)
-    return json(
-      {
-        error:
-          "このメールアドレスの応募はすでに確認中です。結果の連絡をお待ちください。",
-      },
-      409,
-    );
+  const applicationChangeCount = applicationResults[0]?.meta?.changes;
+  const responseTaskChangeCount = applicationResults[1]?.meta?.changes;
+  const emailQueueChangeCounts = applicationResults
+    .slice(2)
+    .map((result) => result.meta?.changes);
   const emailQueueCount = applicationResults
     .slice(2)
     .reduce((count, result) => count + (result.meta?.changes ?? 0), 0);
+  if (
+    applicationChangeCount === 0 &&
+    responseTaskChangeCount === 0 &&
+    emailQueueChangeCounts.every((changes) => changes === 0)
+  )
+    return alreadyApplied();
+  const writeCountsMatch =
+    applicationChangeCount === 1 &&
+    responseTaskChangeCount === 1 &&
+    emailStatements.length > 0 &&
+    emailQueueChangeCounts.length === emailStatements.length &&
+    emailQueueChangeCounts.every((changes) => changes === 1);
+  // 201 only means the application, operator task and all initial queue rows committed.
+  // Provider delivery runs asynchronously and is reported separately by the queue worker.
+  if (!writeCountsMatch) {
+    logSubmissionFailure("application_write_count_mismatch");
+    return json(
+      {
+        error:
+          applicationChangeCount === 1
+            ? "応募内容は保存されています。運営への引継ぎ状況を確認中です。再送せず、応募状況をご確認ください。"
+            : "応募の処理結果を確認できませんでした。再送せず、応募状況をご確認ください。",
+        code: "APPLICATION_RESULT_UNCONFIRMED",
+        correlationId,
+        statusUrl: "/applicant/?submission=check",
+      },
+      503,
+    );
+  }
   if (ctx) ctx.waitUntil(dispatchApplicationEmails(env));
   // 応募は個人情報を含むため、Discordへは一切転送しない。運営内運営が管理画面でのみ閲覧する。
   return json(
     {
       ok: true,
+      applicationCreated: true,
       turnstileRequired: Boolean(env.TURNSTILE_SECRET_KEY),
-      responseTaskCreated: applicationResults[1]?.meta?.changes === 1,
+      responseTaskCreated: true,
       emailQueued: emailQueueCount > 0,
       emailQueueCount,
+      emailDeliveryStatus: "queued",
       emailProviderConfigured: Boolean(
         env.RESEND_API_KEY?.trim() && env.EMAIL_FROM?.trim(),
       ),

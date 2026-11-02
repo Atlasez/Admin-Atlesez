@@ -103,6 +103,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         <label class="trap" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off" /></label>
         <button type="submit" data-i18n="submit" disabled>応募を送信</button>
         <output data-result aria-live="polite"></output>
+        <a data-application-status-link href="/applicant/" hidden>応募状況を確認する</a>
       </form>
     </section>
   </main>
@@ -130,6 +131,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       })
       .catch(() => undefined);
     const result = document.querySelector<HTMLOutputElement>("[data-result]")!;
+    const applicationStatusLink = document.querySelector<HTMLAnchorElement>("[data-application-status-link]")!;
     const slot = document.querySelector<HTMLElement>("[data-turnstile]")!;
     const tz = form.querySelector<HTMLSelectElement>("[data-timezone]")!;
     const affiliation = form.querySelector<HTMLSelectElement>("[data-affiliation]")!;
@@ -142,6 +144,10 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       fallback.append(option);
       return fallback;
     })();
+    language.addEventListener("change", () => {
+      if (!applicationStatusLink.hidden)
+        applicationStatusLink.textContent = language.value === "en" ? "Check application status" : "応募状況を確認する";
+    });
     const institutionInput = form.querySelector<HTMLInputElement>("[data-institution-input]")!;
     const institutionList = form.querySelector<HTMLElement>("#institution-directory")!;
     const institutionStatus = form.querySelector<HTMLElement>("[data-institution-status]")!;
@@ -590,7 +596,16 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ ...fields, turnstileToken }),
         });
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        const data = (await response.json().catch(() => ({}))) as { error?: string; code?: string };
+        if (response.status === 409 && data.code === "APPLICATION_ALREADY_EXISTS") {
+          result.value = submittedLanguage === "en" ? "This project already has an application or membership for your account. Opening your status…" : "このプロジェクトの応募または参加情報を確認します。応募状況へ移動します…";
+          location.assign("/applicant/?submission=already-received");
+          return;
+        }
+        if (data.code === "APPLICATION_RESULT_UNCONFIRMED") {
+          location.assign("/applicant/?submission=check");
+          return;
+        }
         if (!response.ok)
           throw new Error(
             data.error ??
@@ -599,7 +614,15 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         result.value = submittedLanguage === "en" ? "Your application has been received." : "応募を受け付けました。";
         location.assign("/applicant/");
       } catch (error) {
-        result.value = error instanceof Error ? error.message : "送信できませんでした。";
+        if (error instanceof TypeError) {
+          result.value = submittedLanguage === "en"
+            ? "We could not confirm the submission result. Check your application status before submitting again."
+            : "送信結果を確認できませんでした。再送前に応募状況をご確認ください。";
+          applicationStatusLink.hidden = false;
+          applicationStatusLink.textContent = submittedLanguage === "en" ? "Check application status" : "応募状況を確認する";
+        } else {
+          result.value = error instanceof Error ? error.message : "送信できませんでした。";
+        }
         isSubmitting = false;
         submitButton.disabled = false;
       }
