@@ -152,9 +152,10 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
     subjects: ["mathematics"],
     isManager: false,
   });
-  await page.goto("./admin/editor/?new=1");
+  await page.goto("./admin/editor/?new=1", { waitUntil: "domcontentloaded" });
 
   const subject = page.locator('select[name="subject"]');
+  await expect(subject).toBeVisible();
   await expect(subject).toHaveValue("mathematics");
   await expect(subject.locator("option")).toHaveCount(1);
   await expect(subject.locator("option")).toHaveText("数学");
