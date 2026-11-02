@@ -118,7 +118,7 @@ it("Resend test-sink mode requires an exact synthetic recipient allowlist", asyn
   insertDelivery.run(
     "stage-mail-allowed",
     "stage-mail-fixture",
-    "allowed@atlasez.test",
+    "delivered@resend.dev",
     now,
     now,
     now,
@@ -126,7 +126,7 @@ it("Resend test-sink mode requires an exact synthetic recipient allowlist", asyn
   insertDelivery.run(
     "stage-mail-blocked",
     "stage-mail-fixture",
-    "blocked@atlasez.test",
+    "person@staging-unowned.example",
     now,
     now,
     now,
@@ -135,7 +135,7 @@ it("Resend test-sink mode requires an exact synthetic recipient allowlist", asyn
     ATLASEZ_STAGING_MODE: "true",
     ATLASEZ_STAGING_CRON_MODE: "intake-only",
     ATLASEZ_STAGING_EMAIL_DELIVERY: "test-sink",
-    ATLASEZ_STAGING_EMAIL_ALLOWLIST: "allowed@atlasez.test",
+    ATLASEZ_STAGING_EMAIL_ALLOWLIST: "delivered@resend.dev",
     RESEND_API_KEY: "synthetic-provider-key",
     EMAIL_FROM: "Atlasez Staging <noreply@staging.example.test>",
   });
@@ -190,6 +190,46 @@ it("Resend test-sink mode fails closed without its secret recipient allowlist", 
   });
   await Promise.all(work);
   expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("rejects arbitrary staging-looking allowlist recipients without logging the address", async () => {
+  const { env } = createAdminTestEnvironment();
+  Object.assign(env, {
+    ATLASEZ_STAGING_MODE: "true",
+    ATLASEZ_STAGING_EMAIL_DELIVERY: "test-sink",
+    ATLASEZ_STAGING_EMAIL_ALLOWLIST: "person@staging-unowned.example",
+    RESEND_API_KEY: "synthetic-provider-key",
+    EMAIL_FROM: "Atlasez Staging <noreply@staging.example.test>",
+  });
+  const fetcher = vi.fn(async () => Response.json({ id: "unexpected" }));
+  const logger = { info: vi.fn(), error: vi.fn() };
+  expect(
+    await dispatchApplicationEmails(env as never, { fetcher, logger }),
+  ).toMatchObject({ skipped: true });
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(JSON.stringify(logger.error.mock.calls)).not.toContain(
+    "person@staging-unowned.example",
+  );
+});
+
+it("rejects arbitrary staging-looking sender domains only in staging mode", async () => {
+  const { env } = createAdminTestEnvironment();
+  Object.assign(env, {
+    ATLASEZ_STAGING_MODE: "true",
+    ATLASEZ_STAGING_EMAIL_DELIVERY: "test-sink",
+    ATLASEZ_STAGING_EMAIL_ALLOWLIST: "delivered@resend.dev",
+    RESEND_API_KEY: "synthetic-provider-key",
+    EMAIL_FROM: "Atlasez Staging <noreply@staging-unowned.example>",
+  });
+  const fetcher = vi.fn(async () => Response.json({ id: "unexpected" }));
+  const logger = { info: vi.fn(), error: vi.fn() };
+  expect(
+    await dispatchApplicationEmails(env as never, { fetcher, logger }),
+  ).toMatchObject({ skipped: true });
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(JSON.stringify(logger.error.mock.calls)).not.toContain(
+    "staging-unowned.example",
+  );
 });
 
 it("staging email delivery fails closed when disabled or allowlisted for a production address", async () => {

@@ -1,3 +1,8 @@
+import {
+  isApprovedStagingAddress,
+  isApprovedStagingRecipient,
+} from "./admin-staging-email-policy.mjs";
+
 type D1Statement = {
   bind(...values: unknown[]): D1Statement;
   run(): Promise<unknown>;
@@ -41,11 +46,6 @@ const RETRY_DELAY_MS = 5 * 60_000;
 const CLAIM_LEASE_MS = 15 * 60_000;
 const IDEMPOTENCY_WINDOW_MS = 24 * 60 * 60_000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const RESEND_TEST_RECIPIENTS = new Set([
-  "delivered@resend.dev",
-  "bounced@resend.dev",
-  "complained@resend.dev",
-]);
 
 function isAdminStagingOrigin(value?: string) {
   try {
@@ -58,18 +58,6 @@ function isAdminStagingOrigin(value?: string) {
   } catch {
     return false;
   }
-}
-
-function isStagingRecipient(email: string) {
-  const normalized = email.trim().toLowerCase();
-  if (RESEND_TEST_RECIPIENTS.has(normalized)) return true;
-  const domain = normalized.slice(normalized.lastIndexOf("@") + 1);
-  return (
-    domain !== "atlasez.org" &&
-    (domain.includes("staging") ||
-      domain.endsWith(".test") ||
-      domain.endsWith(".invalid"))
-  );
 }
 
 const safeLog = (
@@ -152,6 +140,13 @@ export async function dispatchApplicationEmails(
     safeLog(logger, "error", "application_email_sender_invalid");
     return { sent: 0, failed: 0, skipped: true };
   }
+  if (
+    env.ATLASEZ_STAGING_MODE === "true" &&
+    !isApprovedStagingAddress(sender)
+  ) {
+    safeLog(logger, "error", "application_email_staging_sender_invalid");
+    return { sent: 0, failed: 0, skipped: true };
+  }
   const stagingRecipients =
     env.ATLASEZ_STAGING_MODE === "true"
       ? (env.ATLASEZ_STAGING_EMAIL_ALLOWLIST ?? "")
@@ -169,7 +164,7 @@ export async function dispatchApplicationEmails(
   }
   if (
     stagingAllowedRecipients &&
-    stagingRecipients.some((email) => !isStagingRecipient(email))
+    stagingRecipients.some((email) => !isApprovedStagingRecipient(email))
   ) {
     safeLog(logger, "error", "application_email_staging_allowlist_invalid");
     return { sent: 0, failed: 0, skipped: true };

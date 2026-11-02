@@ -1,3 +1,8 @@
+import {
+  isApprovedStagingAddress,
+  isApprovedStagingRecipient,
+} from "../../src/lib/admin-staging-email-policy.mjs";
+
 export const ADMIN_STAGING_TEMPLATE_PATH =
   "wrangler.admin.staging.example.jsonc";
 export const ADMIN_STAGING_LOCAL_CONFIG_PATH = "wrangler.admin.staging.jsonc";
@@ -46,11 +51,6 @@ const DANGEROUS_VAR_NAME =
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACCOUNT_PATTERN = /^[0-9a-f]{32}$/i;
-const RESEND_TEST_RECIPIENTS = new Set([
-  "delivered@resend.dev",
-  "bounced@resend.dev",
-  "complained@resend.dev",
-]);
 
 export function parseAdminStagingConfig(source) {
   let withoutComments = "";
@@ -145,23 +145,6 @@ function normalizedOrigin(value) {
   } catch {
     return null;
   }
-}
-
-function isStagingEmail(value) {
-  const normalized = value.trim().toLowerCase();
-  if (RESEND_TEST_RECIPIENTS.has(normalized)) return true;
-  const at = value.lastIndexOf("@");
-  if (at <= 0) return false;
-  const domain = value
-    .slice(at + 1)
-    .trim()
-    .toLowerCase();
-  return (
-    domain !== "atlasez.org" &&
-    (domain.includes("staging") ||
-      domain.endsWith(".test") ||
-      domain.endsWith(".invalid"))
-  );
 }
 
 export function validateAdminStagingConfig(
@@ -471,8 +454,8 @@ export function validateAdminStagingConfig(
       : "";
   add(
     failures,
-    isStagingEmail(sender),
-    "EMAIL_FROM must use a staging-only sender domain",
+    isApprovedStagingAddress(sender),
+    "EMAIL_FROM must use an explicitly approved synthetic test domain",
   );
   const operatorEmails =
     typeof vars.APPLICATION_OPERATIONS_EMAILS === "string"
@@ -482,8 +465,9 @@ export function validateAdminStagingConfig(
       : [];
   add(
     failures,
-    operatorEmails.length > 0 && operatorEmails.every(isStagingEmail),
-    "operator notification recipients must be isolated staging/test addresses",
+    operatorEmails.length > 0 &&
+      operatorEmails.every(isApprovedStagingRecipient),
+    "operator notification recipients must use explicitly approved synthetic test addresses",
   );
 
   return failures;

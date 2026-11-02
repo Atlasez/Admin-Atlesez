@@ -5,6 +5,10 @@ import {
   parseAdminStagingConfig,
   validateAdminStagingConfig,
 } from "../../scripts/lib/admin-staging-config.mjs";
+import {
+  isApprovedStagingAddress,
+  isApprovedStagingRecipient,
+} from "../../src/lib/admin-staging-email-policy.mjs";
 import { ADMIN_STAGING_ACCOUNTS } from "../fixtures/admin-staging-accounts";
 
 function safeStagingConfig() {
@@ -41,6 +45,36 @@ describe("ADMIN staging isolation preflight", () => {
 
   it("accepts a staging Worker, workers.dev origin, isolated D1, and test provider identities", () => {
     expect(validateAdminStagingConfig(safeStagingConfig())).toEqual([]);
+  });
+
+  it("allows exact synthetic test domains and Resend simulator addresses only", () => {
+    expect(isApprovedStagingAddress("operator@staging.example.test")).toBe(
+      true,
+    );
+    expect(isApprovedStagingRecipient("delivered@resend.dev")).toBe(true);
+    expect(isApprovedStagingRecipient("person@staging-unowned.example")).toBe(
+      false,
+    );
+    expect(isApprovedStagingRecipient("person@my-staging.example.com")).toBe(
+      false,
+    );
+    expect(
+      isApprovedStagingAddress("person@atlasez.test.attacker.example"),
+    ).toBe(false);
+
+    const sender = safeStagingConfig();
+    sender.vars.EMAIL_FROM =
+      "Atlasez Staging <noreply@staging-unowned.example>";
+    expect(validateAdminStagingConfig(sender)).toContain(
+      "EMAIL_FROM must use an explicitly approved synthetic test domain",
+    );
+
+    const operator = safeStagingConfig();
+    operator.vars.APPLICATION_OPERATIONS_EMAILS =
+      "person@staging-unowned.example";
+    expect(validateAdminStagingConfig(operator)).toContain(
+      "operator notification recipients must use explicitly approved synthetic test addresses",
+    );
   });
 
   it("accepts an old-Worker compatibility config only when scheduled triggers are absent", () => {
