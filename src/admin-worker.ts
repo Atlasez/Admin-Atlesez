@@ -84,6 +84,12 @@ interface Env {
   ADMIN_PUBLIC_ORIGIN?: string;
   GOOGLE_OAUTH_CLIENT_ID?: string;
   GOOGLE_OAUTH_CLIENT_SECRET?: string;
+  /** Staging-only switch. Its scheduled handler is restricted to intake reconciliation. */
+  ATLASEZ_STAGING_MODE?: string;
+  ATLASEZ_STAGING_CRON_MODE?: string;
+  /** Enables only explicitly allowlisted synthetic email deliveries in staging. */
+  ATLASEZ_STAGING_EMAIL_DELIVERY?: string;
+  ATLASEZ_STAGING_EMAIL_ALLOWLIST?: string;
   /** localhostの開発時だけ使う、ログイン不要のテスト用メールアドレス。 */
   ADMIN_LOCAL_EMAIL?: string;
   /** 任意。D1の初期権限行を復旧するための主管理者メール。コードへ直書きしない。 */
@@ -25409,6 +25415,50 @@ export default {
       "cron" in controller
         ? String((controller as { cron?: unknown }).cron ?? "")
         : "";
+    let stagingOrigin = false;
+    try {
+      const origin = new URL(env.ADMIN_PUBLIC_ORIGIN ?? "");
+      stagingOrigin =
+        origin.protocol === "https:" &&
+        origin.hostname.startsWith("atlasez-admin-staging.") &&
+        origin.hostname.endsWith(".workers.dev");
+    } catch {
+      // A missing or malformed origin is handled by the normal config checks.
+    }
+    const stagingModeConfigured =
+      stagingOrigin ||
+      env.ATLASEZ_STAGING_MODE !== undefined ||
+      env.ATLASEZ_STAGING_CRON_MODE !== undefined ||
+      env.ATLASEZ_STAGING_EMAIL_DELIVERY !== undefined ||
+      env.ATLASEZ_STAGING_EMAIL_ALLOWLIST !== undefined;
+    if (stagingModeConfigured) {
+      if (
+        env.ATLASEZ_STAGING_MODE !== "true" ||
+        cron !== "*/5 * * * *" ||
+        env.ATLASEZ_STAGING_CRON_MODE !== "intake-only"
+      ) {
+        console.error(
+          JSON.stringify({
+            event: "admin_staging_cron_skipped",
+            reason:
+              env.ATLASEZ_STAGING_MODE !== "true"
+                ? "staging_mode_invalid"
+                : cron === "*/5 * * * *"
+                  ? "unsafe_cron_mode"
+                  : "unsupported_schedule",
+          }),
+        );
+        return;
+      }
+      ctx.waitUntil(
+        (async () => {
+          await reconcilePendingApplicationIntakes(env);
+          if (env.ATLASEZ_STAGING_EMAIL_DELIVERY === "test-sink")
+            await dispatchApplicationEmails(env);
+        })(),
+      );
+      return;
+    }
     if (cron === "*/1 * * * *") {
       ctx.waitUntil(progressEditorialPublicationRuns(env));
       return;

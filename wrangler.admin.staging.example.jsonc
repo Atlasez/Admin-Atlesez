@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "REPLACE_WITH_STAGING_ACCOUNT_ID",
+  "name": "atlasez-admin-staging",
+  "main": "src/admin-worker.ts",
+  "compatibility_date": "2026-07-26",
+  "preview_urls": false,
+  "workers_dev": true,
+  "vars": {
+    "ADMIN_AUTH_MODE": "google-oauth",
+    "ADMIN_PUBLIC_ORIGIN": "https://atlasez-admin-staging.replace-account-subdomain.workers.dev",
+    "PUBLIC_ANALYTICS_ORIGIN": "https://atlasez-admin-staging.replace-account-subdomain.workers.dev",
+    "PUBLIC_SITE_ORIGIN": "https://atlasez-admin-staging.replace-account-subdomain.workers.dev",
+    "ATLASEZ_STAGING_MODE": "true",
+    "ATLASEZ_STAGING_CRON_MODE": "intake-only",
+    "ATLASEZ_STAGING_EMAIL_DELIVERY": "disabled",
+    "EMAIL_FROM": "Atlasez Staging <noreply@staging.example.invalid>",
+    "APPLICATION_OPERATIONS_EMAILS": "operator@staging.example.invalid",
+    "GOOGLE_OAUTH_CLIENT_ID": "REPLACE_WITH_STAGING_GOOGLE_CLIENT_ID",
+    "DISCORD_GUILD_ID": "REPLACE_WITH_TEST_GUILD_ID",
+    "DISCORD_GUILD_NAME": "Atlasez Staging Test Guild",
+    "DISCORD_OAUTH_CLIENT_ID": "REPLACE_WITH_TEST_DISCORD_CLIENT_ID",
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/*"],
+  },
+  "d1_databases": [
+    {
+      "binding": "REPORTS",
+      "database_name": "atlasez-admin-staging-reports",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+    },
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"],
+  },
+}
