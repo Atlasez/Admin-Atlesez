@@ -8681,7 +8681,8 @@ async function reconcilePendingApplicationIntakes(env: Env) {
   let repairedCount = 0;
   let pendingCount = 0;
   for (const application of pending.results ?? []) {
-    const correlationId = `scheduled:${application.id}`;
+    const correlationId = crypto.randomUUID();
+    const recoveryAuditKey = `scheduled:${application.id}`;
     const safeLog = (category: string, details: Record<string, number | string | boolean> = {}) =>
       console.error(JSON.stringify({
         event: "application_intake_reconciliation",
@@ -8781,7 +8782,7 @@ async function reconcilePendingApplicationIntakes(env: Env) {
     try {
       const recoveryInput = {
         applicationId: application.id,
-        correlationId,
+        correlationId: recoveryAuditKey,
         detectedBy: "scheduled_reconciliation" as const,
         missing: missingBefore,
         repaired,
@@ -8801,7 +8802,7 @@ async function reconcilePendingApplicationIntakes(env: Env) {
         env.REPORTS.prepare(
           "SELECT 1 AS found FROM admin_audit_log WHERE id=? LIMIT 1",
         )
-          .bind(`application-recovery:${application.id}:${correlationId}`)
+          .bind(`application-recovery:${application.id}:${recoveryAuditKey}`)
           .first<{ found: number }>(),
       ]);
       recoveryRecordVerified = Boolean(task && task.status !== "done" && audit);

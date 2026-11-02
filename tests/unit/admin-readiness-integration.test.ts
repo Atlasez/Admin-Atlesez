@@ -2148,6 +2148,7 @@ it("補完と復旧記録がともに失敗してもCron照合が欠損を修復
   const serializedRecoveryLogs = logger.mock.calls
     .map((call) => String(call[0]))
     .join("\n");
+  expect(serializedRecoveryLogs).not.toContain(row.id);
   expect(serializedRecoveryLogs).not.toContain("継続照合");
   expect(serializedRecoveryLogs).not.toContain("検証");
 
@@ -2240,6 +2241,7 @@ it("復旧記録を作れない古い行が25件上限を占有せず次回Cron�
     .join("\n");
   expect(serializedLogs).not.toContain("rotation-00@atlasez.test");
   expect(serializedLogs).not.toContain("rotation-25@atlasez.test");
+  expect(serializedLogs).not.toContain("intake-rotation-");
 });
 
 it("応募INSERTが実SQLで無視された全件0変更を二重応募409と誤認しない", async () => {
