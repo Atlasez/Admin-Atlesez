@@ -86,10 +86,25 @@ Cloudflare D1 Time Travelは現在のbookmarkをread-onlyで取得できます�
 1. Cloudflare dashboard/WranglerでWorker名・D1名・完全なD1 IDを二名照合し、production IDでないことを確認します。対象の旧Worker build/SHA、D1 migration ledger、CI runを記録します。
 2. `wrangler d1 info atlasez-admin-staging-reports --remote --config wrangler.admin.staging.jsonc` でD1 storage versionを確認します。Time Travelを使用できる状態であることを記録します。
 3. `wrangler d1 time-travel info atlasez-admin-staging-reports --config wrangler.admin.staging.jsonc` でmigration前bookmarkを取得し、安全な運用記録に保存します。出力をIssueへ丸ごと貼らず、bookmarkは権限を持つ担当者間だけで共有します。
-4. `wrangler d1 migrations list atlasez-admin-staging-reports --remote --config wrangler.admin.staging.jsonc` でmigration 0134だけがpendingであることを確認します。
-5. 事前backup/bookmarkと専用D1を再確認し、承認されたD1 operatorが `wrangler d1 migrations apply atlasez-admin-staging-reports --remote --config wrangler.admin.staging.jsonc` を実行します。本番D1名やproduction configを指定しません。
-6. migration ledgerに0134が一度だけ記録され、応募/queue件数、backfill、送信済み状態、default markerをread-onlyで確認します。旧Workerを維持した状態で既存SELECT/旧列INSERTが通ることをsynthetic accountで確認後、新Workerをstagingだけへ配信し応募/API/E2Eを行います。
-7. Time Travel restoreの実証は他のSTG dataが存在しない使い捨てD1で行います。migration前bookmarkへのrestore後に0134列/ledgerがなく、synthetic legacy rowsが保たれたことをread-only検証し、その後必要なら0134を再適用して最終ledgerを確認します。共有staging D1を無断でrestoreしません。
+4. `wrangler d1 migrations list atlasez-admin-staging-reports --remote --config wrangler.admin.staging.jsonc` で新規D1のpending migration一覧と最終番号を確認します。新規D1では0134だけでなく全migrationがpendingであるのが想定です。途中migrationが一部適用済みなら作業を止め、状態を調査します。
+5. 事前backup/bookmarkと専用D1を再確認し、承認されたD1 operatorが `wrangler d1 migrations apply atlasez-admin-staging-reports --remote --config wrangler.admin.staging.jsonc` を実行します。本番D1名やproduction configを指定しません。適用後、read-only migration listで0134を含む全migrationのledgerを確認します。
+6. **旧migrationの固定運営者をstagingへ持ち込まないための初期role resetを、新規D1でOAuth account/試験データを追加する前に一度実施します。** Migration `0004`/`0090` は本番の全体管理者、`0079` は本番のproject leader、`0091` は本番管理者のDiscord除外を固定値でseedします。新規D1へ全migrationを適用するとこれらの行も作られます。ステージングD1 operatorは対象のD1名/IDを二名照合した後、次のSQLを `atlasez-admin-staging-reports` のみへ実行します。`<DEDICATED_STAGING_GOOGLE_OPERATOR_EMAIL>` はGoogle test userとして既に登録した専用合成アカウントの小文字メールへ置換し、実メンバーのメールは使いません。
+
+   ```sql
+   DELETE FROM report_admin_permissions;
+   DELETE FROM editorial_workflow_roles;
+   DELETE FROM atlasez_member_discord_role_sync_exclusions;
+   INSERT OR IGNORE INTO report_admin_permissions (email, subject)
+     VALUES ('<DEDICATED_STAGING_GOOGLE_OPERATOR_EMAIL>', '*');
+   SELECT email, subject FROM report_admin_permissions;
+   SELECT COUNT(*) AS count FROM editorial_workflow_roles;
+   SELECT COUNT(*) AS count FROM atlasez_member_discord_role_sync_exclusions;
+   ```
+
+   Read-backで全体権限が専用staging operatorの1行だけ、他2表が0行であることを確認します。この初期化は新規staging D1限定で、後続の試験roleを作成した後に再実行しません。失敗/途中成功時はrole試験を開始せず、operatorが同じ初期化を再実行して上記状態を確認します。SQL結果やメールアドレスをIssueへ貼らず、匿名fixture key・row counts・実施者role・UTC時刻を記録します。
+
+7. migration ledgerに0134が一度だけ記録され、応募/queue件数、backfill、送信済み状態、default markerをread-onlyで確認します。旧Workerを維持した状態で既存SELECT/旧列INSERTが通ることをsynthetic accountで確認後、新Workerをstagingだけへ配信し応募/API/E2Eを行います。
+8. Time Travel restoreの実証は他のSTG dataが存在しない使い捨てD1で行います。migration前bookmarkへのrestore後に0134列/ledgerがなく、synthetic legacy rowsが保たれたことをread-only検証し、その後必要なら0134を再適用して最終ledgerを確認します。共有staging D1を無断でrestoreしません。
 
 実行前にD1の `version` がTime Travelをサポートしない場合、backup手段とrestore権限が未確認の場合、migration listに0134以外の予期しない項目がある場合、backup/bookmarkが確認できない場合は停止します。適用失敗時はworker配信とCronを止め、migration SQL・D1 query error・ledgerを保存し、再applyやrestoreを推測で行わずD1 operatorへエスカレーションします。コードを戻す場合も0134の列/indexは残し、down migrationでschema/dataを削除しません。
 
@@ -98,6 +113,16 @@ Cloudflare D1 Time Travelは現在のbookmarkをread-onlyで取得できます�
 ## 6. STG-01〜09を開始する順序
 
 `docs/ADMIN_MEMBER_INTAKE_STAGING_CHECKLIST.md` が正式な試験票です。次の順序で担当者が準備し、試験ごとに対象SHA/Worker Version、anonymous fixture key、UTC時刻、HTTP status、synthetic row counts、許可/拒否、証跡URLを記録します。メール本文、住所、Cookie、OAuth情報、Discord account名は記録しません。
+
+最初の開始操作と担当は次の順です。これは作業手順であり、未実施のCloudflare/provider変更を実施済みとは扱いません。
+
+1. **Staging owner / Cloudflare Account admin:** 専用Worker・D1を作成し、`wrangler.admin.staging.jsonc` をignored local configとして完成。`npm run verify:admin-staging-config` と `npm run deploy:admin:staging -- --dry-run` が通るまでdeployしません。Resource ID、worker.dev URL、binding/secret名だけを二名でread-backします。
+2. **Google Cloud admin:** 専用OAuth clientにstaging worker.dev originと `/auth/google/callback` を登録し、運営が管理する合成Google test usersを用意します。アカウントのメール/secretはGitHubに記録せず、内部の権限台帳でfixture keyに対応付けます。
+3. **D1 operator:** migration/backup手順に従い全migrationを専用D1だけへ適用し、上記のbootstrap SQLでmigrationに埋め込まれた本番role seedを除去してsynthetic global operatorだけを作成します。operatorがGoogle OAuthでログインでき、global route/APIにだけscopeを持つ read-only 確認が終わるまで他roleをseedしません。
+4. **Staging owner + QA/role owner:** applicant/accepted/member/manager/coordinator/suspended/withdrawn用の合成Google accountsを管理台帳で各fixture keyへ割当てます。`@atlasez.test` fixtureはローカル専用なので実Google loginに流用しません。応募者と受入memberはUI/APIから作り、権限fixtureはglobal operatorでstaging API経由に作成します。直接SQL seedする場合は対象role・必要最小行・cleanupを別途レビューし、全API権限は付与しません。
+5. **Release owner:** staging Worker deployとSTG-01 OAuth smokeを開始します。Resend/DiscordはOPSD-08を含む承認・test sink/guildのread-backが完了するまで無効のままとし、STG-02〜09はそれぞれ表の事前条件を満たしてから開始します。
+
+したがって、現時点ではSTG-01から開始できません。最初に必要なのはCloudflare Account adminが隔離Worker/D1を作成し、Staging ownerが匿名化したresource metadataを揃えることです。Google/Resend/Discordの担当者はそのstaging hostnameが確定した後に専用client/sink/guildを紐付けます。
 
 | STG                 | 開始前に必要なもの                                                      | 合格証拠                                                                                           |
 | ------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |

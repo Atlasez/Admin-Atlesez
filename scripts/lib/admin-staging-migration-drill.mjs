@@ -63,6 +63,40 @@ export function runAdminStagingMigrationDrill({
     );
     for (const file of files.slice(0, targetIndex)) recordMigration.run(file);
 
+    // A fresh D1 receives hard-coded production operator/editor identities from
+    // older migrations. A staging database must clear those bootstrap grants
+    // before any OAuth account or test data is introduced, then grant only its
+    // dedicated synthetic global operator.
+    db.exec(`
+      DELETE FROM report_admin_permissions;
+      DELETE FROM editorial_workflow_roles;
+      DELETE FROM atlasez_member_discord_role_sync_exclusions;
+    `);
+    db.prepare(
+      "INSERT OR IGNORE INTO report_admin_permissions (email, subject) VALUES (?, '*')",
+    ).run("staging-global-operator@atlasez.test");
+    assert.equal(
+      count(db, "SELECT COUNT(*) AS count FROM report_admin_permissions"),
+      1,
+    );
+    assert.equal(
+      db
+        .prepare("SELECT email FROM report_admin_permissions WHERE subject='*'")
+        .get()?.email,
+      "staging-global-operator@atlasez.test",
+    );
+    assert.equal(
+      count(db, "SELECT COUNT(*) AS count FROM editorial_workflow_roles"),
+      0,
+    );
+    assert.equal(
+      count(
+        db,
+        "SELECT COUNT(*) AS count FROM atlasez_member_discord_role_sync_exclusions",
+      ),
+      0,
+    );
+
     const oldColumns = columnNames(db);
     assert.equal(
       oldColumns.has("operator_notification_recipients_json"),
@@ -227,6 +261,7 @@ export function runAdminStagingMigrationDrill({
       migration: TARGET_MIGRATION,
       preservedApplicationRows: 1,
       preservedEmailQueueRows: 2,
+      stagingBootstrapRolesSanitized: true,
       legacyInsertCompatible: true,
       isolatedBackupRestore: true,
     };
