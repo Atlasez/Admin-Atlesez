@@ -112,10 +112,11 @@ function environment() {
     email: string,
     body?: unknown,
     origin = "https://admin.atlasez.test",
+    method?: string,
   ) =>
     worker.fetch(
       new Request(`https://admin.atlasez.test${path}`, {
-        method: body === undefined ? "GET" : "POST",
+        method: method ?? (body === undefined ? "GET" : "POST"),
         headers: {
           cookie: `atlasez_admin_session=${session(email)}`,
           origin,
@@ -1399,6 +1400,109 @@ it("同一利用者の同時応募は1件だけ保存し、副作用も一組だ
   expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
+it("応募・運営対応タスク・メールキューを同じbatchで確定し、失敗時は再応募可能にする", async () => {
+  const { db, request, env } = environment();
+  const email = "application-rollback@atlasez.test";
+  const profile = {
+    familyName: "隔離",
+    givenName: "応募",
+    familyNameKana: "かくり",
+    givenNameKana: "おうぼ",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+  const application = {
+    projectSlug: "thinking-cafe",
+    interests: "対話",
+    message: "応募関連の一括確定を検証",
+    referralSource: "隔離テスト",
+    interviewAvailability: "平日18時 Asia/Tokyo",
+    projectAnswers: { theme: "運用" },
+  };
+  expect(
+    (await request("/api/application-profile", email, profile)).status,
+  ).toBe(200);
+
+  const originalBatch = env.REPORTS.batch;
+  let injectFailure = true;
+  env.REPORTS.batch = async (statements) => {
+    const taskStatement = statements.find((statement) =>
+      statement.query.includes("INSERT INTO editorial_tasks"),
+    );
+    if (injectFailure && taskStatement) {
+      injectFailure = false;
+      taskStatement.run = async () => {
+        throw new Error("isolated task insert failure");
+      };
+    }
+    return originalBatch(statements);
+  };
+
+  const failed = await request("/api/apply", email, application);
+  expect(failed.status).toBe(503);
+  expect(await failed.json()).not.toHaveProperty("ok");
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE email=?",
+      )
+      .get(email),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM editorial_tasks WHERE created_by='応募フォーム'",
+      )
+      .get(),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries",
+      )
+      .get(),
+  ).toEqual({ count: 0 });
+
+  const retried = await request("/api/apply", email, application);
+  expect(retried.status, await retried.clone().text()).toBe(201);
+  const result = await retried.json();
+  expect(result).toMatchObject({
+    responseTaskCreated: true,
+    emailProviderConfigured: false,
+  });
+  expect(result.emailQueued).toBe(true);
+  expect(result.emailQueueCount).toBeGreaterThan(0);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE email=?",
+      )
+      .get(email),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM editorial_tasks WHERE created_by='応募フォーム'",
+      )
+      .get(),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries",
+      )
+      .get(),
+  ).toEqual({ count: result.emailQueueCount });
+  expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+});
+
 it("参加済みメンバーは追加応募や二つ目の未入力プロフィールで会員アクセスを失わない", async () => {
   const { db, request } = environment();
   const managerProfile = await request(
@@ -1458,6 +1562,110 @@ it("参加済みメンバーは追加応募や二つ目の未入力プロフィ�
   );
   expect((await request("/api/admin/member-tasks", email)).status).toBe(200);
   expect((await request("/api/admin/permissions", email)).status).toBe(403);
+});
+
+it("既存会員の別プロジェクト応募を受け入れても既存所属を維持する", async () => {
+  const { db, request } = environment();
+  const email = "multi-project-journey@atlasez.test";
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO atlasez_member_applications
+      (id,name,email,interests,message,status,created_at,updated_at,project_slug)
+     VALUES ('existing-atlas-application','既存会員',?,'学習','既存所属','accepted',?,?,'atlas')`,
+  ).run(email, now, now);
+  db.prepare(
+    "INSERT INTO editorial_member_profiles(email,display_name,bio,updated_at) VALUES (?,?,?,?)",
+  ).run(email, "既存会員", "運営外プロフィール", now);
+  db.prepare(
+    "INSERT INTO editorial_project_member_profiles(project_id,email,internal_bio,updated_at) VALUES ('atlas',?,?,?)",
+  ).run(email, "Atlas内プロフィール", now);
+  db.prepare(
+    "INSERT INTO atlasez_project_memberships(project_id,email,role,joined_at) VALUES ('atlas',?,'member',?)",
+  ).run(email, now);
+
+  const profile = {
+    familyName: "複数",
+    givenName: "所属",
+    familyNameKana: "ふくすう",
+    givenNameKana: "しょぞく",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+  expect(
+    (await request("/api/application-profile", email, profile)).status,
+  ).toBe(200);
+  expect(
+    (
+      await request("/api/apply", email, {
+        projectSlug: "thinking-cafe",
+        interests: "対話の場づくり",
+        message: "別プロジェクトへの応募",
+        referralSource: "メンバー向け案内",
+        interviewAvailability: "平日18時 Asia/Tokyo",
+        projectAnswers: { theme: "学び" },
+      })
+    ).status,
+  ).toBe(201);
+  expect(
+    db
+      .prepare(
+        "SELECT project_id FROM atlasez_project_memberships WHERE lower(email)=lower(?) ORDER BY project_id",
+      )
+      .all(email),
+  ).toEqual([{ project_id: "atlas" }]);
+
+  const application = db
+    .prepare(
+      "SELECT id FROM atlasez_member_applications WHERE lower(email)=lower(?) AND project_slug='thinking-cafe'",
+    )
+    .get(email) as { id: string };
+  for (const [fromState, toState, idempotencyKey] of [
+    ["new", "reviewing", "multi-project-review"],
+    ["reviewing", "accepted", "multi-project-accept"],
+  ]) {
+    const response = await request(
+      "/api/admin/workflow/transition",
+      "global@atlasez.test",
+      {
+        entityType: "application",
+        entityId: application.id,
+        fromState,
+        toState,
+        idempotencyKey,
+      },
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+  }
+
+  expect(
+    db
+      .prepare(
+        "SELECT project_id,role FROM atlasez_project_memberships WHERE lower(email)=lower(?) ORDER BY project_id",
+      )
+      .all(email),
+  ).toEqual([
+    { project_id: "atlas", role: "member" },
+    { project_id: "thinking-cafe", role: "member" },
+  ]);
+  const memberStatusResponse = await request("/api/user/status", email);
+  const memberStatusData = (await memberStatusResponse.json()) as {
+    stage: string;
+    applicationProjects: string[];
+  };
+  expect(memberStatusData).toMatchObject({ stage: "MEMBER" });
+  expect(memberStatusData.applicationProjects).toEqual(
+    expect.arrayContaining(["atlas", "thinking-cafe"]),
+  );
+  expect(memberStatusData.applicationProjects).toHaveLength(2);
+  expect((await request("/admin/portal/", email)).status).toBe(200);
+  expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
 it("受入応募の個人情報を削除しても現在の所属とプロフィールで会員利用を継続できる", async () => {
@@ -1747,6 +1955,77 @@ it("仮応募者の応募から審査受入・初回オンボーディング・�
       })
     ).json(),
   ).toMatchObject({ ok: true, stage: "MEMBER", next: "/admin/portal/" });
+
+  const firstTaskCreation = await request(
+    "/api/admin/operations/tasks",
+    "global@atlasez.test",
+    {
+      projectId: "thinking-cafe",
+      assigneeEmail: email,
+      title: "初回タスクの隔離検証",
+      details: "メンバーが状態を更新して完了する。",
+    },
+  );
+  expect(firstTaskCreation.status, await firstTaskCreation.clone().text()).toBe(
+    200,
+  );
+  const firstTask = db
+    .prepare(
+      "SELECT id,status,updated_at FROM editorial_tasks WHERE assignee_email=? AND title='初回タスクの隔離検証'",
+    )
+    .get(email) as { id: string; status: string; updated_at: string };
+  expect(firstTask.status).toBe("open");
+  const memberTasks = await request("/api/admin/member-tasks?view=all", email);
+  expect(memberTasks.status, await memberTasks.clone().text()).toBe(200);
+  expect(await memberTasks.json()).toMatchObject({
+    tasks: expect.arrayContaining([
+      expect.objectContaining({
+        id: firstTask.id,
+        title: "初回タスクの隔離検証",
+        can_update: true,
+      }),
+    ]),
+  });
+  let taskUpdatedAt = firstTask.updated_at;
+  for (const [toState, idempotencyKey] of [
+    ["doing", "onboarded-first-task-doing"],
+    ["done", "onboarded-first-task-done"],
+  ]) {
+    const taskUpdate = await request(
+      `/api/admin/operations/tasks/${firstTask.id}`,
+      email,
+      {
+        status: toState,
+        expectedUpdatedAt: taskUpdatedAt,
+        idempotencyKey,
+      },
+      "https://admin.atlasez.test",
+      "PATCH",
+    );
+    expect(taskUpdate.status, await taskUpdate.clone().text()).toBe(200);
+    taskUpdatedAt = (
+      db
+        .prepare("SELECT updated_at FROM editorial_tasks WHERE id=?")
+        .get(firstTask.id) as { updated_at: string }
+    ).updated_at;
+  }
+  expect(
+    db
+      .prepare("SELECT status FROM editorial_tasks WHERE id=?")
+      .get(firstTask.id),
+  ).toEqual({ status: "done" });
+  expect(
+    db
+      .prepare(
+        "SELECT from_state,to_state FROM workflow_transition_events WHERE entity_type='task' AND entity_id=? ORDER BY created_at",
+      )
+      .all(firstTask.id),
+  ).toEqual(
+    expect.arrayContaining([
+      { from_state: "open", to_state: "doing" },
+      { from_state: "doing", to_state: "done" },
+    ]),
+  );
 
   expect(await (await request("/api/user/status", email)).json()).toMatchObject(
     {

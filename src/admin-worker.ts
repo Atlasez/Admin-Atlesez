@@ -8196,7 +8196,7 @@ async function applicationOperatorEmails(env: Env) {
   ];
 }
 
-async function queueApplicationEmails(
+async function applicationEmailDeliveryStatements(
   env: Env,
   application: {
     id: string;
@@ -8243,14 +8243,13 @@ async function queueApplicationEmails(
       htmlBody: `<h2>新しい応募が届きました</h2><p><b>プロジェクト:</b> ${emailSafe(application.projectLabel)}<br><b>応募者:</b> ${emailSafe(application.name)}<br><b>メール:</b> ${emailSafe(application.email)}<br><b>応募日時:</b> ${emailSafe(application.createdAt)}</p><p><a href="https://admin.atlasez.org/admin/applications/?project=${encodeURIComponent(application.projectSlug)}">管理画面で確認する</a></p>`,
     })),
   ];
-  if (!rows.length) return { queued: 0, operatorCount: 0 };
-  await env.REPORTS.batch(
-    rows.map((row) =>
-      env.REPORTS.prepare(
-        `INSERT OR IGNORE INTO atlasez_application_email_deliveries
-         (id,application_id,recipient_email,kind,subject,text_body,html_body,status,attempt_count,next_attempt_at,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,'pending',0,?,?,?)`,
-      ).bind(
+  return rows.map((row) =>
+    env.REPORTS.prepare(
+      `INSERT OR IGNORE INTO atlasez_application_email_deliveries
+       (id,application_id,recipient_email,kind,subject,text_body,html_body,status,attempt_count,next_attempt_at,created_at,updated_at)
+       SELECT ?,?,?,?,?,?,?,'pending',0,?,?,?
+       WHERE EXISTS (SELECT 1 FROM atlasez_member_applications WHERE id=?)`,
+    ).bind(
         crypto.randomUUID(),
         application.id,
         row.email,
@@ -8261,10 +8260,9 @@ async function queueApplicationEmails(
         application.createdAt,
         application.createdAt,
         application.createdAt,
+      application.id,
       ),
-    ),
   );
-  return { queued: rows.length, operatorCount: operatorEmails.length };
 }
 
 async function queueApplicationAcceptanceEmail(
@@ -8420,7 +8418,7 @@ async function queueApplicationDiscordEmail(
     .run();
 }
 
-async function createApplicationResponseTask(
+function applicationResponseTaskStatement(
   env: Env,
   application: {
     id: string;
@@ -8439,10 +8437,11 @@ async function createApplicationResponseTask(
     `プロジェクト: ${application.projectLabel}`,
     "応募管理で内容を確認し、応募者への対応を進めてください。",
   ].join("\n");
-  await env.REPORTS.prepare(
+  return env.REPORTS.prepare(
     `INSERT INTO editorial_tasks
      (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,reminder_at,reminder_repeat,reminder_email,created_by,created_at,updated_at)
-     VALUES (?, 'secretariat', NULL, NULL, ?, ?, 'open', NULL, 'Asia/Tokyo', NULL, 'none', NULL, ?, ?, ?)`,
+     SELECT ?, 'secretariat', NULL, NULL, ?, ?, 'open', NULL, 'Asia/Tokyo', NULL, 'none', NULL, ?, ?, ?
+     WHERE EXISTS (SELECT 1 FROM atlasez_member_applications WHERE id=?)`,
   )
     .bind(
       crypto.randomUUID(),
@@ -8451,8 +8450,8 @@ async function createApplicationResponseTask(
       "応募フォーム",
       application.createdAt,
       application.createdAt,
+      application.id,
     )
-    .run();
 }
 
 async function notifyProgressToDiscord(
@@ -14997,7 +14996,7 @@ async function submitMemberApplication(
       )
       .run();
   }
-  const applicationInsert = await env.REPORTS.prepare(
+  const applicationInsert = env.REPORTS.prepare(
     `INSERT INTO atlasez_member_applications
      (id,name,email,affiliation_email,family_name,given_name,middle_name,nickname,family_name_kana,given_name_kana,form_language,interests,message,status,created_at,updated_at,project_slug,project_answers,affiliation_type,institution,grade,country,timezone,desired_subjects,article_ideas,discord_user_id,availability_note,birth_date,residence_city,current_organizations,referral_source,motivation_reasons,desired_roles,interview_availability,applicant_questions)
      SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?, 'new',?,?,?,?,?,?,?,?,?,?,?,'',?,?,?,?,?,?,?,?,?
@@ -15042,15 +15041,6 @@ async function submitMemberApplication(
       applicantQuestions,
       email,
       projectSlug,
-    )
-    .run();
-  if (applicationInsert.meta?.changes !== 1)
-    return json(
-      {
-        error:
-          "このメールアドレスの応募はすでに確認中です。結果の連絡をお待ちください。",
-      },
-      409,
     );
   const followup = {
     id: applicationId,
@@ -15060,20 +15050,48 @@ async function submitMemberApplication(
     projectSlug,
     createdAt: now,
   };
+  let emailStatements: Awaited<ReturnType<Env["REPORTS"]["prepare"]>>[];
+  let applicationResults: Awaited<ReturnType<Env["REPORTS"]["batch"]>>;
   try {
-    await createApplicationResponseTask(env, followup);
-    await queueApplicationEmails(env, followup);
+    emailStatements = await applicationEmailDeliveryStatements(env, followup);
+    applicationResults = await env.REPORTS.batch([
+      applicationInsert,
+      applicationResponseTaskStatement(env, followup),
+      ...emailStatements,
+    ]);
   } catch {
-    // 応募本文の保存を巻き戻さず、運営側の自動処理だけを再試行対象にする。
-    console.error("application follow-up setup failed");
+    // 応募本文・運営対応タスク・通知キューは同一batchで確定させる。
+    // どれかに失敗した場合はbatch全体がrollbackされ、再送できる。
+    console.error("application submission transaction failed");
+    return json(
+      {
+        error:
+          "応募を保存できませんでした。入力内容を保ったまま、時間をおいてもう一度お試しください。",
+      },
+      503,
+    );
   }
+  if (applicationResults[0]?.meta?.changes !== 1)
+    return json(
+      {
+        error:
+          "このメールアドレスの応募はすでに確認中です。結果の連絡をお待ちください。",
+      },
+      409,
+    );
+  const emailQueueCount = applicationResults
+    .slice(2)
+    .reduce((count, result) => count + (result.meta?.changes ?? 0), 0);
   if (ctx) ctx.waitUntil(dispatchApplicationEmails(env));
   // 応募は個人情報を含むため、Discordへは一切転送しない。運営内運営が管理画面でのみ閲覧する。
   return json(
     {
       ok: true,
       turnstileRequired: Boolean(env.TURNSTILE_SECRET_KEY),
-      emailQueued: Boolean(
+      responseTaskCreated: applicationResults[1]?.meta?.changes === 1,
+      emailQueued: emailQueueCount > 0,
+      emailQueueCount,
+      emailProviderConfigured: Boolean(
         env.RESEND_API_KEY?.trim() && env.EMAIL_FROM?.trim(),
       ),
     },

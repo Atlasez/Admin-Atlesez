@@ -673,7 +673,8 @@ describe("Google OAuth login callback", () => {
           };
           return statement;
         },
-        batch: async () => [],
+        batch: async (statements: Statement[]) =>
+          Promise.all(statements.map((statement) => statement.run())),
       },
       ASSETS: { fetch: async () => new Response("protected page") },
     };
@@ -2160,7 +2161,8 @@ describe("applicant stage server-side access", () => {
           };
           return statement;
         },
-        batch: async () => [],
+        batch: async (statements: Statement[]) =>
+          Promise.all(statements.map((statement) => statement.run())),
       },
       ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
     };
@@ -2204,7 +2206,13 @@ describe("applicant stage server-side access", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(await response.json()).toMatchObject({ ok: true });
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      responseTaskCreated: true,
+      emailQueued: true,
+      emailQueueCount: 1,
+      emailProviderConfigured: false,
+    });
     expect(inserts).toHaveLength(1);
   });
 

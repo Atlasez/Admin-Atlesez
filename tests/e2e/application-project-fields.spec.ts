@@ -170,3 +170,104 @@ for (const width of [1280, 390]) {
     });
   }
 }
+
+test("応募保存の一時障害を成功と誤認せず、同じ入力の再送で応募状況へ進める", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.route("**/api/user/status", (route) =>
+    route.fulfill({
+      json: {
+        email: "retry-applicant@atlasez.test",
+        stage: "NEW_USER",
+        applicationProjects: [],
+      },
+    }),
+  );
+  await page.route("**/api/application-profile", (route) =>
+    route.fulfill({
+      json: {
+        profile: {
+          email: "retry-applicant@atlasez.test",
+          family_name: "再試行",
+          given_name: "検証",
+          family_name_kana: "さいしこう",
+          given_name_kana: "けんしょう",
+          form_language: "ja",
+          affiliation_email: "school@atlasez.test",
+          affiliation_type: "大学",
+          institution: "検証大学",
+          grade: "B1",
+          country: "日本",
+          timezone: "Asia/Tokyo",
+          birth_date: "2000-01-01",
+          residence_city: "検証市",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/public/application-config", (route) =>
+    route.fulfill({ json: {} }),
+  );
+  let attempts = 0;
+  await page.route("**/api/apply", async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({
+        status: 503,
+        json: {
+          error: "応募を保存できませんでした。時間をおいて再試行してください。",
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 201,
+      json: {
+        ok: true,
+        responseTaskCreated: true,
+        emailQueued: true,
+        emailQueueCount: 1,
+        emailProviderConfigured: false,
+      },
+    });
+  });
+  await page.route("**/api/applicant/me", (route) =>
+    route.fulfill({
+      json: {
+        email: "retry-applicant@atlasez.test",
+        stage: "APPLICANT",
+        applications: [{ project: "考えるカフェ", status: "new" }],
+      },
+    }),
+  );
+
+  await page.goto("apply/thinking-cafe/");
+  await page.locator('[name="interests"]').fill("対話の場づくり");
+  await page.locator('[name="message"]').fill("再試行の隔離検証");
+  await page.locator('[name="referralSource"]').fill("公式サイト");
+  await page
+    .locator('[name="interviewAvailability"]')
+    .fill("平日18時 Asia/Tokyo");
+  await page.locator('[data-project-answer="theme"]').fill("学びの場づくり");
+  const submit = page.getByRole("button", { name: "応募を送信", exact: true });
+
+  await submit.click();
+  await expect(
+    page.getByText(
+      "応募を保存できませんでした。時間をおいて再試行してください。",
+    ),
+  ).toBeVisible();
+  await expect(submit).toBeEnabled();
+  await expect(page).not.toHaveURL(/\/applicant\//);
+  await expect(page.locator('[name="message"]')).toHaveValue(
+    "再試行の隔離検証",
+  );
+
+  await submit.click();
+  await expect(page).toHaveURL(/\/applicant\/$/);
+  await expect(
+    page.getByRole("heading", { name: "応募状況を確認できます" }),
+  ).toBeVisible();
+  expect(attempts).toBe(2);
+});
