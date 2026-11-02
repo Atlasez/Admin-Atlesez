@@ -1,6 +1,10 @@
 import { expect, it, vi } from "vitest";
-import worker from "../../src/admin-worker";
+import worker, { syncDiscordRolesToAdmin } from "../../src/admin-worker";
 import { dispatchApplicationEmails } from "../../src/lib/application-email-delivery";
+import {
+  deliverProgressDiscordNotification,
+  dispatchDueDiscordNotifications,
+} from "../../src/lib/discord-notifications";
 import { createAdminTestEnvironment } from "../helpers/admin-test-environment";
 
 it("staging Cron only runs intake reconciliation by default and never reaches external services", async () => {
@@ -96,6 +100,97 @@ it("staging origin alone prevents an absent mode from entering production Cron",
       }),
     ],
   ]);
+});
+
+it("staging Discord-disabled mode rejects direct OAuth and APIs without provider or D1 calls", async () => {
+  const { db, env } = createAdminTestEnvironment();
+  Object.assign(env, {
+    ADMIN_PUBLIC_ORIGIN:
+      "https://atlasez-admin-staging.synthetic-account.workers.dev",
+    ATLASEZ_STAGING_MODE: "true",
+    ATLASEZ_STAGING_DISCORD_MODE: "disabled",
+    ATLASEZ_STAGING_DISCORD_POLICY_APPROVED: "false",
+    DISCORD_GUILD_ID: "123456789012345678",
+    DISCORD_GUILD_NAME: "Accidental Staging Test Guild",
+    DISCORD_BOT_TOKEN: "synthetic-bot-token",
+    DISCORD_OAUTH_CLIENT_ID: "123456789012345679",
+    DISCORD_OAUTH_CLIENT_SECRET: "synthetic-client-secret",
+    DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY: "synthetic-encryption-key",
+    DISCORD_ATLAS_WEBHOOK_URL:
+      "https://discord.com/api/webhooks/123/synthetic-webhook-token",
+    DISCORD_PROGRESS_WEBHOOK_URL:
+      "https://discord.com/api/webhooks/456/synthetic-progress-token",
+    DISCORD_PROGRESS_CHANNEL_ID: "123456789012345680",
+  });
+  const prepare = vi.spyOn(env.REPORTS, "prepare");
+  const providerFetch = vi.fn(async () => Response.json({ ok: true }));
+  vi.stubGlobal("fetch", providerFetch);
+
+  try {
+    const requests = [
+      ["/auth/discord/start", "GET"],
+      ["/auth/discord/callback?code=synthetic&state=synthetic", "GET"],
+      ["/api/admin/discord-readiness", "GET"],
+      ["/api/admin/discord-member-roles", "POST"],
+      ["/api/admin/member-discord-user", "PUT"],
+      ["/api/admin/member-discord-roles", "PUT"],
+      ["/api/admin/discord-provision-roles", "POST"],
+      [
+        "/api/admin/applications/123e4567-e89b-42d3-a456-426614174000/discord-retry",
+        "POST",
+      ],
+    ] as const;
+    for (const [path, method] of requests) {
+      const response = await worker.fetch(
+        new Request(
+          `https://atlasez-admin-staging.synthetic-account.workers.dev${path}`,
+          {
+            method,
+            headers: {
+              origin:
+                "https://atlasez-admin-staging.synthetic-account.workers.dev",
+              ...(method === "GET"
+                ? {}
+                : { "content-type": "application/json" }),
+            },
+            ...(method === "GET" ? {} : { body: "{}" }),
+          },
+        ),
+        env as never,
+      );
+      expect(response.status, `${method} ${path}`).toBe(503);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      await expect(response.json()).resolves.toMatchObject({
+        code: "staging_discord_disabled",
+      });
+    }
+
+    const notificationEnv = env as never;
+    await expect(
+      deliverProgressDiscordNotification(notificationEnv, {
+        reportId: "synthetic-progress-id",
+        subject: null,
+        body: "synthetic progress only",
+      }),
+    ).resolves.toEqual({ notified: false, sent: 0, failed: 0, skipped: 0 });
+    await expect(
+      dispatchDueDiscordNotifications(notificationEnv),
+    ).resolves.toEqual({ notified: false, sent: 0, failed: 0, skipped: 0 });
+    await expect(syncDiscordRolesToAdmin(env as never)).resolves.toMatchObject({
+      accounts: 0,
+      synced: 0,
+      updated: 0,
+      assignmentsRevoked: 0,
+    });
+
+    expect(prepare).not.toHaveBeenCalled();
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM discord_notifications").get(),
+    ).toEqual({ count: 0 });
+    expect(providerFetch).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 
 it("Resend test-sink mode requires an exact synthetic recipient allowlist", async () => {

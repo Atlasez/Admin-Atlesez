@@ -26,7 +26,27 @@ try {
 
 const allowResendTestSink =
   process.env.ATLASEZ_STAGING_RESEND_SINK_CONFIRMED === "1";
-const failures = validateAdminStagingConfig(config, { allowResendTestSink });
+const discordTestGuildConfirmations = [
+  "ATLASEZ_STAGING_DISCORD_POLICY_CONFIRMED",
+  "ATLASEZ_STAGING_DISCORD_TEST_GUILD_VERIFIED",
+  "ATLASEZ_STAGING_DISCORD_SECRETS_VERIFIED",
+];
+const discordTestGuildRequested =
+  config.vars?.ATLASEZ_STAGING_DISCORD_MODE === "test-guild";
+const missingDiscordTestGuildConfirmations = discordTestGuildRequested
+  ? discordTestGuildConfirmations.filter((name) => process.env[name] !== "1")
+  : [];
+if (missingDiscordTestGuildConfirmations.length) {
+  console.error(
+    `Discord staging mode stopped. Complete STG-08 read-back first: ${missingDiscordTestGuildConfirmations.join(", ")}`,
+  );
+  process.exit(2);
+}
+const allowDiscordTestGuild = discordTestGuildRequested;
+const failures = validateAdminStagingConfig(config, {
+  allowResendTestSink,
+  allowDiscordTestGuild,
+});
 if (failures.length) {
   console.error("ADMIN staging isolation preflight failed:");
   for (const failure of failures) console.error(`- ${failure}`);
@@ -42,6 +62,14 @@ if (mode === "--deploy") {
   const missing = requiredConfirmations.filter(
     (name) => process.env[name] !== "1",
   );
+  if (config.vars?.ATLASEZ_STAGING_DISCORD_MODE === "test-guild")
+    missing.push(
+      ...[
+        "ATLASEZ_STAGING_DISCORD_POLICY_CONFIRMED",
+        "ATLASEZ_STAGING_DISCORD_TEST_GUILD_VERIFIED",
+        "ATLASEZ_STAGING_DISCORD_SECRETS_VERIFIED",
+      ].filter((name) => process.env[name] !== "1"),
+    );
   if (missing.length) {
     console.error(
       `Staging deploy stopped. Complete the operator read-back first: ${missing.join(", ")}`,

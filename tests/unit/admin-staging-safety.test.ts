@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
@@ -9,6 +10,10 @@ import {
   isApprovedStagingAddress,
   isApprovedStagingRecipient,
 } from "../../src/lib/admin-staging-email-policy.mjs";
+import {
+  isStagingDiscordDisabled,
+  isStagingDiscordEnabled,
+} from "../../src/lib/admin-staging-discord-policy";
 import { ADMIN_STAGING_ACCOUNTS } from "../fixtures/admin-staging-accounts";
 
 function safeStagingConfig() {
@@ -22,8 +27,6 @@ function safeStagingConfig() {
   example.vars.PUBLIC_SITE_ORIGIN = origin;
   example.vars.GOOGLE_OAUTH_CLIENT_ID =
     "synthetic-staging.apps.googleusercontent.com";
-  example.vars.DISCORD_GUILD_ID = "123456789012345678";
-  example.vars.DISCORD_OAUTH_CLIENT_ID = "123456789012345679";
   example.vars.EMAIL_FROM = "Atlasez Staging <noreply@staging.example.test>";
   example.vars.APPLICATION_OPERATIONS_EMAILS = "operator@staging.example.test";
   example.d1_databases[0].database_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -43,8 +46,109 @@ describe("ADMIN staging isolation preflight", () => {
     );
   });
 
-  it("accepts a staging Worker, workers.dev origin, isolated D1, and test provider identities", () => {
-    expect(validateAdminStagingConfig(safeStagingConfig())).toEqual([]);
+  it("accepts a staging Worker and isolated D1 while Discord is disabled and unconfigured", () => {
+    const config = safeStagingConfig();
+    expect(config.vars.ATLASEZ_STAGING_DISCORD_MODE).toBe("disabled");
+    expect(config.vars.ATLASEZ_STAGING_DISCORD_POLICY_APPROVED).toBe("false");
+    expect(config.vars).not.toHaveProperty("DISCORD_GUILD_ID");
+    expect(config.vars).not.toHaveProperty("DISCORD_OAUTH_CLIENT_ID");
+    expect(config.vars).not.toHaveProperty("DISCORD_GUILD_NAME");
+    expect(validateAdminStagingConfig(config)).toEqual([]);
+  });
+
+  it("requires explicit STG-08 approval and verified test-only Discord identities", () => {
+    const config = safeStagingConfig();
+    config.vars.ATLASEZ_STAGING_DISCORD_MODE = "test-guild";
+    config.vars.ATLASEZ_STAGING_DISCORD_POLICY_APPROVED = "true";
+    config.vars.DISCORD_GUILD_ID = "123456789012345678";
+    config.vars.DISCORD_OAUTH_CLIENT_ID = "123456789012345679";
+    config.vars.DISCORD_GUILD_NAME = "Atlasez Staging Test Guild";
+    expect(validateAdminStagingConfig(config)).toContain(
+      "test-guild mode requires the explicit STG-08 validation opt-in",
+    );
+    expect(
+      validateAdminStagingConfig(config, { allowDiscordTestGuild: true }),
+    ).toEqual([]);
+
+    const productionGuild = safeStagingConfig();
+    Object.assign(productionGuild.vars, {
+      ATLASEZ_STAGING_DISCORD_MODE: "test-guild",
+      ATLASEZ_STAGING_DISCORD_POLICY_APPROVED: "true",
+      DISCORD_GUILD_ID: "1359062450028282017",
+      DISCORD_OAUTH_CLIENT_ID: "123456789012345679",
+      DISCORD_GUILD_NAME: "Atlasez Staging Test Guild",
+    });
+    expect(
+      validateAdminStagingConfig(productionGuild, {
+        allowDiscordTestGuild: true,
+      }).some((failure) => failure.includes("DISCORD_GUILD_ID")),
+    ).toBe(true);
+  });
+
+  it("rejects Discord identities when the staging profile is disabled", () => {
+    const config = safeStagingConfig();
+    config.vars.DISCORD_GUILD_ID = "123456789012345678";
+    expect(validateAdminStagingConfig(config)).toContain(
+      "DISCORD_GUILD_ID must be absent while staging Discord is disabled",
+    );
+  });
+
+  it("requires explicit policy, test-guild, and secret read-back before the STG-08 preflight opt-in", () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        "scripts/verify-admin-staging-config.mjs",
+        "--example",
+        "--allow-discord-test-guild",
+      ],
+      {
+        encoding: "utf8",
+        env: { PATH: process.env.PATH ?? "" },
+      },
+    );
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain(
+      "requires approved STG-08 role policy, test-guild read-back, and secret-name read-back confirmations",
+    );
+  });
+
+  it("enables Discord at runtime only for a complete and explicitly approved staging test guild", () => {
+    const enabledProfile = {
+      ADMIN_PUBLIC_ORIGIN:
+        "https://atlasez-admin-staging.synthetic-account.workers.dev",
+      ATLASEZ_STAGING_MODE: "true",
+      ATLASEZ_STAGING_DISCORD_MODE: "test-guild",
+      ATLASEZ_STAGING_DISCORD_POLICY_APPROVED: "true",
+      DISCORD_GUILD_ID: "123456789012345678",
+      DISCORD_GUILD_NAME: "Atlasez Staging Test Guild",
+      DISCORD_BOT_TOKEN: "synthetic-bot-token",
+      DISCORD_OAUTH_CLIENT_ID: "123456789012345679",
+      DISCORD_OAUTH_CLIENT_SECRET: "synthetic-client-secret",
+      DISCORD_OAUTH_REDIRECT_URI:
+        "https://atlasez-admin-staging.synthetic-account.workers.dev/auth/discord/callback",
+      DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY: "ab".repeat(32),
+    };
+    expect(isStagingDiscordEnabled(enabledProfile)).toBe(true);
+    expect(isStagingDiscordDisabled(enabledProfile)).toBe(false);
+    expect(
+      isStagingDiscordDisabled({
+        ...enabledProfile,
+        DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY: "invalid-key",
+      }),
+    ).toBe(true);
+    expect(
+      isStagingDiscordDisabled({
+        ...enabledProfile,
+        ATLASEZ_STAGING_DISCORD_POLICY_APPROVED: "false",
+      }),
+    ).toBe(true);
+    expect(
+      isStagingDiscordDisabled({
+        ...enabledProfile,
+        DISCORD_GUILD_ID: "1359062450028282017",
+      }),
+    ).toBe(true);
+    expect(isStagingDiscordDisabled({})).toBe(false);
   });
 
   it("allows exact synthetic test domains and Resend simulator addresses only", () => {

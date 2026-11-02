@@ -39,6 +39,8 @@ const ALLOWED_VAR_KEYS = new Set([
   "ATLASEZ_STAGING_MODE",
   "ATLASEZ_STAGING_CRON_MODE",
   "ATLASEZ_STAGING_EMAIL_DELIVERY",
+  "ATLASEZ_STAGING_DISCORD_MODE",
+  "ATLASEZ_STAGING_DISCORD_POLICY_APPROVED",
   "EMAIL_FROM",
   "APPLICATION_OPERATIONS_EMAILS",
   "GOOGLE_OAUTH_CLIENT_ID",
@@ -152,6 +154,7 @@ export function validateAdminStagingConfig(
   {
     allowExample = false,
     allowResendTestSink = false,
+    allowDiscordTestGuild = false,
     compatibilityNoCron = false,
   } = {},
 ) {
@@ -268,6 +271,57 @@ export function validateAdminStagingConfig(
       (emailMode === "test-sink" && allowResendTestSink),
     "staging email delivery must remain disabled unless the test-sink gate is explicitly enabled",
   );
+
+  const discordMode = vars.ATLASEZ_STAGING_DISCORD_MODE;
+  add(
+    failures,
+    discordMode === "disabled" || discordMode === "test-guild",
+    "staging Discord mode must be explicitly disabled or an approved test guild",
+  );
+  if (discordMode === "disabled") {
+    add(
+      failures,
+      vars.ATLASEZ_STAGING_DISCORD_POLICY_APPROVED === "false",
+      "disabled staging Discord mode must keep its policy approval false",
+    );
+    for (const key of [
+      "DISCORD_GUILD_ID",
+      "DISCORD_GUILD_NAME",
+      "DISCORD_OAUTH_CLIENT_ID",
+    ])
+      add(
+        failures,
+        !Object.hasOwn(vars, key),
+        `${key} must be absent while staging Discord is disabled`,
+      );
+  } else if (discordMode === "test-guild") {
+    add(
+      failures,
+      allowDiscordTestGuild,
+      "test-guild mode requires the explicit STG-08 validation opt-in",
+    );
+    add(
+      failures,
+      vars.ATLASEZ_STAGING_DISCORD_POLICY_APPROVED === "true",
+      "test-guild mode requires an explicitly approved Discord role policy",
+    );
+    for (const key of ["DISCORD_GUILD_ID", "DISCORD_OAUTH_CLIENT_ID"]) {
+      const value = vars[key];
+      add(
+        failures,
+        typeof value === "string" &&
+          /^\d{17,20}$/.test(value) &&
+          !PRODUCTION_IDENTIFIERS.includes(value),
+        `${key} must be a verified test-only Discord identifier`,
+      );
+    }
+    add(
+      failures,
+      typeof vars.DISCORD_GUILD_NAME === "string" &&
+        /staging|test/i.test(vars.DISCORD_GUILD_NAME),
+      "Discord test guild name must be explicitly marked as staging/test",
+    );
+  }
 
   const assets = config.assets;
   add(
@@ -418,35 +472,6 @@ export function validateAdminStagingConfig(
       "a dedicated staging Google OAuth client ID is required",
     );
   }
-
-  for (const key of ["DISCORD_GUILD_ID", "DISCORD_OAUTH_CLIENT_ID"]) {
-    const value = vars[key];
-    if (allowExample) {
-      const expected =
-        key === "DISCORD_GUILD_ID"
-          ? "REPLACE_WITH_TEST_GUILD_ID"
-          : "REPLACE_WITH_TEST_DISCORD_CLIENT_ID";
-      add(
-        failures,
-        value === expected,
-        `example ${key} placeholder changed unexpectedly`,
-      );
-    } else {
-      add(
-        failures,
-        typeof value === "string" &&
-          /^\d{17,20}$/.test(value) &&
-          !PRODUCTION_IDENTIFIERS.includes(value),
-        `${key} must identify the dedicated test guild/client`,
-      );
-    }
-  }
-  add(
-    failures,
-    typeof vars.DISCORD_GUILD_NAME === "string" &&
-      /staging|test/i.test(vars.DISCORD_GUILD_NAME),
-    "Discord guild name must be explicitly marked as staging/test",
-  );
 
   const sender =
     typeof vars.EMAIL_FROM === "string"

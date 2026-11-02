@@ -3,17 +3,18 @@
 作成日: 2026-11-03 JST
 状態: **ローカル隔離試験を実装済み。専用stagingと実サービス受入は未構築・未実施。**
 
-本書は [PR #547のADMIN新規メンバー受入チェックリスト](https://github.com/Atlasez/Admin-Atlesez/blob/3281a7b05f7b566cc2acc0ace62277428b9deef2/docs/ADMIN_MEMBER_INTAKE_STAGING_CHECKLIST.md) を実行するための設定ガード、fixture、migration drillを定めます。Cloudflare設定変更、staging deploy/migration、Google/Resend/Discordの実接続は、このPRだけでは実行しません。
+本書は [PR #547のADMIN新規メンバー受入チェックリスト](https://github.com/Atlasez/Admin-Atlesez/pull/547) と連携し、設定ガード、fixture、migration drillを定めます。Cloudflare設定変更、staging deploy/migration、Google/Resend/Discordの実接続は、このPRだけでは実行しません。
 
 ## 1. 隔離設定と検査
 
-- `wrangler.admin.staging.example.jsonc` は意図的に無効なAccount ID、D1 ID、OAuth/Discord IDを含む雛形です。deployに使わないでください。
+- `wrangler.admin.staging.example.jsonc` は意図的に無効なAccount ID、D1 ID、Google OAuth IDを含む雛形です。Discordはdisabledが既定で、Guild/Client IDを含みません。deployに使わないでください。
 - ローカル設定は雛形を `wrangler.admin.staging.jsonc` へコピーして作成します。このファイルは `.gitignore` 対象です。secret値、synthetic recipient一覧、Cookie、OAuth state/code/tokenをGitへ追加しないでください。
 - 0134以前のWorker互換性をCloudflare上で確認する場合は、通常設定を複製した `wrangler.admin.staging.compat.jsonc` から `triggers` を削除し、`npm run verify:admin-staging-config:compat` で検査します。これは旧Worker用の一時設定であり、staging WorkerのスケジュールもDashboardで無効化・read-backしてから使います。
 - `npm run verify:admin-staging-config:template` は雛形に対し静的検査をします。実設定は `npm run verify:admin-staging-config` で確認します。
-- 検査はWorker名を `atlasez-admin-staging`、D1名を `atlasez-admin-staging-reports`、`workers.dev` originのみ、Custom Routeなし、Preview URLなし、専用Google/Discord ID、test送信元/通知先に固定します。本番Worker、D1、route、Discord guild/client ID、secrets in `vars`、production Cron群を拒否します。
+- 検査はWorker名を `atlasez-admin-staging`、D1名を `atlasez-admin-staging-reports`、`workers.dev` originのみ、Custom Routeなし、Preview URLなし、専用Google OAuth ID、test送信元/通知先に固定します。Discordは `ATLASEZ_STAGING_DISCORD_MODE=disabled` とし、Guild/Client IDは設定から省きます。STG-08を別途承認する場合だけ `test-guild` profileへ切り替え、専用test guild/client ID、staging/test表記のguild名、Bot token・OAuth secret・暗号鍵を検査し、承認・test guild read-back・secret名 read-backの3確認を必須にします。本番Worker、D1、route、production Discord ID、secrets in `vars`、production Cron群を拒否します。
 - stagingの `*/5 * * * *` CronはWorker側でstaging `workers.dev` originまたはstaging変数を認識した場合に `ATLASEZ_STAGING_MODE=true` と `ATLASEZ_STAGING_CRON_MODE=intake-only` を確認してから応募受付の照合だけを実行します。staging mode欠落・誤値・別scheduleではCron全体を停止します。GitHub同期、公開処理、タスクリマインダー、Discord role同期、通知dispatchは呼びません。Resend dispatchはAPI経由も含め `ATLASEZ_STAGING_EMAIL_DELIVERY=test-sink` とCloudflare Secretの完全一致allowlistがある場合だけで、`disabled`時はqueueのdispatch自体をしません。送信元とテスト宛先のドメインは `atlasez.test`、`staging.example.test`、`staging.example.invalid` の完全一致だけを認め、宛先は加えてResendの正確な予約済みsimulator address（`delivered@resend.dev`、`bounced@resend.dev`、`complained@resend.dev`）を認めます。substring、任意の`.test`/`.invalid`、`staging`を含むだけの外部ドメインは拒否します。実際のsink宛先を追加する場合は、管理者が所有確認済みtest domain/addressを別途承認してからコードの明示allowlistを変更し、再レビューします。その他のqueue rowはproviderへ送信しません。本番モードにはこのstaging専用の宛先制約を適用しません。
-- 設定検査はCloudflare/Google/Resend/Discordのsecret値を読みません。API keyがstaging用か、Resend sinkが実際にそのsynthetic addressを受けるか、Botが他guildへアクセスできないかは、サービス管理者のread-backと証跡が必要です。検査成功だけで実サービス隔離をPASSにしません。
+- Discord disabled profileではDiscord ID・secretを設定しません。関連OAuth/APIはHTTP 503 `staging_discord_disabled` でfail closedし、queue処理を含めDiscord providerを呼びません。STG-08のtest-guild opt-inが不完全なら同様に無効です。
+- 設定検査はCloudflare/Google/Resend/Discordのsecret値を読みません。Google OAuth secretのstaging専用性、Resend sinkの所有、Discord Botがtest guild以外へアクセスできないことは、サービス管理者のread-backと証跡が必要です。Discord disabled profileはGuild/Client IDやsecretの有無を要求しません。検査成功だけで実サービス隔離をPASSにしません。
 
 ## 2. ローカル隔離検証
 
@@ -38,7 +39,7 @@ npm run test:admin-staging:isolated
 
 ## 3. 管理されたstaging deploy
 
-実Workerへ配信する前に、Cloudflare管理者が専用Worker/D1を作成し、設定とsecret名をread-backします。secret値をGit、Issue、shell historyへ記録しません。Workerには別用途のGitHub、公開サイト、production Discord、productionメールsecretを設定しません。staging D1の0134 ledgerが適用済みで、旧Worker互換性の確認が終わるまで新Workerは配信しません。
+実Workerへ配信する前に、Cloudflare管理者が専用Worker/D1を作成し、必要なGoogle secret名をread-backします。DiscordとResendは無効のまま、STG-01〜06に不要なsecretを登録しません。secret値をGit、Issue、shell historyへ記録しません。Workerには別用途のGitHub、公開サイト、本番Discord、本番メールsecretを設定しません。staging D1の0134 ledgerが適用済みで、旧Worker互換性の確認が終わるまで新Workerは配信しません。
 
 ```bash
 cp wrangler.admin.staging.example.jsonc wrangler.admin.staging.jsonc
@@ -65,8 +66,8 @@ Resendのtest sinkを明示的に使う時だけ `ATLASEZ_STAGING_RESEND_SINK_CO
 1. staging Worker `atlasez-admin-staging` と専用D1 `atlasez-admin-staging-reports` を作成し、D1 IDを運営の安全な台帳へ記録します。同じCloudflare Accountを使う場合もWorkerとD1は本番と別資源にします。
 2. `workers.dev` の専用URLを有効にし、`preview_urls=false` のままにします。この基盤はzone Custom Routeを使わないため、staging WorkerにWorkers Routes権限を付与しません。
 3. Worker bindingは専用D1だけにします。`atlasez-reports`、本番の編集室Durable Object、production Queue、公開サイトbindingを追加しません。member intake以外の編集室画面は試験対象外です。
-4. Staging secretsへ専用Google OAuth secret、Discord OAuth secret/暗号鍵、test guild専用Bot token、Resend test-sink API keyを個別登録します。`vars`へsecretを置かず、production secretを複製しません。WorkerにGitHub App/token、公開サイト連携、production webhook/token、Turnstile secretなど不要secretが存在しないことをsecret名だけでread-backします。
-5. `wrangler.admin.staging.example.jsonc` をローカル専用設定にコピーし、Cloudflareから取得したstaging Account ID、D1 ID、workers.dev host、Google/Discord test ID、staging sender/sink addressだけを記入します。完成後に静的検査を実行し、値はIssueへ貼らず、resource名・末尾を除いた匿名識別子・検査時刻だけを記録します。
+4. Staging secretsには専用Google OAuth secretだけを必要に応じて登録します。Resendは確認済みtest sinkが準備されるまで、DiscordはSTG-08のOPSD-08承認まで、関連secretを設定せず無効に保ちます。いずれも `vars`へsecretを置かず、production secretを複製しません。WorkerにGitHub App/token、公開サイト連携、production webhook/token、Turnstile secretなど不要secretが存在しないことをsecret名だけでread-backします。
+5. `wrangler.admin.staging.example.jsonc` をローカル専用設定にコピーし、Cloudflareから取得したstaging Account ID、D1 ID、workers.dev host、Google test client ID、synthetic sender addressだけを記入します。Discord disabledのままならGuild/Client IDもsecretも設定しません。完成後に静的検査を実行し、値はIssueへ貼らず、resource名・匿名識別子・検査時刻だけを記録します。
 
 CloudflareのAccount adminは専用資源を作る権限、D1 operatorは専用D1 migration/read-back/Time Travelの権限、Worker deploy担当はstaging Workerのscript/settings write権限が必要です。本番Route権限は不要です。
 
@@ -74,9 +75,9 @@ CloudflareのAccount adminは専用資源を作る権限、D1 operatorは専用D
 
 - **Google Cloud admin:** 専用OAuth clientを作り、Authorized JavaScript originをstaging `workers.dev` origin、redirect URIを `https://<staging-worker-host>/auth/google/callback` に限定します。synthetic Google accountだけをtest usersへ登録します。prod client secretを複製せず、client IDの匿名識別子・callback設定・test-account件数を記録します。
 - **Resend owner:** test-sink用のproject/API keyとverified staging senderを確認し、承認されたsynthetic recipientだけをexact-address allowlistにします。現在コードで許可される宛先は上記の合成test domainとResend公式simulator addressのみです。別の実sink address/domainを使う場合は、所有確認と明示的なコードallowlist変更・レビューが完了するまでResendを無効に保ちます。Test recipientでsimulatorを使う場合も、queue登録・provider受理・sink側状態を別々に記録します。API key・recipient本文は証跡へ残しません。
-- **Discord admin:** 別OAuth applicationとBotを作り、`https://<staging-worker-host>/auth/discord/callback` だけをredirect URIにします。Botをtest guildだけへinstallし、必要な最小権限とtest role hierarchyをread-backします。production guildへのinstallやproduction Bot token共有は禁止し、OPSD-08の承認前はgrant/revoke試験を開始しません。
+- **Discord admin（STG-08のみ）:** OPSD-08で休止・退会・復帰時のrole方針が承認されるまではDiscord profileをdisabledのままにし、Client/Guild IDやsecretをstagingへ登録しません。有効化する場合は別OAuth applicationとBotを作り、`https://<staging-worker-host>/auth/discord/callback` だけをredirect URIにします。Botをtest guildだけへinstallし、必要な最小権限とtest role hierarchyをread-backします。Cloudflare configを `test-guild` / approval `true`へ変更するのは、最終role方針・test guild/client identity・secret名を照合した後だけです。production guildへのinstallやproduction Bot token共有は禁止します。
 
-設定担当はstaging host/Worker ID/D1 ID/Google client ID/Discord application・guild IDの一致、secret名とprovider projectの分離を二名で照合します。証跡は値を伏せた設定画面、read-only resource metadata、検査時刻、照合者roleで残します。Cloudflare accountを共用する場合も対象resource IDを必ず記録し、production D1/Route/Workerをstaging用として転用しません。
+設定担当はstaging host/Worker ID/D1 ID/Google client IDの一致、secret名とprovider projectの分離を二名で照合します。Discordを後から有効にする場合だけ、test application/guild IDと承認済みrole policyも二名照合します。証跡は値を伏せた設定画面、read-only resource metadata、検査時刻、照合者roleで残します。Cloudflare accountを共用する場合も対象resource IDを必ず記録し、production D1/Route/Workerをstaging用として転用しません。
 
 ## 5. migration 0134の実staging試験
 
@@ -154,6 +155,17 @@ ResendとDiscordを無効のままでも、STG-01〜06のWeb/API側検証は実�
 | 09 障害/運用        | intake-only Cron、D1 operator、alert/primary+backup on-call           | failure injection、marker recovery、pending queue/alerts、stop/ack/drill記録。                               |
 
 Resendの実送信を有効化する場合は、staging configの `ATLASEZ_STAGING_EMAIL_DELIVERY` を `test-sink` に変え、静的確認を `ATLASEZ_STAGING_RESEND_SINK_CONFIRMED=1 node scripts/verify-admin-staging-config.mjs --config wrangler.admin.staging.jsonc --allow-resend-test-sink` で通してから、Cloudflare Secret `ATLASEZ_STAGING_EMAIL_ALLOWLIST` にtest inboxだけを設定します。allowlistを登録できない、synthetic Google accountの送信先がsinkでない、Resend account/key scopeが確かめられない場合は試験を止めます。
+
+STG-01〜06を実施する間は、Discord configを `disabled` / policy `false` のままにし、Discord IDs/secretsを登録しません。STG-08はOPSD-08の承認とtest guild/client/secret-name read-back後に限り、専用configを `test-guild` / policy `true` に変更して、次の確認を先に通します。production Discord IDは検査で拒否されます。
+
+```bash
+ATLASEZ_STAGING_DISCORD_POLICY_CONFIRMED=1 \
+ATLASEZ_STAGING_DISCORD_TEST_GUILD_VERIFIED=1 \
+ATLASEZ_STAGING_DISCORD_SECRETS_VERIFIED=1 \
+npm run verify:admin-staging-config -- --allow-discord-test-guild
+```
+
+この検査はsecret値を読みません。Cloudflare secret名のread-backと値の投入は権限を持つ管理者が個別に行います。検査失敗、未承認、または読み取り確認が欠ける場合、Discord OAuth/APIはstagingで引き続き503拒否しproviderを呼びません。通常のSTG-01〜06にこのDiscord opt-inは不要です。
 
 ## 7. 開始を阻害する確認事項
 
