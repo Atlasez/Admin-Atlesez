@@ -88,8 +88,8 @@
 ### 2026-11-03 production / GitHub 読み取り確認
 
 - 公開`https://admin.atlasez.org/build-info.json`はmain SHA `5e8dd7533e417b9237c232102856bfecd026e2c0`、ref `main`、target `admin`を報告した。公開buildの時刻は`2026-10-14T07:54:26.721Z`。
-- 固定Worker `atlasez-admin`のread-only Version/Deployment確認はVersion `ea236de8-3458-421c-a9ba-4030a9d86674`、100%配信、作成時刻`2026-10-14T07:55:28.329877Z`、source `Unknown (deployment)`。build-info一致だけではWorkers Buildsのprovenanceを証明しない。
-- Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509)はOPEN（最終更新2026-10-13）。現在の公開build-infoはmainと一致するが、Worker Sourceは依然Unknown。Workers Builds復旧済みとは判定しない。
+- 固定Worker `atlasez-admin`のread-only Deployment listはVersion `ea236de8-3458-421c-a9ba-4030a9d86674`、100%配信、作成時刻`2026-10-14T07:55:28.329877Z`、source `wrangler`、annotation `workers/triggered_by=deployment`。build-info一致だけではWorkers Buildsのprovenanceを証明しない。
+- Issue [#509](https://github.com/Atlasez/Admin-Atlesez/issues/509)はOPEN（最終更新2026-10-13）。公開build-infoはmainと一致するが、最新read-only Deployment listのsourceは`wrangler`。Workers Builds checkout SHAとのprovenanceが確認できず、復旧済みとは判定しない。
 - 2026-11-02のproduction sync run `41420726517`は成功。これはbuild-infoとmainの照合であり、Cloudflare VersionのBuild provenanceを証明しない。認証済みChromeで主要画面を確認していない。
 - Branch protectionの確認値はrequired check `verify`、strict=true、required approving reviews=0、admin enforcement有効。今回この値は変更していない。
 
@@ -98,7 +98,7 @@
 | 優先度                          | 状態                     | 根拠 / 必要な次の処置                                                                                                                                                                                  |
 | ------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | P0: 応募データの部分成功        | 修正済み・隔離テストPASS | 以前は応募insert後のtask/email設定失敗を握りつぶし、HTTP 201と誤った`emailQueued`を返し得た。transaction化と失敗後再試行を実装。PR CI・レビュー・通常のmain配信後に再照合する。                        |
-| P0: 本番provenance              | BLOCKED                  | Worker sourceがUnknown。Issue #509を継続し、Workers Builds成功runのcheckout SHAと固定Worker Versionを照合する。手動deployや設定変更で迂回しない。                                                      |
+| P0: 本番provenance              | BLOCKED                  | 最新Worker Deployment sourceは`wrangler`で、Workers Builds provenanceを確認できない。Issue #509を継続し、成功runのcheckout SHAと固定Worker Versionを照合する。手動deployや設定変更で迂回しない。       |
 | P0: 実認証・全role matrix       | BLOCKED                  | 未認証/応募者/採用前/一般member/各scope担当/global admin/休止/退会済みで、専用隔離アカウントを使うUIと直接APIのexact-head確認が必要。                                                                  |
 | P0: 外部状態                    | BLOCKED                  | 承認済みsandboxでResend/Discordの失敗・再試行・重複・権限失効を実測し、実受信/実role状態とqueue記録を照合する必要がある。                                                                              |
 | P1: 受入体制                    | BLOCKED                  | OPSD-01/02/06/07について担当/代理/返信目安、受入上限/停止条件、queue確認頻度、停止・再開承認者が未決定。運営責任者の記録が必要。                                                                       |
@@ -125,13 +125,13 @@
 
 ### 5段階のGo / No-Go
 
-| 判定                  | 状態                                                               | 理由                                                                                                            |
-| --------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| Code Ready            | BLOCKED（応募〜初回タスクのコード経路はローカルとGitHub CIでPASS） | 全role/API matrix、外部状態、専用sandbox検証が未了で、PRレビューも未完了。                                      |
-| Staging Ready         | BLOCKED                                                            | この作業では共有staging・実OAuth/providerを利用していない。隔離SQLiteとPlaywright mockはstagingの代替ではない。 |
-| Production Verified   | BLOCKED                                                            | 公開build-infoとmain SHAは一致するが、Cloudflare sourceがUnknownで、認証済みChromeの画面証拠がない。            |
-| Limited Intake GO     | BLOCKED                                                            | OPSD-01/02/03/05/06/07/08/09、専用sandbox、production provenanceと権限・外部連携受入が未完了。                  |
-| Public Recruitment GO | BLOCKED                                                            | 限定受入が未承認。募集処理能力、プライバシー、返信目安、backup/incident準備、公開repo PR #140の判断が未完了。   |
+| 判定                  | 状態                                                               | 理由                                                                                                                                         |
+| --------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code Ready            | BLOCKED（応募〜初回タスクのコード経路はローカルとGitHub CIでPASS） | 全role/API matrix、外部状態、専用sandbox検証が未了で、PRレビューも未完了。                                                                   |
+| Staging Ready         | BLOCKED                                                            | この作業では共有staging・実OAuth/providerを利用していない。隔離SQLiteとPlaywright mockはstagingの代替ではない。                              |
+| Production Verified   | BLOCKED                                                            | 公開build-infoとmain SHAは一致するが、Cloudflare sourceは`wrangler`でWorkers Builds provenanceを確認できず、認証済みChromeの画面証拠もない。 |
+| Limited Intake GO     | BLOCKED                                                            | OPSD-01/02/03/05/06/07/08/09、専用sandbox、production provenanceと権限・外部連携受入が未完了。                                               |
+| Public Recruitment GO | BLOCKED                                                            | 限定受入が未承認。募集処理能力、プライバシー、返信目安、backup/incident準備、公開repo PR #140の判断が未完了。                                |
 
 ### Limited Intakeへ進む最短手順
 
