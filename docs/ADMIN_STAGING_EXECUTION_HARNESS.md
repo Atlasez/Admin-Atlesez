@@ -128,6 +128,8 @@ Cloudflare D1 Time Travelは現在のbookmarkをread-onlyで取得できます�
 
 `docs/ADMIN_MEMBER_INTAKE_STAGING_CHECKLIST.md` が正式な試験票です。次の順序で担当者が準備し、試験ごとに対象SHA/Worker Version、anonymous fixture key、UTC時刻、HTTP status、synthetic row counts、許可/拒否、証跡URLを記録します。メール本文、住所、Cookie、OAuth情報、Discord account名は記録しません。
 
+ResendとDiscordを無効のままでも、STG-01〜06のWeb/API側検証は実施できます。STG-02では応募・運営task・メールqueueの状態を照合し、Resend dispatch/provider呼出しが0件であることを確認します。実配達はverified test sinkがread-backされるまでSTG-07へ分離します。STG-06では既存sessionからのサイトAPI拒否・membership/role状態を確認し、Discordのgrant/revokeはOPSD-08承認後のSTG-08に限ります。
+
 最初の開始操作と担当は次の順です。これは作業手順であり、未実施のCloudflare/provider変更を実施済みとは扱いません。
 
 1. **Staging owner / Cloudflare Account admin:** 専用Worker・D1を作成し、`wrangler.admin.staging.jsonc` をignored local configとして完成。`npm run verify:admin-staging-config` と `npm run deploy:admin:staging -- --dry-run` が通るまでdeployしません。Resource ID、worker.dev URL、binding/secret名だけを二名でread-backします。
@@ -139,17 +141,17 @@ Cloudflare D1 Time Travelは現在のbookmarkをread-onlyで取得できます�
 
 したがって、現時点ではSTG-01から開始できません。最初に必要なのはCloudflare Account adminが隔離Worker/D1を作成し、Staging ownerが匿名化したresource metadataを揃えることです。Google/Resend/Discordの担当者はそのstaging hostnameが確定した後に専用client/sink/guildを紐付けます。
 
-| STG                 | 開始前に必要なもの                                                      | 合格証拠                                                                                           |
-| ------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| 01 Google OAuth     | 専用OAuth client、staging callback URI、管理下synthetic accounts        | state/nonce replay拒否、callback/logout/session失効の結果、Cookie属性。secret/codeなし。           |
-| 02 応募             | staging D1 0134、synthetic applicant accounts、test-only email sink設定 | 応募/task/queue row counts、保存後応答喪失/409本人status、multi-project結果。recipient値は匿名化。 |
-| 03 審査             | applicant/manager/global synthetic roles                                | 対象project GET/decisionのHTTP matrix、監査履歴・revision。別projectの403/404。                    |
-| 04 複数所属         | 2 projectのsynthetic memberships                                        | project A保持、project Bだけ追加、各scopeのdirect API拒否証跡。                                    |
-| 05 初期設定/task    | accepted-incomplete/member fixtures、synthetic calendar/task rows       | profile/portal/calendar/task状態、他人task拒否、375px/keyboard/axe証跡。                           |
-| 06 休止・退会・復帰 | suspended/withdrawn/returned fixtures、承認済みDiscord方針              | 失効前後同一sessionのAPI結果、他project membership不変、許可scopeの復帰。                          |
-| 07 Resend           | test-sink API key、verified staging sender、synthetic inbox allowlist   | queue→provider accepted→sink receivedを別記録。allowlist外recipient fetch 0、retry/idempotency。   |
-| 08 Discord          | test guild、test bot/user、明示承認済みrole policy                      | guild/user/role pseudonym、grant/revokeのprovider read-back、サイト権限との同期。                  |
-| 09 障害/運用        | intake-only Cron、D1 operator、alert/primary+backup on-call             | failure injection、marker recovery、pending queue/alerts、stop/ack/drill記録。                     |
+| STG                 | 開始前に必要なもの                                                    | 合格証拠                                                                                                     |
+| ------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| 01 Google OAuth     | 専用OAuth client、staging callback URI、管理下synthetic accounts      | state/nonce replay拒否、callback/logout/session失効の結果、Cookie属性。secret/codeなし。                     |
+| 02 応募             | staging D1 0134、synthetic applicant accounts、Resend disabled        | 応募/task/queue row counts、保存後応答喪失/409本人status、multi-project結果、provider呼出し0。宛先は匿名化。 |
+| 03 審査             | applicant/manager/global synthetic roles                              | 対象project GET/decisionのHTTP matrix、監査履歴・revision。別projectの403/404。                              |
+| 04 複数所属         | 2 projectのsynthetic memberships                                      | project A保持、project Bだけ追加、各scopeのdirect API拒否証跡。                                              |
+| 05 初期設定/task    | accepted-incomplete/member fixtures、synthetic calendar/task rows     | profile/portal/calendar/task状態、他人task拒否、375px/keyboard/axe証跡。                                     |
+| 06 休止・退会・復帰 | suspended/withdrawn/returned fixtures、Discord disabled               | 失効前後同一sessionのAPI結果、他project membership不変、許可scopeの復帰。Discord外部操作なし。               |
+| 07 Resend           | test-sink API key、verified staging sender、synthetic inbox allowlist | queue→provider accepted→sink receivedを別記録。allowlist外recipient fetch 0、retry/idempotency。             |
+| 08 Discord          | test guild、test bot/user、明示承認済みrole policy                    | guild/user/role pseudonym、grant/revokeのprovider read-back、サイト権限との同期。                            |
+| 09 障害/運用        | intake-only Cron、D1 operator、alert/primary+backup on-call           | failure injection、marker recovery、pending queue/alerts、stop/ack/drill記録。                               |
 
 Resendの実送信を有効化する場合は、staging configの `ATLASEZ_STAGING_EMAIL_DELIVERY` を `test-sink` に変え、静的確認を `ATLASEZ_STAGING_RESEND_SINK_CONFIRMED=1 node scripts/verify-admin-staging-config.mjs --config wrangler.admin.staging.jsonc --allow-resend-test-sink` で通してから、Cloudflare Secret `ATLASEZ_STAGING_EMAIL_ALLOWLIST` にtest inboxだけを設定します。allowlistを登録できない、synthetic Google accountの送信先がsinkでない、Resend account/key scopeが確かめられない場合は試験を止めます。
 
