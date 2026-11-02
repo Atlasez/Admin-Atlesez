@@ -181,3 +181,35 @@ before/afterの行数・状態 / PIIを除いた画像またはログ / cleanup�
 限定受入への判断: [ ] NO-GO [ ] 別途承認後に再判定　根拠記録: ____
 
 このチェックリストへの署名だけで、本番配信、D1変更、実メール、Discord変更、実ユーザー招待、募集開始を許可しない。各行為は既存の明示承認・変更手順に従う。
+
+## 限定受入リリースの停止条件と順序
+
+この節はリリース担当者が承認済みの変更手順を組み立てるための確認票であり、Cloudflare・D1の操作権限や実行承認を付与しない。空欄や確認不能が1つでもあれば停止する。
+
+### PR merge前の確認
+
+- [ ] 最新のmain SHA、対象PR HEAD、差分、レビュー結果、required `verify`のexact-head successを記録する。rebase・競合解消・追加commit後は、その新HEADのCIを使う。
+- [ ] Cloudflare管理者がWorkers Buildsの接続repository、Production branch `main`、Preview無効、Build/Deploy command、対象Workerを読み取り確認する。PR mergeでproduction buildが起動し得るか明示する。設定を確認できない場合は「自動配信なし」と推測せず、PR mergeを止める。
+- [ ] Issue #509のprovenance gateとして、成功したBuild run ID、checkout SHA、固定Worker `atlasez-admin` のVersion、100%配信、公開build-infoを照合する。build-infoとmainのSHA一致だけでは合格にしない。
+- [ ] D1運用者が固定された本番D1の現在のmigration ledgerをread-onlyで取得する。権限エラー、古い結果、対象DBを識別できない出力は未確認扱いとする。
+- [ ] PR #545を含む新Workerを配信する前に、承認済みbackup・migration手順で `0134_application_intake_reconciliation.sql` を本番D1へ適用し、read-only ledgerで適用を確認する。実行者、承認者、対象DB識別子、対象SHA、時刻、結果を別々に記録する。PR mergeの許可をmigration許可に読み替えない。
+- [ ] 運営責任者がOPSD決定票の必要項目、少人数上限、担当/代理、停止・復旧担当を承認する。未決定の保存期間、SLA、Discord role方針を公開・実行しない。
+
+### mergeと配信の順序
+
+Issue #548の順序案は `#546 → #545 → #547`。この順序はCloudflareのproduction buildが安全に制御・検証でき、各merge後のmain CIと配信証拠を見て次へ進める場合だけ使う。必要なmigrationが未確認、Workers Builds provenanceが未解決、または自動配信の発生有無を確認できない場合は、独立したdocs-only PRを含めmergeしない。
+
+各merge後にmain SHA、CI run、Cloudflare Build/Deployment/Version、配信率、build-infoを記録する。異常があれば次のPRをmergeせず、deploy・rollback・promote・cache purgeを推測で実行しない。
+
+### 配信後の確認と復旧
+
+- [ ] 承認されたmain SHAのWorker Versionが固定Workerへ100%配信され、Build run/checkout SHAと一致する。
+- [ ] 認証済みChromeでlogin、応募者status、portal、task、calendar、profile、対象projectのapplicationsを確認する。合成roleに対応する許可/拒否APIも確認し、実会員の応募・採用・role変更を行わない。
+- [ ] 応募row、対応task、期待メールqueue、reconciliation markerを隔離データで照合する。メールproviderの受理、sinkでの受信、Discord側read-backをそれぞれ分けて記録する。
+- [ ] アプリの問題はレビュー済みrevert PRとWorkers Buildsで戻す。migration 0134の列/indexを削除せず、送信済みメールを復旧操作で再送しない。D1復元は対象・影響を別途レビューし、承認されたrunbookでのみ行う。
+
+| 承認role                   | merge/deploy可否 | migration/backup確認      | OPSD必要承認               | 証跡URL・日時 |
+| -------------------------- | ---------------- | ------------------------- | -------------------------- | ------------- |
+| Cloudflare / release owner | ____             | 対象SHA・Version: ____    | N/A                        | ____          |
+| D1 operator / security     | N/A              | backup・0134 ledger: ____ | OPSD-05/07: ____           | ____          |
+| 運営責任者 / privacy責任者 | N/A              | N/A                       | OPSD-01〜04/06/08/09: ____ | ____          |
