@@ -1,0 +1,114 @@
+# ADMIN新規メンバー受入：運営決定・staging実施チェックリスト
+
+作成日: 2026-11-03 JST  
+状態: **未実施／未承認**。このチェックリストは運営判断と隔離環境の準備票であり、募集開始・実ユーザーへの通知・本番変更を許可するものではない。
+
+## 実施前の停止条件
+
+- [ ] ADMINの対象commit、CI、Worker名、staging URL、staging D1 IDを記録した。stagingは本番Worker・本番D1・本番Route・本番OAuth clientと分離されている。
+- [ ] staging Workerが接続するDB、Cron、queue、送信provider、Discord guildを一覧化し、本番の共有D1・外部通知・実メンバーへ到達しないことを確認した。
+- [ ] 専用合成アカウントの利用者とcleanup担当を承認した。既存個人アカウントや一般メンバーで代用しない。
+- [ ] staging用secretは専用のsecret storeに登録した。値・OAuth token・Cookie・認証コードをPR、Issue、スクリーンショット、テストログへ記録しない。
+- [ ] 対象SHAのCIが成功し、stagingだけに必要なmigrationが適用済みであることをread-onlyで確認した。migrationはレビュー済み手順でstagingにのみ適用する。
+- [ ] OPSD-01〜09のうち、この試験に必要な決定を承認済み運営者が記入した。未決定のDiscord方針や個人情報保持値を試験者が補完しない。
+
+**一項目でも未完了なら外部サービスを使う試験を開始しない。** ローカルSQLite/Mock試験は本番・stagingへの接続なしで継続できる。
+
+## 運営責任者が記入する決定票（OPSD-01〜09）
+
+チェックした選択肢だけで決定を確定しない。必須欄を記入し、決定者が承認した後に状態を`APPROVED`へ変更する。空欄・複数選択・署名なしは`PENDING`のままとする。保存期間、上限、SLAなどの未承認値はWeb画面や公開文面へ表示しない。
+
+| ID                                      | 選択・記入欄（承認者が記入）                                                                                                                                                                                                                                                                | 必須記録と完了条件                                                                                                                        | 決定責任role                             | 状態／承認                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------- |
+| OPSD-01 応募・運営の担当                | [ ] 各queueに主担当と代理を割当 [ ] 共通当番を設定 [ ] 担当不在時に受付停止。応募確認、採否、分野レビュー、初回設定、障害、相談・休止・退会ごとに主担当role、代理role、連絡経路、対応時間帯、初回応答目安、期限超過時の連絡先を記入。                                                       | 担当表が全queueを覆い、代理者が引継ぎを机上確認。公開募集の返信目安と一致。                                                               | 運営責任者、各project lead               | 状態: ____　決定日: ____　承認者role/署名: ____ |
+| OPSD-02 少人数受入の容量                | [ ] 招待制の限定受入 [ ] project限定 [ ] その他（要記述）。最大人数、期間、対象project、同時審査件数、未対応queue上限、受付一時停止の閾値と停止担当、再開承認者、限定運用の振返り日を記入。                                                                                                 | 数値入り計画、上限到達時の本人向け案内、停止・再開担当が揃う。一般募集は限定運用の記録と振返り後に別決定。                                | 運営代表、各project lead                 | 状態: ____　決定日: ____　承認者role/署名: ____ |
+| OPSD-03 応募・profile等の保存           | [ ] データ種類ごとに期間を決定 [ ] 削除条件を決定 [ ] 保存期間の専門確認が必要。応募/profile、採否確定済み応募、審査メモ、問い合わせ、session/rate limit、記事報告のhash/contact、backup copyを分け、利用目的、保存期間、起算イベント、例外、削除依頼窓口、削除実行者、削除確認方法を記入。 | 承認済み保持表が公開プライバシー説明、削除手順、backup保持と一致。未承認の保持値をコードで有効化しない。                                  | privacy責任者、運営責任者                | 状態: ____　決定日: ____　承認者role/署名: ____ |
+| OPSD-04 監査ログの個人情報              | [ ] 現行記載の保持案を採用 [ ] 期間短縮 [ ] 識別情報を分離・削除し統計だけ保持 [ ] その他。各ログ項目、用途、閲覧可能role、検索理由、archive期間、削除可否、アクセス記録、応募/profile保持との違いを記入。                                                                                  | 監査ログの目的・アクセスrole・保持削除が承認され、公開説明と整合。既存の730日記載は承認済み決定とみなさない。                             | privacy責任者、ADMIN管理者               | 状態: ____　決定日: ____　承認者role/署名: ____ |
+| OPSD-05 backup・復元                    | [ ] D1 Time Travel [ ] 暗号化exportを分離保存 [ ] 手動export [ ] 複数方式。採用する保存先の識別名、頻度、暗号化、閲覧role、保持削除、失敗通知、restore承認者、実測RPO/RTOを記入。                                                                                                           | 隔離環境でのrestore・整合性検証と所要時間を記録。backupが存在するだけで復元可能とは扱わない。                                             | D1運用担当、security責任者               | 状態: ____　決定日: ____　承認者role/署名: ____ |
+| OPSD-06 障害・queue監視                 | [ ] 当番が定時確認 [ ] 閾値でalert [ ] 併用。応募/メール/Discord/Cron/公開queueごとに確認頻度、最古滞留時間、再試行枯渇条件、障害判定時間、alert先、一次応答者、エスカレーション先を記入。                                                                                                  | stagingで失敗注入→alert受信→acknowledge→引継ぎを実証。設定済み、provider accepted、送信API成功だけで実配達・復旧成功とは扱わない。        | 運営責任者、各service担当                | 状態: ____　決定日: ____　承認者role/署名: ____ |
+| OPSD-07 停止・復旧権限                  | [ ] 指定operatorが停止し責任者が復旧承認 [ ] 二名で停止・復旧 [ ] 管理者へ即時エスカレーション。停止条件、停止可能role、Worker/Cron/queueの安全な停止順、共有D1への影響、連絡先、再開条件、復旧承認者を記入。                                                                               | 承認済み手順で机上演習を実施。Cloudflare/GitHubの設定変更、本番停止・再開は個別承認なしに実施しない。                                     | 運営責任者、Cloudflare管理者、D1運用担当 | 状態: ____　決定日: ____　承認者role/署名: ____ |
+| OPSD-08 Discord roleの停止・退会・復帰  | [ ] 休止/退会時に全roleを解除 [ ] Atlasez内scopeだけ停止しDiscord role維持 [ ] 対象project roleだけ解除 [ ] 状態ごとに異なる方針を表で決定。休止、project離脱、恒久退会、復帰、連携失敗時を分け、本人への説明、Bot失敗時の停止状態、手動確認者、再連携条件を記入。                          | role grant/revokeとサイト認可が一致するstaging結果を保存。本人同意と運営承認のない連携・削除をしない。未決定中はDiscord依存の受入を停止。 | 運営責任者、Discord管理者                | 状態: ____　決定日: ____　承認者role/署名: ____ |
+| OPSD-09 隔離staging・合成roleアカウント | [ ] 専用staging Worker/D1 [ ] provider別sandbox [ ] まずMockのみ。staging URL、Worker識別、D1 UUID、OAuth client識別、Resend環境、Discord test guild/bot、各synthetic account pseudonymとrole、fixture作成・削除担当を記入する。secret値・個人メールはここへ書かない。                      | 本番からの隔離を読み取りで確認し、各roleのUI/API matrix、test data初期化・cleanup、利用者の承認が完了。                                   | ADMIN maintainer、各role owner           | 状態: ____　決定日: ____　承認者role/署名: ____ |
+
+決定票の記録先（承認済み運営記録。個人情報をこのrepoへ保存しない）: ____  
+根拠・関連Issue/PR: ____　公開文面/手順の更新担当: ____　次回見直し日: ____
+
+## staging環境・合成アカウント台帳
+
+実施環境はユーザー向けの本番URLと見間違えない名前にする。staging専用Google OAuth client/callback、Resend送信設定またはsink、Discord test guild/bot/role、別のD1を用意する。stagingアプリに本番secretや本番D1 bindingが残っていないことを、値を表示せずbinding名・環境IDで確認する。
+
+| Pseudonym            | 初期状態・role                       | 用途                                    | cleanup owner | 準備状態 |
+| -------------------- | ------------------------------------ | --------------------------------------- | ------------- | -------- |
+| `applicant-fresh`    | 新規Google account、応募/profileなし | OAuth、profile、応募                    | ____          | PENDING  |
+| `applicant-review`   | 審査中の合成応募                     | 面談・審査・状態確認                    | ____          | PENDING  |
+| `applicant-rejected` | 不採用の合成応募                     | 結果表示とAPI拒否                       | ____          | PENDING  |
+| `member-project-a`   | project A所属、一般メンバー          | 既存所属維持、別project応募、初回タスク | ____          | PENDING  |
+| `manager-project-a`  | project A責任者、Bはscope外          | 所属projectの応募・審査、Bの拒否        | ____          | PENDING  |
+| `subject-lead-a`     | project A分野担当者                  | 担当分野scopeの境界                     | ____          | PENDING  |
+| `global-manager`     | 全体管理者                           | 全体管理画面の許可範囲                  | ____          | PENDING  |
+| `member-suspended`   | 休止状態                             | 既存sessionの失効、再開                 | ____          | PENDING  |
+| `member-withdrawn`   | 退会済み状態                         | API拒否、復帰scope限定                  | ____          | PENDING  |
+
+全て専用の検証アカウントまたはMock fixtureとし、実メンバーを使わない。実Google OAuthでは管理されたsynthetic Google accountだけを選択する。Resend/Discordの外部連携は専用projectとtest guildのみを使い、宛先・アカウント識別子は安全な運営保管先に置く。
+
+## 実施順・受入シナリオ
+
+各シナリオはUI操作だけでなく、許可されたstaging APIを同じrole sessionで直接呼び、HTTP statusとDB状態を照合する。D1はstaging read-only queryで行数・仮ID・状態だけを見る。秘密値や応募者の入力本文は証拠に含めない。
+
+| ID / actor                                                                          | 手順                                                                                                                                                                           | 合格条件                                                                                                                                                                                                                              | 保存する証拠                                                                                                                               |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| STG-01 OAuth / `applicant-fresh`                                                    | 専用staging URLの未認証ページからGoogleログイン。許可済みsynthetic accountを選択し同意、callback後にログアウト・再ログインも実施。                                             | state/nonce/cookie/callbackが正常、同一Google identityに結合。session cookieは安全属性付き。未認証APIは拒否、応募者をmember/adminにしない。失敗・取消後に再試行可能。                                                                 | staging URL識別子、SHA、OAuth client pseudonym、callback結果/status、cookie属性名のみ、擬似user ID。state/token/cookie値は保存しない。     |
+| STG-02 Profile・応募・再送 / `applicant-fresh`                                      | 基本profileを保存してページ再読み込み、途中保存・再開。project Aへ応募し、二重クリックと並行POST、応答timeout後の再送を実施。応募statusページを開く。別project Bにも応募する。 | 入力検証、保存値、projectごとの応募、既存応募確認が正しい。timeout後の再送409は失敗表示にならず既存statusへ移動。application/task/queueが想定行数。commit状態が不明なら成功・rollbackと断定せず運営確認を表示。provider送達は別扱い。 | 相関ID、HTTP status/code、匿名fixture ID、app/task/queueの前後行数、status画面のPII除去画像、重複回数。                                    |
+| STG-03 審査・不採用 / `manager-project-a`, `applicant-review`, `applicant-rejected` | manager Aが対象応募を閲覧、面談記録、審査状態変更、受入ではなく不採用経路を選ぶ。応募者sessionと直接APIで状態を確認。                                                          | 対象project scopeの応募だけ閲覧・変更可。履歴にactor/時刻/旧新状態。二重・古い更新は409等で検出。rejectにmembership/portal/task管理権限を作らない。本人は結果を見られるがprotected APIは拒否。                                        | role別status、監査行数・actor pseudonym、拒否HTTP code、membership=0、保存前後の状態。応募内容なし。                                       |
+| STG-04 複数所属 / `member-project-a`, `manager-project-a`                           | A所属memberがBへ応募。B担当者がBだけを受入。操作前後にA/Bのmembership・permissionを照合。A/BのAPIを両roleで呼ぶ。                                                              | A所属が維持されBだけ追加。対象projectの権限だけ付与。Aのtask/calendar/membershipが消えない。manager AはB応募にアクセス不可。                                                                                                          | project pseudonym別membership/permission件数、対象外API拒否status、監査event。                                                             |
+| STG-05 初回設定・初回task / 新規受入member                                          | 受入後に同じGoogle accountでlogin、プロフィール・project自己紹介を保存し、getting-started/portalへ移動。自分のtask、calendar、資料を確認。合成taskをopen→doing→doneへ更新。    | onboardingは実DB状態に対応。所属projectだけ見える。本人の許可済みscopeでtask更新でき、他人のtaskは拒否。一般memberに管理roleを付けない。保存失敗・通信切断は成功表示しない。                                                          | profile completion flags、project scope、task state transition、403/API拒否、360/375/390pxまたは375px画像、PIIなし。                       |
+| STG-06 休止・退会・復帰 / `member-suspended`, `member-withdrawn`                    | 引継ぎ中taskを確認。申請・取下げ・審査・適用を別fixtureで試験。権限を失効させ、古いsessionの直接URLとAPIを再呼出し。承認済み再開を行い、membership/roles再確認。               | lifecycle状態と既存session/APIが一致し、失効後は直接APIも拒否。別project membershipを勝手に消さない。再開時に過去の応募だけでmemberを復活させず、許可済みscopeのみ戻す。監査履歴が残る。Discord側操作はOPSD-08承認前に行わない。      | 旧sessionの401/403、project別行数、監査event、再開scope表、未完了task引継ぎ確認。                                                          |
+| STG-07 Resend / `applicant-fresh`                                                   | staging credentialとResend sandbox/test sinkを確認し、受付・面談・採否の各templateを試験。503、timeout、同一idempotency再送、queue滞留/枯渇を注入。                            | queue作成・provider受理・配達イベントを別状態で表示。重複送信がない。provider失敗はqueueにretryable/failed状態で残る。受信箱で検証する場合もsynthetic宛先と承認済みtest sinkのみ。                                                    | queue pseudonym ID、attempt/status、provider event ID、sinkでの受信確認時刻。recipientや本文なし。                                         |
+| STG-08 Discord grant/revoke / 専用test guildのsynthetic user                        | OPSD-08承認後のみ、Discord consentを行い、project roleを付与。bot権限・role hierarchyを確認。失敗・timeout・再試行を注入し、その後に承認済みの休止/退会role処理と復帰を行う。  | provider応答またはread-backでgrant/revokeを検証。サイト側権限失効をDiscord成功と推測しない。失敗時は`pending/failed`で原因と再試行案内を表示し、管理権限を誤付与しない。重複操作は安全。                                              | test guild pseudonym、synthetic user pseudonym、role ID pseudonym、HTTP/provider status、同期記録IDと時刻。access token/guild招待URLなし。 |
+| STG-09 通信・DB・queue障害 / 上記各role                                             | read-only失敗、DB transaction error、500/timeout、session期限切れ、空データ、通知queue滞留を注入。操作再読込・戻る・再試行・運営案内を確認。                                   | 未確定状態を成功表示しない。保存済みか不明なら重複防止と状態確認へ誘導。権限拒否、空状態、通信失敗、保存失敗が別表示。次の運営連絡先が分かる。                                                                                        | injection種別、status/code、request correlation ID、再試行回数、状態前後の件数、PIIなしの画面画像。                                        |
+
+### API/UI role matrix
+
+同じ合成応募・プロフィール・記事・taskについて、UIの表示だけでなく直接APIで検証する。`403`/`404`等の正確なstatusはendpoint contractを基準とし、他人のデータを返さないことを必須とする。
+
+| role/state          | 自分の応募status        | 他人/別project応募・非公開profile | 自分のmembership/task      | 管理・審査API         |
+| ------------------- | ----------------------- | --------------------------------- | -------------------------- | --------------------- |
+| 未認証              | 拒否                    | 拒否                              | 拒否                       | 拒否                  |
+| 応募者/審査中       | 自分の応募だけ許可      | 拒否                              | member portal拒否          | 拒否                  |
+| 不採用者            | 自分の結果だけ許可      | 拒否                              | member portal拒否          | 拒否                  |
+| 受入済み/初期設定中 | 自分の結果/profile許可  | 拒否                              | 付与済みprojectのsetupのみ | 拒否                  |
+| 一般member          | 自分の情報・許可scope   | 拒否                              | 所属project内のみ          | 拒否                  |
+| project責任者       | 割当projectのみ         | scope外は拒否                     | 付与scope内                | 対象projectのみ許可   |
+| 分野担当者          | 担当範囲のみ            | 他project/他分野は拒否            | 許可scope内                | 担当業務だけ許可      |
+| 全体管理者          | 運用上許可された範囲    | audit/log対象を含め職務scope内    | 許可scope内                | 許可された管理APIのみ |
+| 休止中member        | 自分の手続き/案内のみ   | 拒否                              | 停止されたscopeを拒否      | 拒否                  |
+| 退会済みmember      | 自分の退会/再開案内のみ | 拒否                              | すべて拒否                 | 拒否                  |
+
+全roleでrole失効後の既存session、直接URL、APIを再確認する。UIでボタンを隠すだけでは合格にしない。
+
+## 証拠の形式と保管
+
+各実行の記録は次の形式を使い、アクセス制限された運営保管先へ保存する。
+
+```text
+Test ID / 実施日時(UTCとJST) / 実施者role / staging識別子
+ADMIN commit SHA / CI run URL / Worker Version pseudonym / staging D1 pseudonym
+synthetic actor pseudonym / endpointまたは画面 / 期待結果 / 実結果(PASS|FAIL|BLOCKED)
+HTTP status・machine code / correlation ID / pseudonymized provider event ID
+before/afterの行数・状態 / PIIを除いた画像またはログ / cleanup結果 / 追跡Issue
+```
+
+証拠には氏名、実メールアドレス、OAuth token/state、Cookie、Discord access token、応募本文、Resend本文、secret、実利用者の画像を含めない。画像を保存する場合はアカウント選択情報、個人名、URL query、通知内容を塗りつぶし、同じstaging runのcommitとtest IDを付ける。providerのAPI成功だけを実着信・Discord反映の証拠にせず、sink/read-backの結果を別に記録する。
+
+## 現在の準備状況と承認欄
+
+- 専用staging Worker/D1/OAuth client/Resend sink/Discord test guild: **未確認・BLOCKED**。
+- 実Google OAuth callback、実メール到達、Discord実role grant/revoke、role別Chrome受入: **未実施**。
+- SQLite/Worker/Mock providerを使う自動試験: 該当するPRのexact-head CIとテスト報告で確認する。これらは実サービス到達の代替ではない。
+- OPSD-01〜09: **未承認**。候補・推奨は運営決定ではない。
+
+運営責任者: ____　決定日: ____　承認対象環境: ____　承認対象commit: ____  
+セキュリティ/プライバシー確認role: ____　staging owner: ____　cleanup owner: ____  
+限定受入への判断: [ ] NO-GO [ ] 別途承認後に再判定　根拠記録: ____
+
+このチェックリストへの署名だけで、本番配信、D1変更、実メール、Discord変更、実ユーザー招待、募集開始を許可しない。各行為は既存の明示承認・変更手順に従う。
