@@ -1,4 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
+import { createHash } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import worker from "../../src/admin-worker";
 
@@ -2143,77 +2145,141 @@ describe("applicant stage server-side access", () => {
   });
 
   it("accepts a complete student-council application and records its project", async () => {
-    const inserts: unknown[][] = [];
-    const applicationEnv = {
-      ADMIN_AUTH_MODE: "google-oauth",
-      REPORTS: {
-        prepare: (query: string) => {
-          const statement = new Statement(query);
-          statement.first = async <T>() => {
-            if (query.includes("admin_auth_sessions"))
-              return { email: "council-applicant@example.com" } as T;
-            return null as T | null;
-          };
-          statement.run = async () => {
-            if (query.includes("INSERT INTO atlasez_member_applications"))
-              inserts.push([]);
-            return { meta: { changes: 1 } };
-          };
-          return statement;
-        },
-        batch: async (statements: Statement[]) =>
-          Promise.all(statements.map((statement) => statement.run())),
-      },
-      ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
-    };
-    const response = await worker.fetch(
-      new Request("https://admin.example/api/apply", {
-        method: "POST",
-        headers: {
-          cookie: "atlasez_admin_session=logged-in",
-          origin: "https://admin.example",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          projectSlug: "student-council-exchange",
-          familyName: "テスト",
-          givenName: "太郎",
-          familyNameKana: "てすと",
-          givenNameKana: "たろう",
-          formLanguage: "ja",
-          affiliationEmail: "student@school.example",
-          affiliationType: "高等学校",
-          institution: "テスト高等学校",
-          grade: "高2",
-          country: "日本",
-          timezone: "Asia/Tokyo",
-          birthDate: "2008-01-01",
-          residenceCity: "東京都",
-          referralSource: "テスト",
-          interests: "企画運営",
-          message: "応募テストです。",
-          motivationReasons: "活動に参加したい。",
-          desiredRoles: "企画",
-          interviewAvailability: "平日夕方",
-          projectAnswers: {
-            councilStatus: "生徒会所属中",
-            councilRole: "書記",
-            councilPlans: "学校を越えた交流会を企画したい。",
+    const db = new DatabaseSync(":memory:");
+    try {
+      const migrationDirectory = new URL("../../migrations/", import.meta.url);
+      for (const file of readdirSync(migrationDirectory)
+        .filter((name) => name.endsWith(".sql"))
+        .sort())
+        db.exec(readFileSync(new URL(file, migrationDirectory), "utf8"));
+      const token = "logged-in";
+      db.prepare(
+        "INSERT INTO admin_auth_sessions(session_hash,email,expires_at,created_at) VALUES (?,?,?,?)",
+      ).run(
+        createHash("sha256").update(token).digest("hex"),
+        "council-applicant@example.com",
+        "2099-01-01T00:00:00.000Z",
+        new Date().toISOString(),
+      );
+      const applicationEnv = {
+        ADMIN_AUTH_MODE: "google-oauth",
+        APPLICATION_OPERATIONS_EMAILS: "operator@atlasez.test",
+        REPORTS: {
+          prepare: (query: string) => {
+            let values: unknown[] = [];
+            return {
+              bind(...nextValues: unknown[]) {
+                values = nextValues;
+                return this;
+              },
+              async run() {
+                return {
+                  meta: {
+                    changes: Number(db.prepare(query).run(...values).changes),
+                  },
+                };
+              },
+              async first<T>() {
+                return (
+                  (db.prepare(query).get(...values) as T | undefined) ?? null
+                );
+              },
+              async all<T>() {
+                return { results: db.prepare(query).all(...values) as T[] };
+              },
+            };
           },
+          batch: async (
+            statements: Array<{
+              run: () => Promise<{ meta: { changes: number } }>;
+            }>,
+          ) => {
+            db.exec("BEGIN");
+            try {
+              const results = [];
+              for (const statement of statements)
+                results.push(await statement.run());
+              db.exec("COMMIT");
+              return results;
+            } catch (error) {
+              db.exec("ROLLBACK");
+              throw error;
+            }
+          },
+        },
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      };
+      const response = await worker.fetch(
+        new Request("https://admin.example/api/apply", {
+          method: "POST",
+          headers: {
+            cookie: "atlasez_admin_session=logged-in",
+            origin: "https://admin.example",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            projectSlug: "student-council-exchange",
+            familyName: "テスト",
+            givenName: "太郎",
+            familyNameKana: "てすと",
+            givenNameKana: "たろう",
+            formLanguage: "ja",
+            affiliationEmail: "student@school.example",
+            affiliationType: "高等学校",
+            institution: "テスト高等学校",
+            grade: "高2",
+            country: "日本",
+            timezone: "Asia/Tokyo",
+            birthDate: "2008-01-01",
+            residenceCity: "東京都",
+            referralSource: "テスト",
+            interests: "企画運営",
+            message: "応募テストです。",
+            motivationReasons: "活動に参加したい。",
+            desiredRoles: "企画",
+            interviewAvailability: "平日夕方",
+            projectAnswers: {
+              councilStatus: "生徒会所属中",
+              councilRole: "書記",
+              councilPlans: "学校を越えた交流会を企画したい。",
+            },
+          }),
         }),
-      }),
-      applicationEnv as never,
-    );
+        applicationEnv as never,
+      );
 
-    expect(response.status).toBe(201);
-    expect(await response.json()).toMatchObject({
-      ok: true,
-      responseTaskCreated: true,
-      emailQueued: true,
-      emailQueueCount: 1,
-      emailProviderConfigured: false,
-    });
-    expect(inserts).toHaveLength(1);
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({
+        ok: true,
+        responseTaskCreated: true,
+        emailQueued: true,
+        emailQueueCount: 2,
+        emailProviderConfigured: false,
+      });
+      expect(
+        db
+          .prepare(
+            "SELECT project_slug FROM atlasez_member_applications WHERE email=?",
+          )
+          .get("council-applicant@example.com"),
+      ).toEqual({ project_slug: "student-council-exchange" });
+      expect(
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM editorial_tasks WHERE created_by='応募フォーム'",
+          )
+          .get(),
+      ).toEqual({ count: 1 });
+      expect(
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries",
+          )
+          .get(),
+      ).toEqual({ count: 2 });
+    } finally {
+      db.close();
+    }
   });
 
   it("sends a Google-authenticated user without an application to the applicant start page", async () => {

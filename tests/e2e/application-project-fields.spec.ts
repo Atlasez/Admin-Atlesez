@@ -272,7 +272,7 @@ test("応募保存の一時障害を成功と誤認せず、同じ入力の再�
   expect(attempts).toBe(2);
 });
 
-test("保存後の応答喪失から再送した409は失敗表示にせず本人の応募状況へ案内する", async ({
+test("保存後の応答喪失から再送した409は本人の状態へ案内し運営確認中を伝える", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 812 });
@@ -335,7 +335,13 @@ test("保存後の応答喪失から再送した409は失敗表示にせず本�
       json: {
         email: "lost-response@atlasez.test",
         stage: "APPLICANT",
-        applications: [{ project: "考えるカフェ", status: "new" }],
+        applications: [
+          {
+            project: "考えるカフェ",
+            status: "new",
+            intakeNeedsOperatorAttention: true,
+          },
+        ],
       },
     }),
   );
@@ -360,10 +366,90 @@ test("保存後の応答喪失から再送した409は失敗表示にせず本�
   await submit.click();
   await expect(page).toHaveURL(/\/applicant\/\?submission=already-received$/);
   await expect(page.locator("[data-submission-confirmation]")).toContainText(
-    "すでに応募情報があります",
+    "受付処理に運営の確認が必要です",
   );
   await expect(page.locator("[data-application-list]")).toContainText(
-    "考えるカフェ：応募を受け付けました",
+    "考えるカフェ：応募を受け付けました（運営確認中）",
   );
   expect(attempts).toBe(2);
+});
+
+test("応募は保存済みだが受付処理に修復が必要な503は状態確認へ案内する", async ({
+  page,
+}) => {
+  await page.route("**/api/user/status", (route) =>
+    route.fulfill({
+      json: {
+        email: "repair-needed@atlasez.test",
+        stage: "NEW_USER",
+        applicationProjects: [],
+      },
+    }),
+  );
+  await page.route("**/api/application-profile", (route) =>
+    route.fulfill({
+      json: {
+        profile: {
+          email: "repair-needed@atlasez.test",
+          family_name: "受付",
+          given_name: "修復",
+          family_name_kana: "うけつけ",
+          given_name_kana: "しゅうふく",
+          form_language: "ja",
+          affiliation_email: "school@atlasez.test",
+          affiliation_type: "大学",
+          institution: "検証大学",
+          grade: "B1",
+          country: "日本",
+          timezone: "Asia/Tokyo",
+          birth_date: "2000-01-01",
+          residence_city: "検証市",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/public/application-config", (route) =>
+    route.fulfill({ json: {} }),
+  );
+  await page.route("**/api/apply", (route) =>
+    route.fulfill({
+      status: 503,
+      json: {
+        code: "APPLICATION_SETUP_REQUIRES_REVIEW",
+        applicationSaved: true,
+        error:
+          "応募内容は保存され、受付処理の不足分を修復しました。運営確認中です。",
+      },
+    }),
+  );
+  await page.route("**/api/applicant/me", (route) =>
+    route.fulfill({
+      json: {
+        email: "repair-needed@atlasez.test",
+        stage: "APPLICANT",
+        applications: [
+          {
+            project: "考えるカフェ",
+            status: "new",
+            intakeNeedsOperatorAttention: true,
+          },
+        ],
+      },
+    }),
+  );
+
+  await page.goto("apply/thinking-cafe/");
+  await page.locator('[name="interests"]').fill("応募状況の確認");
+  await page.locator('[name="message"]').fill("保存済み状態を確認します");
+  await page.locator('[name="referralSource"]').fill("公式サイト");
+  await page
+    .locator('[name="interviewAvailability"]')
+    .fill("平日18時 Asia/Tokyo");
+  await page.locator('[data-project-answer="theme"]').fill("受付修復の確認");
+  await page.getByRole("button", { name: "応募を送信", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/applicant\/\?submission=check$/);
+  await expect(page.locator("[data-submission-confirmation]")).toContainText(
+    "応募内容は保存されていますが、受付処理に運営の確認が必要です",
+  );
 });

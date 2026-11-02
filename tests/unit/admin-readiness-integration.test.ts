@@ -1504,7 +1504,97 @@ it("応募保存後にHTTP応答だけが失われた再送は409となり、本
   expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
-it("応募行・運営タスク・メールqueueの変更数が一致しない場合は201を返さずPIIなしの相関ログを残す", async () => {
+it("D1 batchのcommit後にWorkerが応答を失ってもrollback済みと扱わず状態を照合する", async () => {
+  const { db, request, env } = environment();
+  const email = "batch-timeout-after-commit@atlasez.test";
+  const profile = {
+    familyName: "commit後",
+    givenName: "応答消失",
+    familyNameKana: "こみっとご",
+    givenNameKana: "おうとうしょうしつ",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+  const application = {
+    projectSlug: "thinking-cafe",
+    interests: "対話",
+    message: "D1 commit後の応答消失を検証",
+    referralSource: "隔離テスト",
+    interviewAvailability: "平日18時 Asia/Tokyo",
+    projectAnswers: { theme: "再試行" },
+  };
+  await request("/api/application-profile", email, profile);
+  const originalBatch = env.REPORTS.batch;
+  let loseFirstResponse = true;
+  env.REPORTS.batch = async (statements) => {
+    const results = await originalBatch(statements);
+    if (loseFirstResponse) {
+      loseFirstResponse = false;
+      throw new Error("isolated response timeout after committed batch");
+    }
+    return results;
+  };
+
+  const uncertain = await request("/api/apply", email, application);
+  expect(uncertain.status).toBe(503);
+  expect(await uncertain.json()).toMatchObject({
+    code: "APPLICATION_SETUP_REQUIRES_REVIEW",
+    applicationSaved: true,
+    setupRepairStatus: "verified",
+    operatorFollowupRecorded: true,
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE email=?",
+      )
+      .get(email),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM editorial_tasks WHERE created_by='応募フォーム'",
+      )
+      .get(),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries",
+      )
+      .get(),
+  ).toEqual({ count: 2 });
+
+  const retried = await request("/api/apply", email, application);
+  expect(retried.status).toBe(409);
+  expect(await retried.json()).toMatchObject({
+    code: "APPLICATION_ALREADY_EXISTS",
+    statusUrl: "/applicant/?submission=already-received",
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE email=?",
+      )
+      .get(email),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries",
+      )
+      .get(),
+  ).toEqual({ count: 2 });
+});
+
+it("実SQLのRAISE(IGNORE)で応募だけcommitしたbatchを検知して冪等修復し運営へ記録する", async () => {
   const { db, request, env } = environment();
   const email = "write-count-mismatch@atlasez.test";
   const profile = {
@@ -1533,18 +1623,62 @@ it("応募行・運営タスク・メールqueueの変更数が一致しない�
   await request("/api/application-profile", email, profile);
   const logger = vi.spyOn(console, "error").mockImplementation(() => {});
   const originalBatch = env.REPORTS.batch;
+  let batchSnapshot: {
+    applications: number;
+    responseTasks: number;
+    emailQueue: number;
+  } | null = null;
+  let injected = false;
   env.REPORTS.batch = async (statements) => {
-    const results = await originalBatch(statements);
-    const responseTaskResult = results[1];
-    if (!responseTaskResult || !("meta" in responseTaskResult)) return results;
-    return results.map((result, index) =>
-      index === 1
-        ? {
-            ...responseTaskResult,
-            meta: { ...responseTaskResult.meta, changes: 0 },
-          }
-        : result,
-    );
+    if (injected) return originalBatch(statements);
+    injected = true;
+    db.exec(`
+      CREATE TRIGGER isolate_ignore_intake_response_task
+      BEFORE INSERT ON editorial_tasks
+      WHEN NEW.created_by='応募フォーム'
+      BEGIN SELECT RAISE(IGNORE); END;
+      CREATE TRIGGER isolate_ignore_applicant_confirmation
+      BEFORE INSERT ON atlasez_application_email_deliveries
+      WHEN NEW.kind='applicant_confirmation'
+      BEGIN SELECT RAISE(IGNORE); END;
+      CREATE TRIGGER isolate_ignore_operator_notification
+      BEFORE INSERT ON atlasez_application_email_deliveries
+      WHEN NEW.kind='operator_notification'
+      BEGIN SELECT RAISE(IGNORE); END;
+    `);
+    try {
+      const results = await originalBatch(statements);
+      batchSnapshot = {
+        applications: Number(
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE email=?",
+            )
+            .get(email)?.count ?? 0,
+        ),
+        responseTasks: Number(
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM editorial_tasks WHERE created_by='応募フォーム'",
+            )
+            .get()?.count ?? 0,
+        ),
+        emailQueue: Number(
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries",
+            )
+            .get()?.count ?? 0,
+        ),
+      };
+      return results;
+    } finally {
+      db.exec(`
+        DROP TRIGGER isolate_ignore_intake_response_task;
+        DROP TRIGGER isolate_ignore_applicant_confirmation;
+        DROP TRIGGER isolate_ignore_operator_notification;
+      `);
+    }
   };
 
   const response = await request("/api/apply", email, application);
@@ -1553,16 +1687,30 @@ it("応募行・運営タスク・メールqueueの変更数が一致しない�
     code: string;
     correlationId: string;
     statusUrl: string;
+    applicationSaved: boolean;
+    setupRepairStatus: string;
+    operatorFollowupRecorded: boolean;
   };
   expect(result).toMatchObject({
-    code: "APPLICATION_RESULT_UNCONFIRMED",
+    code: "APPLICATION_SETUP_REQUIRES_REVIEW",
+    applicationSaved: true,
+    setupRepairStatus: "repaired",
+    operatorFollowupRecorded: true,
     statusUrl: "/applicant/?submission=check",
+  });
+  expect(batchSnapshot).toEqual({
+    applications: 1,
+    responseTasks: 0,
+    emailQueue: 0,
   });
   expect(result.correlationId).toMatch(/^[0-9a-f-]{36}$/i);
   expect(logger).toHaveBeenCalledTimes(1);
   const logLine = String(logger.mock.calls[0]?.[0]);
   expect(logLine).toContain(result.correlationId);
   expect(logLine).toContain("application_write_count_mismatch");
+  expect(logLine).toContain('"responseTaskCount":1');
+  expect(logLine).toContain('"applicantConfirmationCount":1');
+  expect(logLine).not.toContain(result.correlationId.replaceAll("-", ""));
   expect(logLine).not.toContain(email);
   expect(logLine).not.toContain("変更数整合性");
   expect(logLine).not.toContain("検証");
@@ -1587,6 +1735,121 @@ it("応募行・運営タスク・メールqueueの変更数が一致しない�
       )
       .get(),
   ).toEqual({ count: 2 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM editorial_tasks WHERE id LIKE 'application-recovery:%'",
+      )
+      .get(),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM admin_audit_log WHERE action='application_intake_reconciliation_required'",
+      )
+      .get(),
+  ).toEqual({ count: 1 });
+  const status = await request("/api/applicant/me", email);
+  expect(status.status).toBe(200);
+  expect(await status.json()).toMatchObject({
+    applications: [
+      expect.objectContaining({ intakeNeedsOperatorAttention: true }),
+    ],
+  });
+  const duplicate = await request("/api/apply", email, application);
+  expect(duplicate.status).toBe(409);
+  expect(await duplicate.json()).toMatchObject({
+    code: "APPLICATION_ALREADY_EXISTS",
+    statusUrl: "/applicant/?submission=already-received",
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM editorial_tasks WHERE id LIKE 'application-recovery:%'",
+      )
+      .get(),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM admin_audit_log WHERE action='application_intake_reconciliation_required'",
+      )
+      .get(),
+  ).toEqual({ count: 1 });
+});
+
+it("応募INSERTが実SQLで無視された全件0変更を二重応募409と誤認しない", async () => {
+  const { db, request, env } = environment();
+  const email = "ignored-application-insert@atlasez.test";
+  const profile = {
+    familyName: "応募",
+    givenName: "未保存",
+    familyNameKana: "おうぼ",
+    givenNameKana: "みほぞん",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+  const application = {
+    projectSlug: "thinking-cafe",
+    interests: "対話",
+    message: "応募行が作成されない場合を検証",
+    referralSource: "隔離テスト",
+    interviewAvailability: "平日18時 Asia/Tokyo",
+    projectAnswers: { theme: "保存確認" },
+  };
+  await request("/api/application-profile", email, profile);
+  const originalBatch = env.REPORTS.batch;
+  let injected = false;
+  env.REPORTS.batch = async (statements) => {
+    if (injected) return originalBatch(statements);
+    injected = true;
+    db.exec(`
+      CREATE TRIGGER isolate_ignore_application_insert
+      BEFORE INSERT ON atlasez_member_applications
+      BEGIN SELECT RAISE(IGNORE); END;
+    `);
+    try {
+      return await originalBatch(statements);
+    } finally {
+      db.exec("DROP TRIGGER isolate_ignore_application_insert");
+    }
+  };
+
+  const response = await request("/api/apply", email, application);
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({
+    code: "APPLICATION_RESULT_UNCONFIRMED",
+    applicationSaved: false,
+    statusUrl: "/applicant/?submission=check",
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE email=?",
+      )
+      .get(email),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM editorial_tasks WHERE created_by='応募フォーム'",
+      )
+      .get(),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries",
+      )
+      .get(),
+  ).toEqual({ count: 0 });
 });
 
 it("応募・運営対応タスク・メールキューを同じbatchで確定し、失敗時は再応募可能にする", async () => {

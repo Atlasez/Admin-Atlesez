@@ -8245,10 +8245,11 @@ async function applicationEmailDeliveryStatements(
   ];
   return rows.map((row) =>
     env.REPORTS.prepare(
-      `INSERT OR IGNORE INTO atlasez_application_email_deliveries
+      `INSERT INTO atlasez_application_email_deliveries
        (id,application_id,recipient_email,kind,subject,text_body,html_body,status,attempt_count,next_attempt_at,created_at,updated_at)
        SELECT ?,?,?,?,?,?,?,'pending',0,?,?,?
-       WHERE EXISTS (SELECT 1 FROM atlasez_member_applications WHERE id=?)`,
+       WHERE EXISTS (SELECT 1 FROM atlasez_member_applications WHERE id=?)
+       ON CONFLICT(application_id,recipient_email,kind) DO NOTHING`,
     ).bind(
         crypto.randomUUID(),
         application.id,
@@ -8429,9 +8430,11 @@ function applicationResponseTaskStatement(
     createdAt: string;
   },
 ) {
+  const taskId = `application-response:${application.id}`;
+  const applicationReference = `応募ID: ${application.id}`;
   const title = `応募対応：${application.projectLabel} / ${application.name}`;
   const details = [
-    `応募ID: ${application.id}`,
+    applicationReference,
     `応募者: ${application.name}`,
     `メール: ${application.email}`,
     `プロジェクト: ${application.projectLabel}`,
@@ -8441,17 +8444,160 @@ function applicationResponseTaskStatement(
     `INSERT INTO editorial_tasks
      (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,reminder_at,reminder_repeat,reminder_email,created_by,created_at,updated_at)
      SELECT ?, 'secretariat', NULL, NULL, ?, ?, 'open', NULL, 'Asia/Tokyo', NULL, 'none', NULL, ?, ?, ?
-     WHERE EXISTS (SELECT 1 FROM atlasez_member_applications WHERE id=?)`,
+     WHERE EXISTS (SELECT 1 FROM atlasez_member_applications WHERE id=?)
+       AND NOT EXISTS (
+         SELECT 1 FROM editorial_tasks
+          WHERE id=? OR instr(details,?)>0
+       )`,
   )
     .bind(
-      crypto.randomUUID(),
+      taskId,
       title,
       details,
       "応募フォーム",
       application.createdAt,
       application.createdAt,
       application.id,
+      taskId,
+      applicationReference,
     )
+}
+
+function applicationIntakeRecoveryTaskStatement(
+  env: Env,
+  input: {
+    applicationId: string;
+    correlationId: string;
+    detectedBy: "batch_error" | "write_count_mismatch";
+    missing: string[];
+    repaired: boolean;
+    repairAttempted: boolean;
+    createdAt: string;
+  },
+) {
+  const taskId = `application-recovery:${input.applicationId}`;
+  const auditId = `${taskId}:${input.correlationId}`;
+  const details = [
+    `応募ID: ${input.applicationId}`,
+    `相関ID: ${input.correlationId}`,
+    `検出区分: ${input.detectedBy}`,
+    `復旧結果: ${input.repaired ? (input.repairAttempted ? "repaired" : "verified_without_repair") : "operator_action_required"}`,
+    `初回batchで不足を確認した項目: ${input.missing.length ? input.missing.join(", ") : "none"}`,
+    "応募行、応募対応タスク、初回メールqueueの状態を照合してください。送信済みメールを再送しないでください。",
+  ].join("\n");
+  return env.REPORTS.prepare(
+    `INSERT INTO editorial_tasks
+     (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,reminder_at,reminder_repeat,reminder_email,created_by,created_at,updated_at)
+     SELECT ?, 'secretariat', NULL, NULL, '応募処理の整合性を確認する', ?, 'open', NULL, 'Asia/Tokyo', NULL, 'none', NULL, '応募処理監視', ?, ?
+     WHERE EXISTS (SELECT 1 FROM atlasez_member_applications WHERE id=?)
+       AND NOT EXISTS (SELECT 1 FROM admin_audit_log WHERE id=?)
+     ON CONFLICT(id) DO UPDATE SET
+       details=excluded.details,
+       status=CASE WHEN editorial_tasks.status='done' THEN 'open' ELSE editorial_tasks.status END,
+       updated_at=excluded.updated_at`,
+  ).bind(
+    taskId,
+    details,
+    input.createdAt,
+    input.createdAt,
+    input.applicationId,
+    auditId,
+  );
+}
+
+function applicationIntakeRecoveryAuditStatement(
+  env: Env,
+  input: {
+    applicationId: string;
+    correlationId: string;
+    detectedBy: "batch_error" | "write_count_mismatch";
+    missing: string[];
+    repaired: boolean;
+    repairAttempted: boolean;
+    createdAt: string;
+  },
+) {
+  const details = JSON.stringify({
+    correlationId: input.correlationId,
+    detectedBy: input.detectedBy,
+    missing: input.missing,
+    repaired: input.repaired,
+    repairAttempted: input.repairAttempted,
+  });
+  return env.REPORTS.prepare(
+    `INSERT INTO admin_audit_log
+     (id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(id) DO NOTHING`,
+  ).bind(
+    `application-recovery:${input.applicationId}:${input.correlationId}`,
+    "応募処理監視",
+    "application_intake_reconciliation_required",
+    "application",
+    input.applicationId,
+    "応募受付処理",
+    input.repaired
+      ? input.repairAttempted
+        ? "応募受付処理の一部を冪等に修復。運営による確認が必要です。"
+        : "応募受付処理のDB状態は揃っていますが、結果照合に不整合がありました。運営による確認が必要です。"
+      : "応募受付処理の一部を修復できません。運営による確認が必要です。",
+    details,
+    input.createdAt,
+  );
+}
+
+type ApplicationIntakeSnapshot = {
+  applicationExists: boolean;
+  responseTaskCount: number;
+  applicantConfirmationCount: number;
+  operatorNotificationCount: number;
+  recoveryTaskOpen: boolean;
+};
+
+async function inspectApplicationIntake(
+  env: Env,
+  applicationId: string,
+): Promise<ApplicationIntakeSnapshot> {
+  const taskId = `application-response:${applicationId}`;
+  const recoveryTaskId = `application-recovery:${applicationId}`;
+  const reference = `応募ID: ${applicationId}`;
+  const row = await env.REPORTS.prepare(
+    `SELECT
+       EXISTS(SELECT 1 FROM atlasez_member_applications WHERE id=?) AS application_exists,
+       (SELECT COUNT(*) FROM editorial_tasks WHERE id=? OR instr(details,?)>0) AS response_task_count,
+       (SELECT COUNT(*) FROM atlasez_application_email_deliveries WHERE application_id=? AND kind='applicant_confirmation') AS applicant_confirmation_count,
+       (SELECT COUNT(*) FROM atlasez_application_email_deliveries WHERE application_id=? AND kind='operator_notification') AS operator_notification_count,
+       EXISTS(SELECT 1 FROM editorial_tasks WHERE id=? AND status!='done') AS recovery_task_open`,
+  )
+    .bind(applicationId, taskId, reference, applicationId, applicationId, recoveryTaskId)
+    .first<{
+      application_exists: number;
+      response_task_count: number;
+      applicant_confirmation_count: number;
+      operator_notification_count: number;
+      recovery_task_open: number;
+    }>();
+  return {
+    applicationExists: Number(row?.application_exists ?? 0) === 1,
+    responseTaskCount: Number(row?.response_task_count ?? 0),
+    applicantConfirmationCount: Number(row?.applicant_confirmation_count ?? 0),
+    operatorNotificationCount: Number(row?.operator_notification_count ?? 0),
+    recoveryTaskOpen: Number(row?.recovery_task_open ?? 0) === 1,
+  };
+}
+
+function missingApplicationIntakeComponents(
+  snapshot: ApplicationIntakeSnapshot,
+  expectedQueueCount: number,
+): string[] {
+  const missing: string[] = [];
+  if (!snapshot.applicationExists) missing.push("application");
+  if (snapshot.responseTaskCount !== 1) missing.push("response_task");
+  if (snapshot.applicantConfirmationCount !== 1)
+    missing.push("applicant_confirmation");
+  if (snapshot.operatorNotificationCount !== expectedQueueCount - 1)
+    missing.push("operator_notification");
+  return missing;
 }
 
 async function notifyProgressToDiscord(
@@ -14630,12 +14776,16 @@ async function submitMemberApplication(
       },
       409,
     );
-  const logSubmissionFailure = (category: string) =>
+  const logSubmissionFailure = (
+    category: string,
+    details: Record<string, string | number | boolean> = {},
+  ) =>
     console.error(
       JSON.stringify({
         event: "application_submission_failed",
         correlationId,
         category,
+        ...details,
       }),
     );
   let authenticatedEmail = "";
@@ -15079,6 +15229,181 @@ async function submitMemberApplication(
       503,
     );
   }
+
+  const reconcileUnconfirmedSubmission = async (
+    detectedBy: "batch_error" | "write_count_mismatch",
+    observedCounts: Record<string, number> = {},
+  ) => {
+    let before: ApplicationIntakeSnapshot;
+    try {
+      before = await inspectApplicationIntake(env, applicationId);
+    } catch {
+      logSubmissionFailure("application_reconciliation_read_failed", {
+        detectedBy,
+      });
+      return json(
+        {
+          error:
+            "応募の保存結果を確認できませんでした。重複送信を避けるため、応募状況をご確認ください。",
+          code: "APPLICATION_RESULT_UNCONFIRMED",
+          applicationSaved: false,
+          correlationId,
+          statusUrl: "/applicant/?submission=check",
+        },
+        503,
+      );
+    }
+
+    if (!before.applicationExists) {
+      try {
+        const existingProject = await env.REPORTS.prepare(
+          `SELECT 1 AS found FROM atlasez_member_applications
+           WHERE lower(email)=lower(?) AND project_slug=? AND status IN ('new','reviewing','accepted')
+           UNION ALL
+           SELECT 1 AS found FROM atlasez_project_memberships
+           WHERE lower(email)=lower(?) AND project_id=? LIMIT 1`,
+        )
+          .bind(email, projectSlug, email, onboardingProjectId(projectSlug))
+          .first<{ found: number }>();
+        if (existingProject) return alreadyApplied();
+      } catch {
+        logSubmissionFailure("application_duplicate_recheck_failed", {
+          detectedBy,
+        });
+        return json(
+          {
+            error:
+              "応募状況を照合できませんでした。重複送信を避けるため、時間をおいて応募状況をご確認ください。",
+            code: "APPLICATION_RESULT_UNCONFIRMED",
+            applicationSaved: false,
+            correlationId,
+            statusUrl: "/applicant/?submission=check",
+          },
+          503,
+        );
+      }
+    }
+
+    const missingBefore = missingApplicationIntakeComponents(
+      before,
+      emailStatements.length,
+    );
+    let after = before;
+    let repairAttempted = false;
+    if (before.applicationExists && missingBefore.length > 0) {
+      repairAttempted = true;
+      try {
+        // Stable task identity, a NOT EXISTS guard, and the queue's narrow
+        // logical-key conflict target make this repair safe to retry.
+        await env.REPORTS.batch([
+          applicationResponseTaskStatement(env, followup),
+          ...emailStatements,
+        ]);
+      } catch {
+        logSubmissionFailure("application_intake_repair_failed", {
+          detectedBy,
+        });
+      }
+      try {
+        after = await inspectApplicationIntake(env, applicationId);
+      } catch {
+        logSubmissionFailure("application_reconciliation_read_failed", {
+          detectedBy,
+          repairAttempted,
+        });
+      }
+    }
+
+    const missingAfter = missingApplicationIntakeComponents(
+      after,
+      emailStatements.length,
+    );
+    const repaired = after.applicationExists && missingAfter.length === 0;
+    let operatorFollowupRecorded = false;
+    if (after.applicationExists) {
+      const recoveryInput = {
+        applicationId,
+        correlationId,
+        detectedBy,
+        missing: missingBefore,
+        repaired,
+        repairAttempted,
+        createdAt: new Date().toISOString(),
+      } as const;
+      try {
+        await env.REPORTS.batch([
+          applicationIntakeRecoveryTaskStatement(env, recoveryInput),
+          applicationIntakeRecoveryAuditStatement(env, recoveryInput),
+        ]);
+        const task = await env.REPORTS.prepare(
+          "SELECT status FROM editorial_tasks WHERE id=? LIMIT 1",
+        )
+          .bind(`application-recovery:${applicationId}`)
+          .first<{ status: string }>();
+        const audit = await env.REPORTS.prepare(
+          "SELECT 1 AS found FROM admin_audit_log WHERE id=? LIMIT 1",
+        )
+          .bind(`application-recovery:${applicationId}:${correlationId}`)
+          .first<{ found: number }>();
+        operatorFollowupRecorded = Boolean(
+          task && task.status !== "done" && audit,
+        );
+      } catch {
+        logSubmissionFailure("application_recovery_record_failed", {
+          detectedBy,
+          repaired,
+        });
+      }
+    }
+
+    logSubmissionFailure(
+      detectedBy === "batch_error"
+        ? "application_batch_result_unconfirmed"
+        : "application_write_count_mismatch",
+      {
+        applicationSaved: after.applicationExists,
+        responseTaskCount: after.responseTaskCount,
+        applicantConfirmationCount: after.applicantConfirmationCount,
+        operatorNotificationCount: after.operatorNotificationCount,
+        expectedEmailQueueCount: emailStatements.length,
+        repairAttempted,
+        repaired,
+        operatorFollowupRecorded,
+        ...observedCounts,
+      },
+    );
+
+    const applicationSaved = after.applicationExists;
+    return json(
+      {
+        error: applicationSaved
+          ? repaired
+            ? repairAttempted
+              ? "応募内容は保存され、受付処理の不足分を修復しました。処理記録に不整合があったため運営確認中です。再送せず、応募状況をご確認ください。"
+              : "応募内容は保存されています。受付処理の結果照合に不整合があったため運営確認中です。再送せず、応募状況をご確認ください。"
+            : "応募内容は保存済みですが、受付処理の一部を修復できませんでした。再送せず、応募状況をご確認ください。"
+          : "応募の保存結果を確認できませんでした。再送せず、応募状況をご確認ください。",
+        code: applicationSaved
+          ? "APPLICATION_SETUP_REQUIRES_REVIEW"
+          : "APPLICATION_RESULT_UNCONFIRMED",
+        applicationSaved,
+        ...(applicationSaved
+          ? {
+              setupRepairStatus: repaired
+                ? repairAttempted
+                  ? "repaired"
+                  : "verified"
+                : "operator_action_required",
+              operatorFollowupRecorded,
+            }
+          : {}),
+        correlationId,
+        statusUrl: "/applicant/?submission=check",
+      },
+      503,
+    );
+  };
+
   let applicationResults: Awaited<ReturnType<Env["REPORTS"]["batch"]>>;
   try {
     applicationResults = await env.REPORTS.batch([
@@ -15087,19 +15412,9 @@ async function submitMemberApplication(
       ...emailStatements,
     ]);
   } catch {
-    // 応募本文・運営対応タスク・通知キューは同一batchで確定させる。
-    // どれかに失敗した場合はbatch全体がrollbackされ、再送できる。
-    logSubmissionFailure("application_batch_failed");
-    return json(
-      {
-        error:
-          "応募を保存できたか確認できませんでした。二重送信を避けるため、まず応募状況を確認してください。",
-        code: "APPLICATION_RESULT_UNCONFIRMED",
-        correlationId,
-        statusUrl: "/applicant/?submission=check",
-      },
-      503,
-    );
+    // SQL error時のbatch transactionはrollbackされるが、Workerが応答を
+    // 受け取れなかった場合までrollback済みとは仮定しない。commit状態を再読込する。
+    return reconcileUnconfirmedSubmission("batch_error");
   }
   const applicationChangeCount = applicationResults[0]?.meta?.changes;
   const responseTaskChangeCount = applicationResults[1]?.meta?.changes;
@@ -15109,34 +15424,50 @@ async function submitMemberApplication(
   const emailQueueCount = applicationResults
     .slice(2)
     .reduce((count, result) => count + (result.meta?.changes ?? 0), 0);
-  if (
-    applicationChangeCount === 0 &&
-    responseTaskChangeCount === 0 &&
-    emailQueueChangeCounts.every((changes) => changes === 0)
-  )
-    return alreadyApplied();
   const writeCountsMatch =
     applicationChangeCount === 1 &&
     responseTaskChangeCount === 1 &&
     emailStatements.length > 0 &&
     emailQueueChangeCounts.length === emailStatements.length &&
     emailQueueChangeCounts.every((changes) => changes === 1);
+  if (writeCountsMatch) {
+    try {
+      const persisted = await inspectApplicationIntake(env, applicationId);
+      const inconsistent = missingApplicationIntakeComponents(
+        persisted,
+        emailStatements.length,
+      );
+      if (inconsistent.length > 0)
+        return reconcileUnconfirmedSubmission("write_count_mismatch", {
+          applicationChanges: 1,
+          responseTaskChanges: 1,
+          emailQueueReportedChanges: emailQueueCount,
+          persistedResponseTaskCount: persisted.responseTaskCount,
+          persistedApplicantConfirmationCount:
+            persisted.applicantConfirmationCount,
+          persistedOperatorNotificationCount:
+            persisted.operatorNotificationCount,
+        });
+    } catch {
+      return reconcileUnconfirmedSubmission("write_count_mismatch", {
+        applicationChanges: 1,
+        responseTaskChanges: 1,
+        emailQueueReportedChanges: emailQueueCount,
+        persistenceReadFailed: 1,
+      });
+    }
+  }
   // 201 only means the application, operator task and all initial queue rows committed.
   // Provider delivery runs asynchronously and is reported separately by the queue worker.
   if (!writeCountsMatch) {
-    logSubmissionFailure("application_write_count_mismatch");
-    return json(
-      {
-        error:
-          applicationChangeCount === 1
-            ? "応募内容は保存されています。運営への引継ぎ状況を確認中です。再送せず、応募状況をご確認ください。"
-            : "応募の処理結果を確認できませんでした。再送せず、応募状況をご確認ください。",
-        code: "APPLICATION_RESULT_UNCONFIRMED",
-        correlationId,
-        statusUrl: "/applicant/?submission=check",
-      },
-      503,
-    );
+    return reconcileUnconfirmedSubmission("write_count_mismatch", {
+      applicationChanges: Number(applicationChangeCount ?? -1),
+      responseTaskChanges: Number(responseTaskChangeCount ?? -1),
+      emailQueueReportedChanges: emailQueueChangeCounts.reduce<number>(
+        (total, changes) => total + Number(changes ?? -1),
+        0,
+      ),
+    });
   }
   if (ctx) ctx.waitUntil(dispatchApplicationEmails(env));
   // 応募は個人情報を含むため、Discordへは一切転送しない。運営内運営が管理画面でのみ閲覧する。
@@ -15198,17 +15529,29 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
     return json({ error: "応募状況を閲覧できる段階ではありません。" }, 403);
   const profile = await getApplicantProfile(env, current.email);
   const basicProfileComplete = Boolean(applicantBasicProfileComplete(profile));
+  const expectedOperatorNotificationCount =
+    (await applicationOperatorEmails(env)).length;
   const applicationRows = await env.REPORTS.prepare(
-    `SELECT a.project_slug, a.created_at, a.status, a.provisioning_status,
+    `SELECT a.id, a.project_slug, a.created_at, a.status, a.provisioning_status,
             a.provisioning_error, a.provisioned_at,
             COALESCE(d.discord_user_id, '') AS discord_user_id,
-            COALESCE(d.oauth_connected_at, '') AS oauth_connected_at
+            COALESCE(d.oauth_connected_at, '') AS oauth_connected_at,
+            (SELECT COUNT(*) FROM editorial_tasks t
+              WHERE t.id='application-response:' || a.id
+                 OR instr(t.details,'応募ID: ' || a.id)>0) AS response_task_count,
+            (SELECT COUNT(*) FROM atlasez_application_email_deliveries e
+              WHERE e.application_id=a.id AND e.kind='applicant_confirmation') AS confirmation_email_count,
+            (SELECT COUNT(*) FROM atlasez_application_email_deliveries e
+              WHERE e.application_id=a.id AND e.kind='operator_notification') AS operator_email_count,
+            EXISTS(SELECT 1 FROM editorial_tasks t
+                    WHERE t.id='application-recovery:' || a.id AND t.status!='done') AS recovery_task_open
      FROM atlasez_member_applications a
      LEFT JOIN atlasez_member_discord_accounts d ON lower(d.email)=lower(a.email)
      WHERE lower(a.email) = lower(?) ORDER BY a.created_at DESC LIMIT 20`,
   )
     .bind(current.email)
     .all<{
+      id: string;
       project_slug: string;
       created_at: string;
       status: string;
@@ -15217,6 +15560,10 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
       provisioned_at: string | null;
       discord_user_id: string;
       oauth_connected_at: string;
+      response_task_count: number;
+      confirmation_email_count: number;
+      operator_email_count: number;
+      recovery_task_open: number;
     }>();
   const applications = (applicationRows.results ?? []).map((application) => ({
     project:
@@ -15228,6 +15575,13 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
     provisioningError: application.provisioning_error ?? "",
     provisionedAt: application.provisioned_at,
     discordConnected: Boolean(application.oauth_connected_at || application.discord_user_id),
+    intakeNeedsOperatorAttention:
+      Number(application.recovery_task_open ?? 0) === 1 ||
+      ((application.status === "new" || application.status === "reviewing") &&
+        (Number(application.response_task_count ?? 0) !== 1 ||
+          Number(application.confirmation_email_count ?? 0) !== 1 ||
+          Number(application.operator_email_count ?? 0) !==
+            expectedOperatorNotificationCount)),
   }));
   const discord = await env.REPORTS.prepare(
     `SELECT discord_user_id,oauth_connected_at FROM atlasez_member_discord_accounts

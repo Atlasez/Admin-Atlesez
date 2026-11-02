@@ -606,6 +606,10 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
           location.assign("/applicant/?submission=check");
           return;
         }
+        if (data.code === "APPLICATION_SETUP_REQUIRES_REVIEW") {
+          location.assign("/applicant/?submission=check");
+          return;
+        }
         if (!response.ok)
           throw new Error(
             data.error ??
