@@ -1547,6 +1547,7 @@ it("D1 batchのcommit後にWorkerが応答を失ってもrollback済みと扱わ
   expect(await uncertain.json()).toMatchObject({
     code: "APPLICATION_SETUP_REQUIRES_REVIEW",
     applicationSaved: true,
+    applicationState: "saved",
     setupRepairStatus: "verified",
     operatorFollowupRecorded: true,
   });
@@ -1592,6 +1593,190 @@ it("D1 batchのcommit後にWorkerが応答を失ってもrollback済みと扱わ
       )
       .get(),
   ).toEqual({ count: 2 });
+});
+
+it("commit後の保存確認read失敗はunknownとして返し、応募状況と409を安全に再確認できる", async () => {
+  const { db, request, env } = environment();
+  const email = "intake-read-unknown@atlasez.test";
+  const profile = {
+    familyName: "保存確認",
+    givenName: "不明",
+    familyNameKana: "ほぞんかくにん",
+    givenNameKana: "ふめい",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+  const application = {
+    projectSlug: "thinking-cafe",
+    interests: "対話",
+    message: "保存結果のread失敗を検証",
+    referralSource: "隔離テスト",
+    interviewAvailability: "平日18時 Asia/Tokyo",
+    projectAnswers: { theme: "unknown state" },
+  };
+  await request("/api/application-profile", email, profile);
+  const originalPrepare = env.REPORTS.prepare.bind(env.REPORTS);
+  let injectedFailures = 2;
+  env.REPORTS.prepare = ((query: string) => {
+    const statement = originalPrepare(query);
+    if (!query.includes("AS application_exists") || injectedFailures <= 0)
+      return statement;
+    const first = statement.first.bind(statement);
+    statement.first = async <T>() => {
+      if (injectedFailures > 0) {
+        injectedFailures -= 1;
+        throw new Error("isolated intake read failure");
+      }
+      return first<T>();
+    };
+    return statement;
+  }) as typeof env.REPORTS.prepare;
+
+  const uncertain = await request("/api/apply", email, application);
+  expect(uncertain.status).toBe(503);
+  expect(await uncertain.json()).toMatchObject({
+    code: "APPLICATION_RESULT_UNCONFIRMED",
+    applicationSaved: false,
+    applicationState: "unknown",
+    statusUrl: "/applicant/?submission=check",
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE email=?",
+      )
+      .get(email),
+  ).toEqual({ count: 1 });
+  env.REPORTS.prepare = originalPrepare;
+
+  const status = await request("/api/applicant/me", email);
+  expect(status.status).toBe(200);
+  expect(await status.json()).toMatchObject({
+    applications: [
+      expect.objectContaining({
+        status: "new",
+        intakeNeedsOperatorAttention: true,
+      }),
+    ],
+  });
+  const duplicate = await request("/api/apply", email, application);
+  expect(duplicate.status).toBe(409);
+  expect(await duplicate.json()).toMatchObject({
+    code: "APPLICATION_ALREADY_EXISTS",
+    statusUrl: "/applicant/?submission=already-received",
+  });
+});
+
+it("運営通知先の設定変更では過去応募を誤検知せず、保存queueの欠損は検知する", async () => {
+  const { db, request, env } = environment();
+  const email = "operator-config-snapshot@atlasez.test";
+  const profile = {
+    familyName: "通知先",
+    givenName: "固定",
+    familyNameKana: "つうちさき",
+    givenNameKana: "こてい",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+  const application = {
+    projectSlug: "thinking-cafe",
+    interests: "対話",
+    message: "応募時点の通知先を確認",
+    referralSource: "隔離テスト",
+    interviewAvailability: "平日18時 Asia/Tokyo",
+    projectAnswers: { theme: "snapshot" },
+  };
+  await request("/api/application-profile", email, profile);
+  const submitted = await request("/api/apply", email, application);
+  expect(submitted.status).toBe(201);
+  expect(await submitted.json()).toMatchObject({
+    applicationState: "saved",
+    responseTaskCreated: true,
+    emailQueueCount: 2,
+    emailDeliveryStatus: "queued",
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT operator_notification_recipients_json FROM atlasez_member_applications WHERE email=?",
+      )
+      .get(email),
+  ).toEqual({
+    operator_notification_recipients_json: '["operator@atlasez.test"]',
+  });
+
+  env.APPLICATION_OPERATIONS_EMAILS = "replacement-operator@atlasez.test";
+  const stillComplete = await request("/api/applicant/me", email);
+  const stillCompleteBody = await stillComplete.text();
+  expect(stillComplete.status).toBe(200);
+  expect(stillCompleteBody).not.toContain("operator@atlasez.test");
+  expect(JSON.parse(stillCompleteBody)).toMatchObject({
+    applications: [
+      expect.objectContaining({
+        intakeVerificationStatus: "verified",
+        intakeNeedsOperatorAttention: false,
+      }),
+    ],
+  });
+
+  db.prepare(
+    "DELETE FROM atlasez_application_email_deliveries WHERE application_id=(SELECT id FROM atlasez_member_applications WHERE email=?) AND kind='operator_notification'",
+  ).run(email);
+  const missingQueue = await request("/api/applicant/me", email);
+  expect(JSON.parse(await missingQueue.text())).toMatchObject({
+    applications: [
+      expect.objectContaining({
+        intakeVerificationStatus: "attention_required",
+        intakeNeedsOperatorAttention: true,
+      }),
+    ],
+  });
+  db.prepare(
+    "UPDATE atlasez_member_applications SET intake_reconciliation_required=1,created_at=? WHERE email=?",
+  ).run(new Date(Date.now() - 10 * 60_000).toISOString(), email);
+  const scheduledWork: Promise<unknown>[] = [];
+  await worker.scheduled?.({ cron: "*/5 * * * *" }, env as never, {
+    waitUntil: (promise) => scheduledWork.push(promise),
+  });
+  await Promise.all(scheduledWork);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries WHERE kind='operator_notification'",
+      )
+      .get(),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT intake_reconciliation_required FROM atlasez_member_applications WHERE email=?",
+      )
+      .get(email),
+  ).toEqual({ intake_reconciliation_required: 1 });
+  expect(
+    JSON.parse(await (await request("/api/applicant/me", email)).text()),
+  ).toMatchObject({
+    applications: [
+      expect.objectContaining({
+        intakeVerificationStatus: "attention_required",
+        intakeNeedsOperatorAttention: true,
+      }),
+    ],
+  });
 });
 
 it("実SQLのRAISE(IGNORE)で応募だけcommitしたbatchを検知して冪等修復し運営へ記録する", async () => {
@@ -1776,6 +1961,285 @@ it("実SQLのRAISE(IGNORE)で応募だけcommitしたbatchを検知して冪等�
       )
       .get(),
   ).toEqual({ count: 1 });
+});
+
+it("補完と復旧記録がともに失敗してもCron照合が欠損を修復し送信済みメールを再送しない", async () => {
+  const { db, request, env } = environment();
+  const email = "intake-cron-repair@atlasez.test";
+  const profile = {
+    familyName: "継続照合",
+    givenName: "検証",
+    familyNameKana: "けいぞくしょうごう",
+    givenNameKana: "けんしょう",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+  const application = {
+    projectSlug: "thinking-cafe",
+    interests: "対話",
+    message: "継続照合を検証",
+    referralSource: "隔離テスト",
+    interviewAvailability: "平日18時 Asia/Tokyo",
+    projectAnswers: { theme: "idempotent repair" },
+  };
+  await request("/api/application-profile", email, profile);
+  const logger = vi.spyOn(console, "error").mockImplementation(() => {});
+  const originalBatch = env.REPORTS.batch;
+  let injected = false;
+  env.REPORTS.batch = async (statements) => {
+    if (injected) return originalBatch(statements);
+    injected = true;
+    db.exec(`
+      CREATE TRIGGER isolate_ignore_intake_task
+      BEFORE INSERT ON editorial_tasks
+      WHEN NEW.created_by IN ('応募フォーム','応募処理監視')
+      BEGIN SELECT RAISE(IGNORE); END;
+      CREATE TRIGGER isolate_ignore_operator_email
+      BEFORE INSERT ON atlasez_application_email_deliveries
+      WHEN NEW.kind='operator_notification'
+      BEGIN SELECT RAISE(IGNORE); END;
+      CREATE TRIGGER isolate_ignore_recovery_audit
+      BEFORE INSERT ON admin_audit_log
+      WHEN NEW.action='application_intake_reconciliation_required'
+      BEGIN SELECT RAISE(IGNORE); END;
+    `);
+    return originalBatch(statements);
+  };
+
+  const response = await request("/api/apply", email, application);
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({
+    code: "APPLICATION_SETUP_REQUIRES_REVIEW",
+    applicationSaved: true,
+    applicationState: "saved",
+    setupRepairStatus: "operator_action_required",
+    operatorFollowupRecorded: false,
+  });
+  const row = db
+    .prepare(
+      "SELECT id,intake_reconciliation_required FROM atlasez_member_applications WHERE email=?",
+    )
+    .get(email) as { id: string; intake_reconciliation_required: number };
+  expect(row.intake_reconciliation_required).toBe(1);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM editorial_tasks WHERE created_by='応募フォーム'",
+      )
+      .get(),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries WHERE kind='operator_notification'",
+      )
+      .get(),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM admin_audit_log WHERE action='application_intake_reconciliation_required'",
+      )
+      .get(),
+  ).toEqual({ count: 0 });
+  const operatorView = await request(
+    "/api/admin/applications?project=thinking-cafe",
+    "global@atlasez.test",
+  );
+  expect(operatorView.status).toBe(200);
+  expect(await operatorView.json()).toMatchObject({
+    applications: [
+      expect.objectContaining({
+        intake_reconciliation_required: true,
+        intake_recovery_task_open: false,
+      }),
+    ],
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT status FROM atlasez_application_email_deliveries WHERE application_id=? AND kind='applicant_confirmation'",
+      )
+      .get(row.id),
+  ).toEqual({ status: "pending" });
+
+  db.exec(`
+    DROP TRIGGER isolate_ignore_intake_task;
+    DROP TRIGGER isolate_ignore_operator_email;
+    DROP TRIGGER isolate_ignore_recovery_audit;
+  `);
+  db.prepare(
+    "UPDATE atlasez_member_applications SET created_at=?,updated_at=? WHERE id=?",
+  ).run(
+    new Date(Date.now() - 10 * 60_000).toISOString(),
+    new Date(Date.now() - 10 * 60_000).toISOString(),
+    row.id,
+  );
+  db.prepare(
+    "UPDATE atlasez_application_email_deliveries SET status='sent',sent_at=?,attempt_count=1 WHERE application_id=? AND kind='applicant_confirmation'",
+  ).run(new Date().toISOString(), row.id);
+
+  const scheduledWork: Promise<unknown>[] = [];
+  await worker.scheduled?.({ cron: "*/5 * * * *" }, env as never, {
+    waitUntil: (promise) => scheduledWork.push(promise),
+  });
+  await Promise.all(scheduledWork);
+
+  expect(
+    db
+      .prepare(
+        "SELECT intake_reconciliation_required FROM atlasez_member_applications WHERE id=?",
+      )
+      .get(row.id),
+  ).toEqual({ intake_reconciliation_required: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT status,attempt_count FROM atlasez_application_email_deliveries WHERE application_id=? AND kind='applicant_confirmation'",
+      )
+      .get(row.id),
+  ).toEqual({ status: "sent", attempt_count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries WHERE application_id=?",
+      )
+      .get(row.id),
+  ).toEqual({ count: 2 });
+  expect(
+    db
+      .prepare("SELECT COUNT(*) AS count FROM editorial_tasks WHERE id=?")
+      .get(`application-response:${row.id}`),
+  ).toEqual({ count: 1 });
+  expect(
+    db
+      .prepare("SELECT status FROM editorial_tasks WHERE id=?")
+      .get(`application-recovery:${row.id}`),
+  ).toEqual({ status: "open" });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM admin_audit_log WHERE action='application_intake_reconciliation_required' AND target_id=?",
+      )
+      .get(row.id),
+  ).toEqual({ count: 1 });
+  const reconciledOperatorView = await request(
+    "/api/admin/applications?project=thinking-cafe",
+    "global@atlasez.test",
+  );
+  expect(await reconciledOperatorView.json()).toMatchObject({
+    applications: [
+      expect.objectContaining({
+        intake_reconciliation_required: false,
+        intake_recovery_task_open: true,
+      }),
+    ],
+  });
+  expect(
+    logger.mock.calls.map((call) => String(call[0])).join("\n"),
+  ).not.toContain(email);
+  const serializedRecoveryLogs = logger.mock.calls
+    .map((call) => String(call[0]))
+    .join("\n");
+  expect(serializedRecoveryLogs).not.toContain("継続照合");
+  expect(serializedRecoveryLogs).not.toContain("検証");
+
+  const retried = await request("/api/apply", email, application);
+  expect(retried.status).toBe(409);
+  expect(await retried.json()).toMatchObject({
+    code: "APPLICATION_ALREADY_EXISTS",
+    statusUrl: "/applicant/?submission=already-received",
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries WHERE application_id=?",
+      )
+      .get(row.id),
+  ).toEqual({ count: 2 });
+});
+
+it("復旧記録を作れない古い行が25件上限を占有せず次回Cronで後続行も照合する", async () => {
+  const { db, env } = environment();
+  const logger = vi.spyOn(console, "error").mockImplementation(() => {});
+  const oldTimestamp = new Date(Date.now() - 10 * 60_000).toISOString();
+  const insert = db.prepare(
+    `INSERT INTO atlasez_member_applications
+       (id,name,email,interests,message,status,created_at,updated_at,project_slug,
+        operator_notification_recipients_json,intake_reconciliation_required)
+     VALUES (?,? ,?,'検証','再試行待ち','new',?,?,'thinking-cafe','[]',1)`,
+  );
+  for (let index = 0; index < 26; index += 1) {
+    const suffix = String(index).padStart(2, "0");
+    insert.run(
+      `intake-rotation-${suffix}`,
+      "継続照合テスト",
+      `rotation-${suffix}@atlasez.test`,
+      oldTimestamp,
+      oldTimestamp,
+    );
+  }
+  db.exec(`
+    CREATE TRIGGER isolate_ignore_recovery_task
+    BEFORE INSERT ON editorial_tasks
+    WHEN NEW.created_by='応募処理監視'
+    BEGIN SELECT RAISE(IGNORE); END;
+    CREATE TRIGGER isolate_ignore_recovery_audit
+    BEFORE INSERT ON admin_audit_log
+    WHEN NEW.action='application_intake_reconciliation_required'
+    BEGIN SELECT RAISE(IGNORE); END;
+  `);
+
+  const runReconciliationCron = async () => {
+    const scheduledWork: Promise<unknown>[] = [];
+    await worker.scheduled?.({ cron: "*/5 * * * *" }, env as never, {
+      waitUntil: (promise) => scheduledWork.push(promise),
+    });
+    await Promise.all(scheduledWork);
+  };
+  await runReconciliationCron();
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE intake_reconciliation_required=1 AND updated_at>?",
+      )
+      .get(oldTimestamp),
+  ).toEqual({ count: 25 });
+  await runReconciliationCron();
+
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE intake_reconciliation_required=1 AND updated_at>?",
+      )
+      .get(oldTimestamp),
+  ).toEqual({ count: 26 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM editorial_tasks WHERE created_by='応募フォーム'",
+      )
+      .get(),
+  ).toEqual({ count: 26 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries WHERE kind='applicant_confirmation'",
+      )
+      .get(),
+  ).toEqual({ count: 26 });
+  const serializedLogs = logger.mock.calls
+    .map((call) => String(call[0]))
+    .join("\n");
+  expect(serializedLogs).not.toContain("rotation-00@atlasez.test");
+  expect(serializedLogs).not.toContain("rotation-25@atlasez.test");
 });
 
 it("応募INSERTが実SQLで無視された全件0変更を二重応募409と誤認しない", async () => {

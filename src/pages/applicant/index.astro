@@ -112,14 +112,15 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
         error?: string;
         stage?: string;
         basicProfileComplete?: boolean;
-        application?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean; intakeNeedsOperatorAttention?: boolean };
-        applications?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean; intakeNeedsOperatorAttention?: boolean }[];
+        application?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean; intakeNeedsOperatorAttention?: boolean; intakeVerificationStatus?: string };
+        applications?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean; intakeNeedsOperatorAttention?: boolean; intakeVerificationStatus?: string }[];
         discord?: { connected?: boolean; oauthConnected?: boolean };
       } }))
       .then(({ response, data }) => {
         if (!response.ok) throw new Error(data.error ?? "参加状況を読み込めませんでした。");
         const applications = data.applications?.length ? data.applications : data.application ? [data.application] : [];
         const needsOperatorAttention = applications.some((item) => item.intakeNeedsOperatorAttention === true);
+        const legacyIntakeUnverified = applications.some((item) => item.intakeVerificationStatus === "legacy_unverified");
         const profileComplete = data.basicProfileComplete === true;
         const isMember = data.stage === "MEMBER";
         if (submissionMode === "already-received") {
@@ -133,6 +134,8 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
         } else if (submissionMode === "check") {
           submissionConfirmation.textContent = needsOperatorAttention
             ? "応募内容は保存されていますが、受付処理に運営の確認が必要です。重複送信せず、下の状態をご確認ください。"
+            : legacyIntakeUnverified
+            ? "応募状況は確認できました。以前の受付通知先の記録がないため通知queueは自動照合できません。応募を再送せず、必要な場合は運営へお問い合わせください。"
             : applications.length
             ? "保存済みの応募が見つかりました。重複を避けるため、再送せず下の状態をご確認ください。"
             : "現在、応募は表示されていません。下の案内から応募フォームへ戻って再送できます。";
@@ -162,7 +165,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
           if (applicationList) {
             applicationList.replaceChildren(...applications.map((item) => {
               const entry = document.createElement("li");
-              entry.textContent = `${item.project}：${statusLabels[item.status] ?? item.status}${item.intakeNeedsOperatorAttention ? "（運営確認中）" : ""}（${formatSubmittedAt(item.submittedAt)}）`;
+              entry.textContent = `${item.project}：${statusLabels[item.status] ?? item.status}${item.intakeNeedsOperatorAttention ? "（運営確認中）" : item.intakeVerificationStatus === "legacy_unverified" ? "（受付通知履歴は未検証）" : ""}（${formatSubmittedAt(item.submittedAt)}）`;
               return entry;
             }));
           }
