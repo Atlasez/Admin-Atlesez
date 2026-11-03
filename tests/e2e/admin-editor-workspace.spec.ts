@@ -1299,10 +1299,13 @@ test("新規記事には概念IDを初期値として設定する", async ({ pag
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
+  const slug = page.locator('[name="slug"]');
+  const draftSlug = await slug.inputValue();
+  expect(draftSlug).toMatch(/^new-article-[a-z0-9-]+$/);
   await expect(page.locator('[name="conceptId"]')).toHaveValue(
-    "math.overview.new-article",
+    `math.overview.${draftSlug}`,
   );
-  await page.locator('[name="slug"]').fill("new-definition");
+  await slug.fill("new-definition");
   await expect(page.locator('[name="conceptId"]')).toHaveValue(
     "math.overview.new-definition",
   );
@@ -2277,6 +2280,7 @@ test("E-8: 入力内容は自動保存され、手動保存UIを表示しない"
     status: "draft",
     body: latexBody,
   });
+  expect(createdPayload?.slug).toMatch(/^new-article-[a-z0-9-]+$/);
   await expect(page).toHaveURL(/\?document=doc-new$/);
   await expect(page.locator("[data-save-message]")).toContainText(
     "入力内容を自動保存しました",

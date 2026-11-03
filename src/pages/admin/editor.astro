@@ -4104,8 +4104,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
               ? "保存しました。公開内容を更新する場合は「公開内容を更新して再試行」を押してください。"
               : "フィードバック済みとして保存しました。公開する場合は「公開」ボタンを押してください。"
             : "保存しました。";
+        try { await loadPublicationReview(savedId, refreshed); } catch { /* 保存結果には影響させない */ }
         if (!autoSave) {
-          try { await loadPublicationReview(savedId); } catch { /* 保存結果には影響させない */ }
           try { await loadRevisions(savedId); } catch { /* 保存結果には影響させない */ }
         }
         setUnsavedChanges(documentSaveFingerprint(documentPayload()) !== sentFingerprint);
@@ -4220,6 +4220,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           saveMessage.value = hasUnsavedChanges ? "送信した内容を自動保存しました。続きの入力を保存しています…" : "入力内容を自動保存しました。";
           collaborationSaveState.succeeded();
           try { await loadDocuments(); } catch { /* 補助一覧の失敗で保存結果を変えない */ }
+          try { await loadPublicationReview(id, documents.find((item) => item.id === id)); } catch { /* 保存結果には影響させない */ }
           setUnsavedChanges(documentSaveFingerprint(documentPayload()) !== sentFingerprint);
         });
       } catch (error) {
@@ -4616,7 +4617,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const generatedDraftSlug = `new-article-${crypto.randomUUID().slice(0, 8)}`;
       const defaultSlug = (source?.slug ?? generatedDraftSlug).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || generatedDraftSlug;
       const defaultId = source?.conceptId ?? `${conceptPrefix(source?.subject ?? selected.slug)}.${categoryValue || "general"}.${defaultSlug}`;
-      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: defaultId, concept_name: null, concept_name_en: null, concept_is_new: false, body: source?.body ?? "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
+      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: defaultSlug, title: source?.title ?? "", summary: source?.summary ?? "", concept_id: defaultId, concept_name: null, concept_name_en: null, concept_is_new: false, body: source?.body ?? "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
       defaultConceptId = source?.conceptId ? "" : defaultId;
       conceptId.value = defaultId;
       fillConceptOptions(defaultId);
