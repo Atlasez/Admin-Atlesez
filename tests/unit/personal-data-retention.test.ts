@@ -150,8 +150,14 @@ it("preserves terminal applications unless personal-data retention is enabled", 
     CREATE TABLE admin_auth_sessions (expires_at TEXT NOT NULL);
     CREATE TABLE atlasez_application_rate_limits (bucket INTEGER NOT NULL);
     CREATE TABLE atlasez_member_applications (
+      id TEXT PRIMARY KEY,
       status TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    );
+    CREATE TABLE atlasez_application_email_deliveries (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL REFERENCES atlasez_member_applications(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK(status IN ('pending','sending','retry','sent','failed'))
     );
   `);
   const database: D1Database = {
@@ -162,12 +168,12 @@ it("preserves terminal applications unless personal-data retention is enabled", 
   const daysAgo = (days: number) =>
     new Date(now.getTime() - days * 86_400_000).toISOString();
   const insert = db.prepare(
-    "INSERT INTO atlasez_member_applications (status,updated_at) VALUES (?,?)",
+    "INSERT INTO atlasez_member_applications (id,status,updated_at) VALUES (?,?,?)",
   );
-  insert.run("accepted", daysAgo(181));
-  insert.run("rejected", daysAgo(181));
-  insert.run("accepted", daysAgo(180));
-  insert.run("reviewing", daysAgo(365));
+  insert.run("old-accepted", "accepted", daysAgo(181));
+  insert.run("old-rejected", "rejected", daysAgo(181));
+  insert.run("boundary-accepted", "accepted", daysAgo(180));
+  insert.run("old-reviewing", "reviewing", daysAgo(365));
 
   const info = vi.spyOn(console, "info").mockImplementation(() => {});
   try {
@@ -190,12 +196,12 @@ it("preserves terminal applications unless personal-data retention is enabled", 
     expect(
       db
         .prepare(
-          "SELECT status,updated_at FROM atlasez_member_applications ORDER BY status,updated_at",
+          "SELECT id,status,updated_at FROM atlasez_member_applications ORDER BY status,updated_at",
         )
         .all(),
     ).toEqual([
-      { status: "accepted", updated_at: daysAgo(180) },
-      { status: "reviewing", updated_at: daysAgo(365) },
+      { id: "boundary-accepted", status: "accepted", updated_at: daysAgo(180) },
+      { id: "old-reviewing", status: "reviewing", updated_at: daysAgo(365) },
     ]);
   } finally {
     info.mockRestore();
@@ -382,4 +388,145 @@ it("logs a safe failure marker and propagates retention errors", async () => {
     "synthetic database failure",
   );
   failure.mockRestore();
+});
+
+it("keeps applications with any undelivered email and verifies linked-record cascades", async () => {
+  const db = new DatabaseSync(":memory:");
+  databases.push(db);
+  db.exec(`
+    PRAGMA foreign_keys = ON;
+    CREATE TABLE admin_auth_sessions (expires_at TEXT NOT NULL);
+    CREATE TABLE atlasez_application_rate_limits (bucket INTEGER NOT NULL);
+    CREATE TABLE atlasez_member_applications (
+      id TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE atlasez_application_email_deliveries (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL REFERENCES atlasez_member_applications(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK(status IN ('pending','sending','retry','sent','failed'))
+    );
+    CREATE TABLE atlasez_application_interviews (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL UNIQUE REFERENCES atlasez_member_applications(id) ON DELETE CASCADE
+    );
+    CREATE TABLE atlasez_application_interview_reviews (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL UNIQUE REFERENCES atlasez_member_applications(id) ON DELETE CASCADE
+    );
+    CREATE TABLE atlasez_application_interview_history (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL REFERENCES atlasez_member_applications(id) ON DELETE CASCADE
+    );
+    CREATE TABLE admin_audit_log (
+      id TEXT PRIMARY KEY,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL
+    );
+  `);
+  const database: D1Database = {
+    prepare: (query) => new Statement(query, db),
+    batch: async () => [],
+  };
+  const now = new Date("2026-10-12T00:00:00.000Z");
+  const expiredAt = new Date(now.getTime() - 181 * 86_400_000).toISOString();
+  const queueStates = ["failed", "pending", "retry", "sending"] as const;
+  for (const status of [...queueStates, "sent"] as const) {
+    const id = `application-${status}`;
+    db.prepare(
+      "INSERT INTO atlasez_member_applications (id,status,updated_at) VALUES (?,?,?)",
+    ).run(id, status === "pending" ? "accepted" : "rejected", expiredAt);
+    db.prepare(
+      "INSERT INTO atlasez_application_email_deliveries (id,application_id,status) VALUES (?,?,?)",
+    ).run(`delivery-${status}`, id, status);
+    db.prepare(
+      "INSERT INTO atlasez_application_interviews (id,application_id) VALUES (?,?)",
+    ).run(`interview-${status}`, id);
+    db.prepare(
+      "INSERT INTO atlasez_application_interview_reviews (id,application_id) VALUES (?,?)",
+    ).run(`review-${status}`, id);
+    db.prepare(
+      "INSERT INTO atlasez_application_interview_history (id,application_id) VALUES (?,?)",
+    ).run(`history-${status}`, id);
+    // The general audit log is deliberately not FK-cascaded from applications.
+    db.prepare(
+      "INSERT INTO admin_audit_log (id,target_type,target_id) VALUES (?,?,?)",
+    ).run(`audit-${status}`, "application", id);
+  }
+
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    await expect(
+      runPersonalDataRetention(database, now, {
+        deleteTerminalApplications: true,
+      }),
+    ).resolves.toMatchObject({
+      resolvedApplicationsDeleted: 1,
+      terminalApplicationsWithUndeliveredEmail: 4,
+    });
+
+    expect(
+      db
+        .prepare("SELECT id FROM atlasez_member_applications ORDER BY id")
+        .all(),
+    ).toEqual(
+      expect.arrayContaining(
+        queueStates.map((status) => ({ id: `application-${status}` })),
+      ),
+    );
+    expect(
+      db
+        .prepare(
+          "SELECT application_id,status FROM atlasez_application_email_deliveries ORDER BY application_id",
+        )
+        .all(),
+    ).toEqual(
+      queueStates.map((status) => ({
+        application_id: `application-${status}`,
+        status,
+      })),
+    );
+    expect(
+      db
+        .prepare("SELECT COUNT(*) AS count FROM atlasez_application_interviews")
+        .get(),
+    ).toEqual({ count: 4 });
+    expect(
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM atlasez_application_interview_reviews",
+        )
+        .get(),
+    ).toEqual({ count: 4 });
+    expect(
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM atlasez_application_interview_history",
+        )
+        .get(),
+    ).toEqual({ count: 4 });
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM admin_audit_log").get(),
+    ).toEqual({ count: 5 });
+
+    // Re-running retention is safe: no protected application or queue is lost.
+    await expect(
+      runPersonalDataRetention(database, now, {
+        deleteTerminalApplications: true,
+      }),
+    ).resolves.toMatchObject({
+      resolvedApplicationsDeleted: 0,
+      terminalApplicationsWithUndeliveredEmail: 4,
+    });
+    expect(
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries",
+        )
+        .get(),
+    ).toEqual({ count: 4 });
+  } finally {
+    info.mockRestore();
+  }
 });
