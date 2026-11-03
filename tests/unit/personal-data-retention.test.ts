@@ -424,6 +424,12 @@ it("keeps applications with any undelivered email and verifies linked-record cas
       target_type TEXT NOT NULL,
       target_id TEXT NOT NULL
     );
+    CREATE TABLE editorial_member_intake_tracking (
+      project_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      application_id TEXT,
+      PRIMARY KEY(project_id,email)
+    );
   `);
   const database: D1Database = {
     prepare: (query) => new Statement(query, db),
@@ -453,6 +459,10 @@ it("keeps applications with any undelivered email and verifies linked-record cas
     db.prepare(
       "INSERT INTO admin_audit_log (id,target_type,target_id) VALUES (?,?,?)",
     ).run(`audit-${status}`, "application", id);
+    // Intake tracking keeps a textual application reference without an FK.
+    db.prepare(
+      "INSERT INTO editorial_member_intake_tracking (project_id,email,application_id) VALUES (?,?,?)",
+    ).run(`project-${status}`, `${status}@example.test`, id);
   }
 
   const info = vi.spyOn(console, "info").mockImplementation(() => {});
@@ -508,6 +518,13 @@ it("keeps applications with any undelivered email and verifies linked-record cas
     ).toEqual({ count: 4 });
     expect(
       db.prepare("SELECT COUNT(*) AS count FROM admin_audit_log").get(),
+    ).toEqual({ count: 5 });
+    expect(
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM editorial_member_intake_tracking",
+        )
+        .get(),
     ).toEqual({ count: 5 });
 
     // Re-running retention is safe: no protected application or queue is lost.
