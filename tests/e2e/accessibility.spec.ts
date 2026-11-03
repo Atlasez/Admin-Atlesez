@@ -41,3 +41,16 @@ for (const path of pages) {
     ).toEqual([]);
   });
 }
+
+test("テーマ切替ボタンの操作名に表示中のラベルが含まれる", async ({ page }) => {
+  await page.goto("./");
+  const button = page.locator("button[data-theme-toggle]").first();
+
+  for (const label of ["ダーク表示", "ブラック表示", "ライト表示"]) {
+    await expect(button).toContainText(label);
+    await expect(
+      page.getByRole("button", { name: label, exact: true }).first(),
+    ).toBeVisible();
+    if (label !== "ライト表示") await button.click();
+  }
+});
