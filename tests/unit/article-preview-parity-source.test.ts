@@ -44,7 +44,10 @@ describe("article preview parity source of truth", () => {
   });
 
   it("keeps mathematics frame styles active after the editor adopts the published preview shell", async () => {
-    const editor = await readSource("src/pages/admin/editor.astro");
+    const [editor, articleContent] = await Promise.all([
+      readSource("src/pages/admin/editor.astro"),
+      readSource("src/styles/article-content.css"),
+    ]);
 
     for (const selector of [
       ".published-article-preview .defi",
@@ -53,6 +56,16 @@ describe("article preview parity source of truth", () => {
       ".published-article-preview .proof-details",
     ]) {
       expect(editor).toContain(selector);
+    }
+
+    for (const variable of [
+      "--article-math-definition-fill",
+      "--article-math-definition-title-fill",
+      "--article-math-statement-fill",
+      "--article-math-statement-title-fill",
+    ]) {
+      expect(editor).toContain(variable);
+      expect(articleContent).toContain(variable);
     }
   });
 });

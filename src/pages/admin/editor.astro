@@ -1057,6 +1057,23 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 </style>
 
 <style is:global>
+  /* Dark workspace previews use muted tabs with readable text, as in the article reading view. */
+  [data-pref-bg="dark"] .published-article-preview,
+  [data-pref-mode="black"] .published-article-preview {
+    --article-math-definition-fill:color-mix(in srgb,#6cb4c2 9%,var(--background-primary));
+    --article-math-definition-border:color-mix(in srgb,#b4d0d2 88%,var(--background-primary));
+    --article-math-definition-accent:#367a83;
+    --article-math-definition-title-fill:color-mix(in srgb,#33727a 86%,var(--background-primary));
+    --article-math-definition-title-border:color-mix(in srgb,#33727a 86%,var(--background-primary));
+    --article-math-definition-title-color:var(--text-primary);
+    --article-math-statement-fill:color-mix(in srgb,#e0c375 12%,var(--background-primary));
+    --article-math-statement-border:color-mix(in srgb,#a07b22 82%,var(--background-primary));
+    --article-math-statement-accent:#836214;
+    --article-math-statement-title-fill:color-mix(in srgb,#654d16 88%,var(--background-primary));
+    --article-math-statement-title-border:color-mix(in srgb,#654d16 88%,var(--background-primary));
+    --article-math-statement-title-color:var(--text-primary);
+  }
+
   .published-article-preview .proof-details { margin:1.2rem 0; }
   .published-article-preview .proof-details > summary { align-items:center; background:var(--background-secondary); border:1px solid var(--border); border-radius:.4rem; cursor:pointer; display:inline-flex; font-weight:800; gap:.45rem; list-style:none; padding:.35rem .8rem .35rem 2rem; position:relative; }
   .published-article-preview .proof-details > summary::-webkit-details-marker { display:none; }
