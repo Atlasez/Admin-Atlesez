@@ -2268,6 +2268,14 @@ test("E-8: 入力内容は自動保存され、手動保存UIを表示しない"
     createdPayload = route.request().postDataJSON() as Record<string, unknown>;
     await route.fulfill({ status: 201, json: { ok: true, id: "doc-new" } });
   });
+  let revisionLoads = 0;
+  await page.route(
+    "**/api/admin/editor/documents/doc-new/revisions",
+    async (route) => {
+      revisionLoads += 1;
+      await route.fulfill({ json: { revisions: [] } });
+    },
+  );
   await page.goto("./admin/editor/?new=1");
   await expect(page.locator("[data-autosave-toggle]")).toHaveCount(0);
   await expect(page.locator("[data-save-document]")).toHaveCount(0);
@@ -2285,6 +2293,7 @@ test("E-8: 入力内容は自動保存され、手動保存UIを表示しない"
   await expect(page.locator("[data-save-message]")).toContainText(
     "入力内容を自動保存しました",
   );
+  await expect.poll(() => revisionLoads).toBe(1);
 });
 
 test("新規原稿の自動保存中に別の記事へ切り替えても入力先を混同しない", async ({
@@ -2334,32 +2343,61 @@ test("新規原稿の自動保存中に別の記事へ切り替えても入力�
   expect(payloads).toHaveLength(1);
 });
 
-test("承認済み記事の自動保存後も公開予約操作を表示する", async ({ page }) => {
-  const approvedDocument = {
+test("既存記事を承認へ自動保存すると公開操作と版履歴を更新する", async ({
+  page,
+}) => {
+  let savedDocument: Record<string, unknown> = {
     ...documentItem,
-    status: "approved" as const,
+    status: "draft",
     published_at: null,
     publication_pr_url: null,
   };
-  await mockAdminApi(page, undefined, approvedDocument);
+  await mockAdminApi(page, undefined, savedDocument);
   let patchCount = 0;
+  let revisionLoads = 0;
+  await page.route(editorDocumentListRoute, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    await route.fulfill({
+      json: {
+        documents: [savedDocument],
+        mentionNames: [],
+        scope: {
+          email: "alice@example.com",
+          subjects: ["mathematics"],
+          isManager: true,
+        },
+      },
+    });
+  });
   await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
     if (route.request().method() === "PATCH") {
       patchCount += 1;
+      savedDocument = {
+        ...savedDocument,
+        ...(route.request().postDataJSON() as Record<string, unknown>),
+        updated_at: "2026-11-04T00:00:00.000Z",
+      };
       await route.fulfill({
         json: { ok: true, updatedAt: "2026-11-04T00:00:00.000Z" },
       });
     } else await route.fallback();
   });
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/revisions",
+    async (route) => {
+      revisionLoads += 1;
+      await route.fulfill({ json: { revisions: [] } });
+    },
+  );
 
   await page.goto("./admin/editor/?document=doc-1");
-  const scheduleButton = page.locator("[data-schedule-document]");
-  await expect(scheduleButton).toBeVisible();
-  await page
-    .locator("[data-body]")
-    .fill("承認済み記事の本文を自動保存します。");
+  await expect.poll(() => revisionLoads).toBe(1);
+  await page.locator("details.metadata > summary").click();
+  await page.locator('[name="status"]').selectOption("approved");
   await expect.poll(() => patchCount).toBe(1);
-  await expect(scheduleButton).toBeVisible();
+  await expect(page.locator("[data-publish-document]")).toBeVisible();
+  await expect(page.locator("[data-schedule-document]")).toBeVisible();
+  await expect.poll(() => revisionLoads).toBe(2);
 });
 
 test("公開済み記事の本文は更新案を作成するまでロックする", async ({ page }) => {

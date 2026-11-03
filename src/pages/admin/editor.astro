@@ -4054,6 +4054,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       setUnsavedChanges(true);
       saveMessage.value = "競合を検知しました。ローカルの変更は保持しています。";
     };
+    const applySavedDocumentState = (item: Omit<Document, "body">) => {
+      if (documentIdForRequest() !== item.id) return;
+      if (currentDocument?.id === item.id) currentDocument = { ...currentDocument, ...item, body: body.value };
+      setPublicationState(item);
+      updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage ?? null, hasUnpublishedPublicationChanges(item));
+      updatePublicationActions(item);
+    };
     type AutosaveGuard = { generation: number; signal: AbortSignal };
     const autosaveGuardIsCurrent = (guard?: AutosaveGuard) => !guard || (guard.generation === autosaveGeneration && !guard.signal.aborted);
     const saveCurrentDocument = (showProgress = true, autoSave = false, guard?: AutosaveGuard) => withDocumentSaveLock(async () => {
@@ -4103,11 +4110,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         const refreshed = documents.find((item) => item.id === savedId);
         persistedDocumentUpdatedAt = data.updatedAt || refreshed?.updated_at || persistedDocumentUpdatedAt;
         documentConflict.hidden = true;
-        if (refreshed) {
-          setPublicationState(refreshed);
-          updateWorkflow(refreshed.status, Boolean(refreshed.published_at), refreshed.publication_review_stage ?? null, hasUnpublishedPublicationChanges(refreshed));
-          updatePublicationActions(refreshed);
-        }
+        if (refreshed) applySavedDocumentState(refreshed);
         saveMessage.value = autoSave
           ? "入力内容を自動保存しました。"
           : status.value === "approved"
@@ -4117,9 +4120,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             : "保存しました。";
         try { await loadPublicationReview(savedId, refreshed); } catch { /* 保存結果には影響させない */ }
         if (!autosaveGuardIsCurrent(guard)) return "";
-        if (!autoSave) {
-          try { await loadRevisions(savedId); } catch { /* 保存結果には影響させない */ }
-        }
+        try { await loadRevisions(savedId); } catch { /* 保存結果には影響させない */ }
+        if (!autosaveGuardIsCurrent(guard)) return "";
         setUnsavedChanges(documentSaveFingerprint(documentPayload()) !== sentFingerprint);
         if (hasUnsavedChanges) {
           saveMessage.value = autoSave ? "続きの入力を自動保存しています…" : "送信した内容を保存しました。続きの変更は未保存です。";
@@ -4236,9 +4238,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           collaborationSaveState.succeeded();
           try { await loadDocuments(); } catch { /* 補助一覧の失敗で保存結果を変えない */ }
           if (generation !== autosaveGeneration) return;
+          const refreshed = documents.find((item) => item.id === id);
+          if (refreshed) applySavedDocumentState(refreshed);
           if (mediaReferencesChanged) try { await loadMediaAssets(id); } catch { /* 保存結果には影響させない */ }
           if (generation !== autosaveGeneration) return;
-          try { await loadPublicationReview(id, documents.find((item) => item.id === id)); } catch { /* 保存結果には影響させない */ }
+          try { await loadPublicationReview(id, refreshed); } catch { /* 保存結果には影響させない */ }
+          if (generation !== autosaveGeneration) return;
+          try { await loadRevisions(id); } catch { /* 保存結果には影響させない */ }
           if (generation !== autosaveGeneration) return;
           setUnsavedChanges(documentSaveFingerprint(documentPayload()) !== sentFingerprint);
         });
@@ -4826,6 +4832,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if(!id) return;
       const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"});
       const data=await read<{revisions?:Revision[];feedbackRequests?:FeedbackRequestHistory[];error?:string}>(response);
+      if (documentIdForRequest() !== id) return;
       if (!response.ok) { revisions.textContent = data.error ?? "版履歴を読み込めませんでした。"; feedbackRequestHistory.textContent = "フィードバック依頼の履歴を読み込めませんでした。"; return; }
       const history = data.revisions ?? [];
       const revisionStatusLabel = (value: string) => value === "published" ? "現行版（公開時点）" : statusLabel[value as keyof typeof statusLabel] ?? value;
