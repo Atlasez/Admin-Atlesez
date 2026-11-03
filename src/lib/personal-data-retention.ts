@@ -6,7 +6,10 @@ const dayMs = 24 * 60 * 60 * 1_000;
 export async function purgeExpiredPersonalData(
   db: D1Database,
   now = new Date(),
-  options: { clearArticleReportData?: boolean } = {},
+  options: {
+    clearArticleReportData?: boolean;
+    deleteTerminalApplications?: boolean;
+  } = {},
 ) {
   const expiredSessions = new Date(now.getTime() - dayMs).toISOString();
   const expiredApplications = new Date(
@@ -29,12 +32,14 @@ export async function purgeExpiredPersonalData(
       .prepare("DELETE FROM atlasez_application_rate_limits WHERE bucket < ?")
       .bind(expiredRateLimits)
       .run(),
-    db
-      .prepare(
-        "DELETE FROM atlasez_member_applications WHERE status IN ('rejected','accepted') AND updated_at < ?",
-      )
-      .bind(expiredApplications)
-      .run(),
+    options.deleteTerminalApplications
+      ? db
+          .prepare(
+            "DELETE FROM atlasez_member_applications WHERE status IN ('rejected','accepted') AND updated_at < ?",
+          )
+          .bind(expiredApplications)
+          .run()
+      : Promise.resolve({ meta: { changes: 0 } }),
   ];
   if (options.clearArticleReportData) {
     statements.push(

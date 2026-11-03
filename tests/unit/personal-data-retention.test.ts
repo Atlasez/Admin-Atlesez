@@ -45,7 +45,7 @@ afterEach(() => {
   for (const db of databases.splice(0)) db.close();
 });
 
-it("keeps proposed article-report cleanup opt-in while routine expiry continues", async () => {
+it("gates proposed personal-data cleanup while routine expiry continues", async () => {
   const createDatabase = () => {
     const executed: string[] = [];
     const database = {
@@ -75,6 +75,7 @@ it("keeps proposed article-report cleanup opt-in while routine expiry continues"
   const scheduled = async (
     database: ReturnType<typeof createDatabase>["database"],
     retentionEnabled?: string,
+    applicationRetentionEnabled?: string,
   ) => {
     const pending: Promise<unknown>[] = [];
     await worker.scheduled(
@@ -84,6 +85,7 @@ it("keeps proposed article-report cleanup opt-in while routine expiry continues"
         EMAIL_FROM: "Atlasez <noreply@example.test>",
         RESEND_API_KEY: "test-key",
         ADMIN_PERSONAL_DATA_RETENTION_ENABLED: retentionEnabled,
+        ADMIN_APPLICATION_RETENTION_ENABLED: applicationRetentionEnabled,
         ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
       } as never,
       { waitUntil: (promise) => pending.push(promise) },
@@ -95,24 +97,106 @@ it("keeps proposed article-report cleanup opt-in while routine expiry continues"
   await scheduled(disabled.database);
   expect(
     disabled.executed.some((query) =>
-      /DELETE FROM admin_auth_sessions|DELETE FROM atlasez_application_rate_limits|DELETE FROM atlasez_member_applications/.test(
+      /DELETE FROM admin_auth_sessions|DELETE FROM atlasez_application_rate_limits/.test(
         query,
       ),
     ),
   ).toBe(true);
   expect(
+    disabled.executed.some((query) =>
+      query.includes("DELETE FROM atlasez_member_applications"),
+    ),
+  ).toBe(false);
+  expect(
     disabled.executed.some((query) => query.includes("article_reports")),
   ).toBe(false);
 
-  const enabled = createDatabase();
+  const articleRetentionEnabled = createDatabase();
   const info = vi.spyOn(console, "info").mockImplementation(() => {});
   try {
-    await scheduled(enabled.database, "true");
+    await scheduled(articleRetentionEnabled.database, "true");
     expect(
-      enabled.executed.some((query) =>
+      articleRetentionEnabled.executed.some((query) =>
+        query.includes("DELETE FROM atlasez_member_applications"),
+      ),
+    ).toBe(false);
+    expect(
+      articleRetentionEnabled.executed.some((query) =>
+        query.includes("article_reports"),
+      ),
+    ).toBe(true);
+
+    const applicationRetentionEnabledDb = createDatabase();
+    await scheduled(applicationRetentionEnabledDb.database, undefined, "true");
+    expect(
+      applicationRetentionEnabledDb.executed.some((query) =>
         query.includes("DELETE FROM atlasez_member_applications"),
       ),
     ).toBe(true);
+    expect(
+      applicationRetentionEnabledDb.executed.some((query) =>
+        query.includes("article_reports"),
+      ),
+    ).toBe(false);
+  } finally {
+    info.mockRestore();
+  }
+});
+
+it("preserves terminal applications unless personal-data retention is enabled", async () => {
+  const db = new DatabaseSync(":memory:");
+  databases.push(db);
+  db.exec(`
+    CREATE TABLE admin_auth_sessions (expires_at TEXT NOT NULL);
+    CREATE TABLE atlasez_application_rate_limits (bucket INTEGER NOT NULL);
+    CREATE TABLE atlasez_member_applications (
+      status TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  const database: D1Database = {
+    prepare: (query) => new Statement(query, db),
+    batch: async () => [],
+  };
+  const now = new Date("2026-10-12T00:00:00.000Z");
+  const daysAgo = (days: number) =>
+    new Date(now.getTime() - days * 86_400_000).toISOString();
+  const insert = db.prepare(
+    "INSERT INTO atlasez_member_applications (status,updated_at) VALUES (?,?)",
+  );
+  insert.run("accepted", daysAgo(181));
+  insert.run("rejected", daysAgo(181));
+  insert.run("accepted", daysAgo(180));
+  insert.run("reviewing", daysAgo(365));
+
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    await expect(
+      runPersonalDataRetention(database, now),
+    ).resolves.toMatchObject({
+      resolvedApplicationsDeleted: 0,
+    });
+    expect(
+      db
+        .prepare("SELECT COUNT(*) AS count FROM atlasez_member_applications")
+        .get(),
+    ).toEqual({ count: 4 });
+
+    await expect(
+      runPersonalDataRetention(database, now, {
+        deleteTerminalApplications: true,
+      }),
+    ).resolves.toMatchObject({ resolvedApplicationsDeleted: 2 });
+    expect(
+      db
+        .prepare(
+          "SELECT status,updated_at FROM atlasez_member_applications ORDER BY status,updated_at",
+        )
+        .all(),
+    ).toEqual([
+      { status: "accepted", updated_at: daysAgo(180) },
+      { status: "reviewing", updated_at: daysAgo(365) },
+    ]);
   } finally {
     info.mockRestore();
   }
