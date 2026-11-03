@@ -2253,40 +2253,35 @@ test("既存記事を一覧から開いても編集画面は先頭から表示�
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 });
 
-test("E-8: 自動保存設定を利用者のブラウザ単位で保持する", async ({ page }) => {
-  await mockAdminApi(page);
-  await page.goto("./admin/editor/?new=1");
-  const toggle = page.locator("[data-autosave-toggle]");
-
-  await expect(toggle).toBeChecked();
-  await toggle.uncheck();
-  await expect
-    .poll(() =>
-      page.evaluate(() => localStorage.getItem("atlasez-editor-autosave")),
-    )
-    .toBe("off");
-  await page.reload();
-  await expect(toggle).not.toBeChecked();
-});
-
-test("自動保存をオフにすると保留中の保存タイマーも実行しない", async ({
+test("E-8: 入力内容は自動保存され、手動保存UIを表示しない", async ({
   page,
 }) => {
   await mockAdminApi(page);
-  let documentPatchCount = 0;
-  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
-    if (route.request().method() === "PATCH") documentPatchCount += 1;
-    await route.fallback();
+  let documentCreateCount = 0;
+  let createdPayload: Record<string, unknown> | undefined;
+  await page.route("**/api/admin/editor/documents", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    documentCreateCount += 1;
+    createdPayload = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({ status: 201, json: { ok: true, id: "doc-new" } });
   });
-  await page.goto("./admin/editor/?document=doc-1");
-  const body = page.locator("[data-body]");
-  const bodyEditor = page.locator(".body-codemirror .cm-content").first();
-  if (await bodyEditor.count())
-    await bodyEditor.fill(`${documentItem.body}\n\nタイマー停止の確認`);
-  else await body.fill(`${documentItem.body}\n\nタイマー停止の確認`);
-  await page.locator("[data-autosave-toggle]").uncheck();
-  await page.waitForTimeout(2_300);
-  expect(documentPatchCount).toBe(0);
+  await page.goto("./admin/editor/?new=1");
+  await expect(page.locator("[data-autosave-toggle]")).toHaveCount(0);
+  await expect(page.locator("[data-save-document]")).toHaveCount(0);
+  await page
+    .locator("[data-body]")
+    .fill("本文を入力すると新規下書きが作られます。");
+  await expect.poll(() => documentCreateCount).toBe(1);
+  expect(createdPayload).toMatchObject({
+    title: "",
+    summary: "",
+    status: "draft",
+    body: "本文を入力すると新規下書きが作られます。",
+  });
+  await expect(page).toHaveURL(/\?document=doc-new$/);
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力内容を自動保存しました",
+  );
 });
 
 test("公開済み記事の本文は更新案を作成するまでロックする", async ({ page }) => {
@@ -2406,9 +2401,6 @@ test("更新案の保存成功と現行版への切り替えを独立して扱�
     body: `${canonical.body}\n\n更新案の本文です。`,
   };
   await mockAdminApi(page, undefined, canonical);
-  await page.addInitScript(() =>
-    localStorage.setItem("atlasez-editor-autosave", "off"),
-  );
   let proposalCreated = false;
   await page.route(/\/api\/admin\/editor\/documents\/doc-1$/, async (route) => {
     await route.fulfill({
@@ -2484,21 +2476,17 @@ test("更新案の保存成功と現行版への切り替えを独立して扱�
   if (await bodyEditor.count())
     await bodyEditor.fill(`${proposal.body}\n\n保存確認`);
   else await page.locator("[data-body]").fill(`${proposal.body}\n\n保存確認`);
-  await page.locator("[data-save-document]").click();
   await expect(page.locator("[data-save-message]")).toContainText(
-    "保存しました",
+    "入力内容を自動保存しました",
   );
   await expect(page.locator("[data-open-current-version]")).toBeVisible();
-  await page
-    .locator("[data-progress-dialog]")
-    .evaluate((dialog) => (dialog as HTMLDialogElement).close());
   await page.locator("[data-open-current-version]").click();
   await expect(page.locator("[data-document-version-label]")).toContainText(
     "更新案あり",
   );
 });
 
-test("保存中の連打は同じ原稿を二重保存しない", async ({ page }) => {
+test("連続入力中の自動保存は同じ原稿を重複更新しない", async ({ page }) => {
   await mockAdminApi(page);
   let patchCount = 0;
   await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
@@ -2511,11 +2499,7 @@ test("保存中の連打は同じ原稿を二重保存しない", async ({ page 
 
   await page.locator("details.metadata > summary").click();
   await page.locator('[name="title"]').fill("保存連打のテスト");
-  await Promise.all([
-    page.locator("[data-document-form]").dispatchEvent("submit"),
-    page.locator("[data-document-form]").dispatchEvent("submit"),
-  ]);
-  await expect(page.locator("[data-progress-dialog]")).toBeVisible();
+  await expect.poll(() => patchCount).toBe(1);
   expect(patchCount).toBe(1);
 });
 
@@ -3010,12 +2994,9 @@ test("CK-1: 自分の確認済み反応を再クリックして取り消せる",
   await expect(action.locator(".comment-action-count")).toHaveText("0");
 });
 
-test("CK-4: autosave OFFの未保存本文をコメント状態変更で保存・破棄しない", async ({
+test("CK-4: 自動保存した本文をコメント状態変更後も保持する", async ({
   page,
 }) => {
-  await page.addInitScript(() =>
-    localStorage.setItem("atlasez-editor-autosave", "off"),
-  );
   await mockAdminApi(page);
   let documentPatchCount = 0;
   page.on("request", (request) => {
@@ -3038,12 +3019,12 @@ test("CK-4: autosave OFFの未保存本文をコメント状態変更で保存�
     .click();
 
   await expect(body).toHaveValue(unsavedBody);
-  expect(documentPatchCount).toBe(0);
+  await expect.poll(() => documentPatchCount).toBe(1);
   const prevented = await page.evaluate(() => {
     const event = new Event("beforeunload", { cancelable: true });
     return !window.dispatchEvent(event);
   });
-  expect(prevented).toBe(true);
+  expect(prevented).toBe(false);
 });
 
 test("CK-3: 新規コメントは確認済み0件の対応待ちで表示する", async ({
@@ -3349,17 +3330,13 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
     .last();
   await expect(previewImage).toHaveAttribute("src", /^blob:/);
 
-  await page.locator("[data-save-document]").click();
-  await page
-    .locator("[data-progress-dialog]")
-    .getByRole("button", { name: "編集を続ける" })
-    .click();
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力内容を自動保存しました",
+  );
   await page.locator("[data-body]").fill("## 画像\n\n画像参照を削除しました。");
-  await page.locator("[data-save-document]").click();
-  await page
-    .locator("[data-progress-dialog]")
-    .getByRole("button", { name: "編集を続ける" })
-    .click();
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力内容を自動保存しました",
+  );
 
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "削除", exact: true }).click();

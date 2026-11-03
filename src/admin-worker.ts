@@ -6166,6 +6166,7 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
     (text(payload.latexEngine, 24) as LatexEngine) || "mathjax";
   const status = text(payload.status, 20) as EditorialDocumentStatus;
   const sourceArticleId = text(payload.sourceArticleId, 180) || null;
+  const canSaveIncompleteDraft = status === "draft";
   const lockedRanges =
     payload.lockedRanges === undefined
       ? undefined
@@ -6180,8 +6181,8 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
     !SUBJECT_SLUG.test(category) ||
     !["ja", "en"].includes(locale) ||
     !SUBJECT_SLUG.test(slug) ||
-    !title ||
-    !summary ||
+    (!title && !canSaveIncompleteDraft) ||
+    (!summary && !canSaveIncompleteDraft) ||
     !/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$/.test(conceptId) ||
     (registerConcept && !conceptName) ||
     !EDITORIAL_DOCUMENT_STATUSES.has(status) ||
