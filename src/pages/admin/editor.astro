@@ -2789,6 +2789,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const match = /^\\includegraphics(?:\[[^\]]*\])?\{([A-Za-z][A-Za-z0-9_-]*)\}\s*$/.exec(line.trim());
       return match?.[1].toLowerCase() === name.toLowerCase();
     });
+    const mediaReferenceSignature = (source: string) => editorialAssets
+      .filter((asset) => source.includes(asset.marker) || latexNameInBody(source, asset.latexName))
+      .map((asset) => asset.id)
+      .sort()
+      .join("|");
     const renderMediaList = () => {
       mediaList.innerHTML = editorialAssets.length
         ? editorialAssets.map((asset) => {
@@ -4023,8 +4028,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           if (documentSaveQueued) {
             documentSaveQueued = false;
             queueMicrotask(() => {
-              const id = documentIdForRequest();
-              if (id && hasUnsavedChanges && documentConflict.hidden) void saveCurrentDocument(false, true).catch(() => undefined);
+              if (hasUnsavedChanges && documentConflict.hidden) scheduleAutosave();
             });
           }
         },
@@ -4034,8 +4038,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           if (documentSaveQueued) {
             documentSaveQueued = false;
             queueMicrotask(() => {
-              const id = documentIdForRequest();
-              if (id && hasUnsavedChanges && documentConflict.hidden) void saveCurrentDocument(false, true).catch(() => undefined);
+              if (hasUnsavedChanges && documentConflict.hidden) scheduleAutosave();
             });
           }
         },
@@ -4051,8 +4054,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       setUnsavedChanges(true);
       saveMessage.value = "競合を検知しました。ローカルの変更は保持しています。";
     };
-    const saveCurrentDocument = (showProgress = true, autoSave = false) => withDocumentSaveLock(async () => {
+    type AutosaveGuard = { generation: number; signal: AbortSignal };
+    const autosaveGuardIsCurrent = (guard?: AutosaveGuard) => !guard || (guard.generation === autosaveGeneration && !guard.signal.aborted);
+    const saveCurrentDocument = (showProgress = true, autoSave = false, guard?: AutosaveGuard) => withDocumentSaveLock(async () => {
       window.clearTimeout(autosaveTimer);
+      if (!autosaveGuardIsCurrent(guard)) return "";
       const requestedId = documentIdForRequest();
       if (requestedId && loadedDocumentWasPublished && !updateProposalActive) {
         saveMessage.value = "公開中の記事を編集するには「更新案を作成」を押してください。";
@@ -4064,14 +4070,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         const id = requestedId;
         const sentPayload = documentPayload();
         const sentFingerprint = documentSaveFingerprint(sentPayload);
-        const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(sentPayload) });
+        const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(sentPayload), ...(guard ? { signal: guard.signal } : {}) });
         const data = await read<{ id?: string; error?: string; code?: string; updatedAt?: string; updatedBy?: string }>(response);
+        if (!autosaveGuardIsCurrent(guard)) return "";
         if (!response.ok) {
           if (response.status === 409 && data.code === "document_conflict") markDocumentConflict(data);
           throw new Error(data.error ?? "保存できませんでした。");
         }
         const savedId = id || data.id || "";
         if (!savedId) throw new Error("保存先の原稿IDを取得できませんでした。");
+        const mediaReferencesChanged = mediaReferenceSignature(persistedDocumentValues.body) !== mediaReferenceSignature(sentPayload.body);
         if (!id) {
           (form.elements.namedItem("documentId") as HTMLInputElement).value = savedId;
           connectCollaboration(savedId);
@@ -4089,6 +4097,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (!autoSave) try { await loadMediaAssets(savedId); } catch { /* 本文保存の成功とは独立した補助表示 */ }
         persistedDocumentUpdatedAt = data.updatedAt || persistedDocumentUpdatedAt;
         try { await loadDocuments(); } catch { /* 補助一覧は次回再読み込みで復旧 */ }
+        if (!autosaveGuardIsCurrent(guard)) return "";
+        if (autoSave && mediaReferencesChanged) try { await loadMediaAssets(savedId); } catch { /* 保存結果には影響させない */ }
+        if (!autosaveGuardIsCurrent(guard)) return "";
         const refreshed = documents.find((item) => item.id === savedId);
         persistedDocumentUpdatedAt = data.updatedAt || refreshed?.updated_at || persistedDocumentUpdatedAt;
         documentConflict.hidden = true;
@@ -4105,6 +4116,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
               : "フィードバック済みとして保存しました。公開する場合は「公開」ボタンを押してください。"
             : "保存しました。";
         try { await loadPublicationReview(savedId, refreshed); } catch { /* 保存結果には影響させない */ }
+        if (!autosaveGuardIsCurrent(guard)) return "";
         if (!autoSave) {
           try { await loadRevisions(savedId); } catch { /* 保存結果には影響させない */ }
         }
@@ -4117,6 +4129,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (showProgress && !hasUnsavedChanges) { closeAllPanePopouts(); progressDialog.showModal(); }
         return savedId;
       } catch (error) {
+        if (!autosaveGuardIsCurrent(guard)) return "";
         collaborationSaveState.failed();
         throw error;
       }
@@ -4179,6 +4192,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       autosaveGeneration += 1;
       autosaveAbortController?.abort();
       autosaveAbortController = null;
+      autosaveInFlight = false;
     };
     const autosaveDraft = async () => {
       const id = documentIdForRequest();
@@ -4195,8 +4209,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       autosaveAbortController = controller;
       try {
         if (!id) {
-          await saveCurrentDocument(false, true);
-          saved = true;
+          saved = Boolean(await saveCurrentDocument(false, true, { generation, signal: controller.signal }));
           return;
         }
         await withDocumentSaveLock(async () => {
@@ -4212,7 +4225,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           }
           if (generation !== autosaveGeneration) return;
           const data = await read<{ updatedAt?: string }>(response.clone());
+          if (generation !== autosaveGeneration) return;
           saved = true;
+          const mediaReferencesChanged = mediaReferenceSignature(persistedDocumentValues.body) !== mediaReferenceSignature(sentPayload.body);
           persistedDocumentUpdatedAt = data.updatedAt || persistedDocumentUpdatedAt;
           documentConflict.hidden = true;
           persistedDocumentValues = { title: sentPayload.title, summary: sentPayload.summary, body: sentPayload.body };
@@ -4220,7 +4235,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           saveMessage.value = hasUnsavedChanges ? "送信した内容を自動保存しました。続きの入力を保存しています…" : "入力内容を自動保存しました。";
           collaborationSaveState.succeeded();
           try { await loadDocuments(); } catch { /* 補助一覧の失敗で保存結果を変えない */ }
+          if (generation !== autosaveGeneration) return;
+          if (mediaReferencesChanged) try { await loadMediaAssets(id); } catch { /* 保存結果には影響させない */ }
+          if (generation !== autosaveGeneration) return;
           try { await loadPublicationReview(id, documents.find((item) => item.id === id)); } catch { /* 保存結果には影響させない */ }
+          if (generation !== autosaveGeneration) return;
           setUnsavedChanges(documentSaveFingerprint(documentPayload()) !== sentFingerprint);
         });
       } catch (error) {
@@ -4230,8 +4249,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         }
       }
       finally {
-        if (autosaveAbortController === controller) autosaveAbortController = null;
-        autosaveInFlight = false;
+        if (autosaveAbortController === controller) {
+          autosaveAbortController = null;
+          autosaveInFlight = false;
+        }
         if (saved && !controller.signal.aborted && hasUnsavedChanges && documentConflict.hidden && generation === autosaveGeneration) scheduleAutosave();
       }
     };

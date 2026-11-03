@@ -2287,6 +2287,81 @@ test("E-8: 入力内容は自動保存され、手動保存UIを表示しない"
   );
 });
 
+test("新規原稿の自動保存中に別の記事へ切り替えても入力先を混同しない", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  const payloads: Record<string, unknown>[] = [];
+  let firstPostStarted!: () => void;
+  const firstPostStartedPromise = new Promise<void>((resolve) => {
+    firstPostStarted = resolve;
+  });
+  let releaseFirstPost!: () => void;
+  const firstPostReleasePromise = new Promise<void>((resolve) => {
+    releaseFirstPost = resolve;
+  });
+  await page.route("**/api/admin/editor/documents", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    payloads.push(route.request().postDataJSON() as Record<string, unknown>);
+    if (payloads.length === 1) {
+      firstPostStarted();
+      await firstPostReleasePromise;
+      try {
+        await route.fulfill({
+          status: 201,
+          json: { ok: true, id: "doc-first" },
+        });
+      } catch {
+        // 別記事への切り替えで最初のリクエストが中断される場合がある。
+      }
+      return;
+    }
+    await route.fulfill({ status: 201, json: { ok: true, id: "doc-second" } });
+  });
+
+  await page.goto("./admin/editor/?new=1");
+  await page.locator("[data-body]").fill("最初の新規原稿");
+  await firstPostStartedPromise;
+  await expect(page.locator('[data-document-id="doc-1"]')).toHaveCount(1);
+  await page
+    .locator('[data-document-id="doc-1"]')
+    .evaluate((button: HTMLButtonElement) => button.click());
+  await expect(page.locator('[name="documentId"]')).toHaveValue("doc-1");
+  releaseFirstPost();
+  await expect(page).not.toHaveURL(/\?document=doc-first$/);
+  await expect(page.locator('[name="title"]')).toHaveValue("群の定義");
+  await expect(page.locator("[data-body]")).toHaveValue(documentItem.body);
+  expect(payloads).toHaveLength(1);
+});
+
+test("承認済み記事の自動保存後も公開予約操作を表示する", async ({ page }) => {
+  const approvedDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    published_at: null,
+    publication_pr_url: null,
+  };
+  await mockAdminApi(page, undefined, approvedDocument);
+  let patchCount = 0;
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (route.request().method() === "PATCH") {
+      patchCount += 1;
+      await route.fulfill({
+        json: { ok: true, updatedAt: "2026-11-04T00:00:00.000Z" },
+      });
+    } else await route.fallback();
+  });
+
+  await page.goto("./admin/editor/?document=doc-1");
+  const scheduleButton = page.locator("[data-schedule-document]");
+  await expect(scheduleButton).toBeVisible();
+  await page
+    .locator("[data-body]")
+    .fill("承認済み記事の本文を自動保存します。");
+  await expect.poll(() => patchCount).toBe(1);
+  await expect(scheduleButton).toBeVisible();
+});
+
 test("公開済み記事の本文は更新案を作成するまでロックする", async ({ page }) => {
   const publishedDocument = {
     ...documentItem,
@@ -3204,6 +3279,7 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
 }) => {
   const documentId = "22222222-2222-4222-8222-222222222222";
   const assetId = "33333333-3333-4333-8333-333333333333";
+  const secondAssetId = "66666666-6666-4666-8666-666666666666";
   const png = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
     "base64",
@@ -3268,14 +3344,25 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
             createdAt: "2026-08-21T00:00:00.000Z",
             marker: `asset://${assetId}`,
           },
+          {
+            id: secondAssetId,
+            filename: "second-diagram.png",
+            mediaType: "image/png",
+            bytes: png.byteLength,
+            alt: "別の図",
+            latexName: "second-diagram",
+            createdAt: "2026-08-21T00:00:00.000Z",
+            marker: `asset://${secondAssetId}`,
+          },
         ];
         await route.fulfill({ status: 201, json: { asset: assets[0] } });
       } else await route.fulfill({ json: { assets } });
       return;
     }
-    if (url.pathname === `/api/admin/editor/assets/${assetId}`) {
+    if (url.pathname.startsWith("/api/admin/editor/assets/")) {
+      const deletingAssetId = url.pathname.split("/").at(-1);
       if (request.method() === "DELETE") {
-        if (savedDocument?.body.includes(`asset://${assetId}`)) {
+        if (savedDocument?.body.includes(`asset://${deletingAssetId}`)) {
           await route.fulfill({
             status: 409,
             json: {
@@ -3284,7 +3371,7 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
             },
           });
         } else {
-          assets = [];
+          assets = assets.filter((asset) => asset.id !== deletingAssetId);
           deleteSucceeded = true;
           await route.fulfill({ json: { ok: true } });
         }
@@ -3327,7 +3414,9 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
     mimeType: "image/png",
     buffer: png,
   });
-  await expect(page.locator(".media-item-name b")).toHaveText("diagram.png");
+  await expect(page.locator(".media-item-name b").first()).toHaveText(
+    "diagram.png",
+  );
   const previewImage = page
     .locator(`[data-editorial-asset="${assetId}"]`)
     .last();
@@ -3336,17 +3425,29 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
   await expect(page.locator("[data-save-message]")).toContainText(
     "入力内容を自動保存しました",
   );
-  await page.locator("[data-body]").fill("## 画像\n\n画像参照を削除しました。");
+  await page
+    .locator("[data-body]")
+    .fill(
+      `## 画像\n\n![図](asset://${assetId})\n![別の図](asset://${secondAssetId})`,
+    );
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力内容を自動保存しました",
+  );
+  await page
+    .locator("[data-body]")
+    .fill(
+      `## 画像\n\n![別の図](asset://${secondAssetId})\n参照を削除しました。`,
+    );
   await expect(page.locator("[data-save-message]")).toContainText(
     "入力内容を自動保存しました",
   );
 
+  const deleteFirstAsset = page.locator(`[data-delete-asset="${assetId}"]`);
+  await expect(deleteFirstAsset).toBeEnabled();
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "削除", exact: true }).click();
-  await expect(page.locator("[data-media-status]")).toHaveText(
-    "素材はまだありません",
-  );
-  await expect(page.locator(".media-item")).toHaveCount(0);
+  await deleteFirstAsset.click();
+  await expect(page.locator("[data-media-status]")).toHaveText("1件の素材");
+  await expect(page.locator(".media-item")).toHaveCount(1);
   expect(deleteSucceeded).toBe(true);
 });
 
