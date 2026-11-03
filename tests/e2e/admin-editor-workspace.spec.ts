@@ -3550,7 +3550,9 @@ test("コメント枠をスクロールしても見出しと別窓ボタンは�
     .toBeGreaterThan(100);
   await page.screenshot({ path: testInfo.outputPath("comments-scrolled.png") });
   const after = await heading.boundingBox();
-  expect(Math.abs((after?.y ?? 0) - before.y)).toBeLessThan(1);
+  // Playwright bounding boxes can differ by one CSS pixel after inner scrolling
+  // because of fractional layout rounding across browser/runtime builds.
+  expect(Math.abs((after?.y ?? 0) - before.y)).toBeLessThanOrEqual(1);
   await expect(heading.locator('[data-pane-popout="review"]')).toBeInViewport();
 });
 
