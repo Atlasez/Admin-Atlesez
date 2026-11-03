@@ -2268,15 +2268,14 @@ test("E-8: 入力内容は自動保存され、手動保存UIを表示しない"
   await page.goto("./admin/editor/?new=1");
   await expect(page.locator("[data-autosave-toggle]")).toHaveCount(0);
   await expect(page.locator("[data-save-document]")).toHaveCount(0);
-  await page
-    .locator("[data-body]")
-    .fill("本文を入力すると新規下書きが作られます。");
+  const latexBody = "数式も入力時に保存されます。\n\n$$\n\\frac{a}{b}\n$$";
+  await page.locator("[data-body]").fill(latexBody);
   await expect.poll(() => documentCreateCount).toBe(1);
   expect(createdPayload).toMatchObject({
     title: "",
     summary: "",
     status: "draft",
-    body: "本文を入力すると新規下書きが作られます。",
+    body: latexBody,
   });
   await expect(page).toHaveURL(/\?document=doc-new$/);
   await expect(page.locator("[data-save-message]")).toContainText(
