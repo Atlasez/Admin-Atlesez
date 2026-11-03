@@ -645,6 +645,17 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-list]")).toContainText(
       "更新前も表示される記事",
     );
+    // A visible list is rendered before the catalog enrichment finishes.
+    // Wait for the initial load to settle so this event exercises a refresh,
+    // not the intentional in-flight request coalescing path.
+    await expect(page.locator("[data-catalog-summary]")).not.toHaveAttribute(
+      "data-state",
+      "loading",
+    );
+    await expect(page.locator("[data-admin-load-surface]")).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
     await page.evaluate(() => {
       Object.defineProperty(document, "visibilityState", {
         configurable: true,
