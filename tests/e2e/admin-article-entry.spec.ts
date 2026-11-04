@@ -383,7 +383,13 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       card.locator('[data-update-proposal-state="in-progress"]'),
     ).toHaveText("更新案作成中");
-    await expect(card).toContainText("公開済み・運営管理中");
+    await expect(card.locator(".article-status-group")).toContainText([
+      "編集",
+      "学習サイト",
+      "運営連携",
+    ]);
+    await expect(card).toContainText("公開中");
+    await expect(card).toContainText("更新案作成中");
     await page.screenshot({
       path: "test-results/admin-articles-update-proposal-in-progress.png",
       fullPage: true,
@@ -437,6 +443,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     ]);
     await expect(page.locator("[data-subject-browser]")).toContainText("数学");
     await expect(page.locator("[data-subject-browser]")).toContainText("物理");
+    await expect(page.locator("[data-subject-browser]")).toContainText("2件");
     await expect(
       page.locator('[data-subject-quick="mathematics"]'),
     ).toContainText("2件");
@@ -450,6 +457,13 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-list]")).toContainText("環論の記事");
     await expect(page.locator("[data-list]")).toContainText("群論の記事");
     await expect(page.locator("[data-list]")).not.toContainText("力学の記事");
+    await expect(page.locator("[data-list]")).toContainText("数学");
+    await expect(page.locator("[data-list]")).toContainText("環論");
+    await expect(page.locator("[data-list]")).toContainText("群論");
+    await expect(page.locator("[data-list]")).not.toContainText(
+      "mathematics / ring-theory",
+    );
+    await expect(page.locator(".subject-browser__empty")).toHaveCount(0);
 
     await page.locator("[data-category]").selectOption("ring-theory");
     await expect(page.locator("[data-list] .article")).toHaveCount(1);
@@ -497,9 +511,10 @@ test.describe("A/D 原稿一覧の作業導線", () => {
 
     await page.goto("admin/articles/?verify=scheduled");
     const scheduledCard = page.locator('[data-document-id="scheduled-doc"]');
-    await expect(scheduledCard).toContainText("公開予約済み・2026/09/10 12:00");
-    await expect(scheduledCard).toContainText("公開予約：2026/09/10 12:00");
+    await expect(scheduledCard).toContainText("公開予約・2026/09/10 12:00");
+    await expect(scheduledCard).toContainText("学習サイト");
 
+    await page.locator(".advanced-filters > summary").click();
     await page.locator("[data-public]").selectOption("scheduled");
     await expect(page.locator("[data-list] .article")).toHaveCount(1);
     await expect(page.locator("[data-list]")).toContainText("予約公開の記事");
@@ -581,7 +596,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-subject]")).toHaveValue("mathematics");
     await expect(page.locator("[data-status]")).toHaveValue("approved");
 
-    await page.getByRole("button", { name: "絞り込みをリセット" }).click();
+    await page.getByRole("button", { name: "条件をリセット" }).click();
     await expect(page.locator("[data-query]")).toHaveValue("");
     await expect(page.locator("[data-subject]")).toHaveValue("all");
     await expect(page.locator("[data-status]")).toHaveValue("all");
@@ -890,6 +905,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       "整理前の下書き",
     );
 
+    await page.locator(".advanced-filters > summary").click();
     await page.locator("[data-archive]").selectOption("archived");
     await expect(page.locator("[data-list] .article")).toHaveCount(2);
     await expect(page.locator("[data-list]")).toContainText("整理前の下書き");
