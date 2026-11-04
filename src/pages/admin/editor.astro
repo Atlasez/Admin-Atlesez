@@ -1072,7 +1072,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     --article-math-statement-title-color:var(--text-primary);
   }
 
-  .published-article-preview .proof-details { margin:1.2rem 0; }
+  .published-article-preview .article-body[data-article-subject="mathematics"] details.proof-details.folding { border:0; border-radius:0; margin:1.2rem 0; overflow:visible; }
   .published-article-preview .proof-details > summary { align-items:center; background:var(--background-secondary); border:1px solid var(--border); border-radius:.4rem; cursor:pointer; display:inline-flex; font-weight:800; gap:.45rem; list-style:none; padding:.35rem .8rem .35rem 2rem; position:relative; }
   .published-article-preview .proof-details > summary::-webkit-details-marker { display:none; }
   .published-article-preview .proof-details > summary::marker { content:""; }
