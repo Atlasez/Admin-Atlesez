@@ -2,6 +2,8 @@
 
 対象は監査P0の4〜7。仮利用者は `@atlasez.test`、隔離D1はメモリ内SQLiteで全migrationを適用する。本番の認証方式・権限表・Google認証を検証用に変更しない。プロバイダーを模擬した試験と実到達・本番受入を区別する。
 
+専用stagingの実サービス受入、OPSD-01〜09の運営承認、synthetic account台帳、証拠形式は[新規メンバー受入stagingチェックリスト](ADMIN_MEMBER_INTAKE_STAGING_CHECKLIST.md)を使う。staging手順が未実施の場合、以下の隔離自動試験を実サービスの受入完了として扱わない。
+
 ## 自動検証
 
 - `tests/unit/admin-readiness-integration.test.ts`: 実Workerのルーターと実SQLで新規利用者、基本情報保存、応募、二重応募防止、他人の基本情報非公開、全体管理と担当者の境界、別プロジェクトの応募非公開、退会後の管理権限剥奪を確認する。外部通信は拒否する。
