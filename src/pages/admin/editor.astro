@@ -4100,6 +4100,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         // PATCHの成功時点で本文と版履歴の保存は完了している。以降の
         // 表示更新が失敗しても、保存失敗として扱わない。
         persistedDocumentValues = { title: sentPayload.title, summary: sentPayload.summary, body: sentPayload.body };
+        persistedDocumentPayloadFingerprint = sentFingerprint;
         setUnsavedChanges(documentSaveFingerprint(documentPayload()) !== sentFingerprint);
         if (!autoSave) try { await loadMediaAssets(savedId); } catch { /* 本文保存の成功とは独立した補助表示 */ }
         persistedDocumentUpdatedAt = data.updatedAt || persistedDocumentUpdatedAt;
@@ -4233,6 +4234,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           persistedDocumentUpdatedAt = data.updatedAt || persistedDocumentUpdatedAt;
           documentConflict.hidden = true;
           persistedDocumentValues = { title: sentPayload.title, summary: sentPayload.summary, body: sentPayload.body };
+          persistedDocumentPayloadFingerprint = sentFingerprint;
           setUnsavedChanges(documentSaveFingerprint(documentPayload()) !== sentFingerprint);
           saveMessage.value = hasUnsavedChanges ? "送信した内容を自動保存しました。続きの入力を保存しています…" : "入力内容を自動保存しました。";
           collaborationSaveState.succeeded();
@@ -4289,6 +4291,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     let collaborationInitialSyncTimer: number | undefined;
     let collaborationSaveFailed = false;
     let persistedDocumentValues = { title: "", summary: "", body: "" };
+    let persistedDocumentPayloadFingerprint = "";
     let persistedDocumentUpdatedAt = "";
     const collaborationFieldLabels: Record<string, string> = { title: "タイトル", summary: "要約", body: "本文" };
     type CollaborationConnectionState = "connecting" | "syncing" | "disconnected" | "reconnecting" | "synced" | "save-error";
@@ -4620,6 +4623,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       status.value = item.status; syncStatusControl(item.status); body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
       persistedDocumentValues = { title: item.title, summary: item.summary, body: item.body };
       persistedDocumentUpdatedAt = item.id ? item.updated_at : "";
+      persistedDocumentPayloadFingerprint = documentSaveFingerprint(documentPayload());
       documentConflict.hidden = true;
       documentConflict.dataset.documentId = item.id;
       renderDocumentProvenance(item);
@@ -5470,6 +5474,38 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     publicationReviewButton.addEventListener("click", () => { publicationReviewNote.value = ""; if (!publicationReviewDialog.open) publicationReviewDialog.showModal(); });
     publicationReviewCancel.addEventListener("click", () => publicationReviewDialog.close());
     publicationReviewForm.addEventListener("submit", async (event) => { event.preventDefault(); const submitter = (event.submitter as HTMLButtonElement | null)?.value; if (submitter !== "approve" && submitter !== "reject") return; const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; const button = event.submitter as HTMLButtonElement; button.disabled = true; try { const response = await fetch(`/api/admin/editor/documents/${id}/publication-review`, { method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision: submitter === "approve" ? "approved" : "rejected", note: publicationReviewNote.value }) }); const data = await read<{ error?: string; status?: string }>(response); if (!response.ok) throw new Error(data.error ?? "公開審査を処理できませんでした。"); publicationReviewDialog.close(); await openDocument(id); saveMessage.value = submitter === "approve" ? (data.status === "approved" ? "公開審査が完了しました。公開または公開予約へ進めます。" : "承認しました。次の審査担当へ通知しました。") : "差し戻しました。フィードバック中へ戻しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "公開審査を処理できませんでした。"; } finally { button.disabled = false; } });
+    const hasPendingDocumentChanges = () => hasUnsavedChanges || (
+      Boolean(persistedDocumentPayloadFingerprint) &&
+      documentSaveFingerprint(documentPayload()) !== persistedDocumentPayloadFingerprint
+    );
+    const savePendingChangesBeforePublish = async (documentId: string) => {
+      while (true) {
+        window.clearTimeout(autosaveTimer);
+        autosaveTimer = undefined;
+        const currentSave = documentSaveInFlight;
+        if (currentSave) await currentSave.catch(() => undefined);
+        // A queued autosave can schedule a debounce as the current request
+        // finishes. Publishing must take over that work and persist the latest
+        // form state itself before it starts the publication request.
+        window.clearTimeout(autosaveTimer);
+        autosaveTimer = undefined;
+        if (documentIdForRequest() !== documentId) {
+          throw new Error("公開前に別の記事へ切り替わりました。記事を確認してから再度公開してください。");
+        }
+        if (!hasPendingDocumentChanges()) return;
+        if (!documentConflict.hidden) {
+          throw new Error("他のユーザーによる更新との競合を解決してから公開してください。");
+        }
+        const fingerprintBeforeSave = documentSaveFingerprint(documentPayload());
+        const savedId = await saveCurrentDocument(false);
+        if (savedId !== documentId) {
+          throw new Error("公開前の変更を保存できませんでした。記事を確認してください。");
+        }
+        if (hasPendingDocumentChanges() && documentSaveFingerprint(documentPayload()) === fingerprintBeforeSave) {
+          throw new Error("最新の変更を保存できませんでした。記事を確認してから再度公開してください。");
+        }
+      }
+    };
     const publishCurrentDocument = async () => {
       const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
       if (!id || publicationActionInFlight) return;
@@ -5477,9 +5513,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       publishButton.disabled = true;
       publishButton.setAttribute("aria-busy", "true");
       try {
-        if (hasUnsavedChanges) {
+        if (hasPendingDocumentChanges() || documentSaveInFlight) {
           saveMessage.value = "公開前に最新の変更を保存中…";
-          await saveCurrentDocument(false);
+          await savePendingChangesBeforePublish(id);
         }
         const currentItem = documents.find((item) => item.id === id);
         const response = await fetch(`/api/admin/editor/documents/${id}/publish`, {

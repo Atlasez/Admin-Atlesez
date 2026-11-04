@@ -2230,6 +2230,88 @@ test("画像参照を含む未保存の変更を公開前に保存してからPR
   );
 });
 
+test("LaTeXの自動保存中に公開すると最新の数式を保存してから公開する", async ({
+  page,
+}) => {
+  const approvedDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    published_at: null,
+    publication_pr_url: null,
+  };
+  await mockAdminApi(page, undefined, approvedDocument);
+  const patches: Array<Record<string, unknown>> = [];
+  const events: string[] = [];
+  let firstPatchStarted!: () => void;
+  const firstPatchStartedPromise = new Promise<void>((resolve) => {
+    firstPatchStarted = resolve;
+  });
+  let releaseFirstPatch!: () => void;
+  const firstPatchGate = new Promise<void>((resolve) => {
+    releaseFirstPatch = resolve;
+  });
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    patches.push(route.request().postDataJSON() as Record<string, unknown>);
+    events.push(`PATCH:${patches.length}`);
+    if (patches.length === 1) {
+      firstPatchStarted();
+      await firstPatchGate;
+    }
+    await route.fulfill({
+      json: { ok: true, updatedAt: "2026-11-04T00:00:00.000Z" },
+    });
+  });
+  let publishFormState: { body: string; dirty: string | null } | null = null;
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/publish",
+    async (route) => {
+      publishFormState = await page.evaluate(() => ({
+        body:
+          document.querySelector<HTMLTextAreaElement>("[data-body]")?.value ??
+          "",
+        dirty:
+          document.querySelector<HTMLElement>("[data-editor-workspace]")
+            ?.dataset.unsavedChanges ?? null,
+      }));
+      events.push("publish");
+      await route.fulfill({ json: { ok: true, pending: true } });
+    },
+  );
+
+  await page.goto("./admin/editor/?document=doc-1");
+  await expect(
+    page.locator('[data-editor-workspace][data-editor-initialized="true"]'),
+  ).toBeVisible();
+  const body = page.locator(
+    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
+  );
+  const bodySource = page.locator("[data-body]");
+  await expect(bodySource).toHaveValue(documentItem.body);
+  await body.fill("$$x$$");
+  await expect(bodySource).toHaveValue("$$x$$");
+  await firstPatchStartedPromise;
+  expect(patches[0]?.body).toBe("$$x$$");
+  await body.fill("$$x + 1$$");
+  await expect(bodySource).toHaveValue("$$x + 1$$");
+  await expect(page.locator("[data-editor-workspace]")).toHaveAttribute(
+    "data-unsaved-changes",
+    "true",
+  );
+  await page.getByRole("button", { name: "公開する" }).click();
+  await page
+    .locator("[data-approval-dialog]")
+    .getByRole("button", { name: "はい（公開する）" })
+    .click();
+
+  releaseFirstPatch();
+  await expect.poll(() => patches.length).toBe(2);
+  await expect.poll(() => events.includes("publish")).toBe(true);
+  expect(events.indexOf("PATCH:2")).toBeLessThan(events.indexOf("publish"));
+  expect(patches[1]?.body).toBe("$$x + 1$$");
+  expect(publishFormState).toMatchObject({ body: "$$x + 1$$" });
+});
+
 test("E-14: 編集画面から戻ると編集・フィードバック一覧へ移動する", async ({
   page,
 }) => {
