@@ -649,3 +649,73 @@ it("keeps terminal applications while intake reconciliation remains unresolved",
     info.mockRestore();
   }
 });
+
+it("rechecks the intake marker in the delete predicate after the candidate count", async () => {
+  const db = new DatabaseSync(":memory:");
+  databases.push(db);
+  db.exec(`
+    CREATE TABLE admin_auth_sessions (expires_at TEXT NOT NULL);
+    CREATE TABLE atlasez_application_rate_limits (bucket INTEGER NOT NULL);
+    CREATE TABLE atlasez_member_applications (
+      id TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      intake_reconciliation_required INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE atlasez_application_email_deliveries (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL REFERENCES atlasez_member_applications(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK(status IN ('pending','sending','retry','sent','failed'))
+    );
+  `);
+  const now = new Date("2026-10-12T00:00:00.000Z");
+  const expiredAt = new Date(now.getTime() - 181 * 86_400_000).toISOString();
+  db.prepare(
+    "INSERT INTO atlasez_member_applications (id,status,updated_at,intake_reconciliation_required) VALUES (?,?,?,0)",
+  ).run("turns-unresolved", "accepted", expiredAt);
+  const database: D1Database = {
+    prepare: (query) => {
+      const statement = new Statement(query, db);
+      const wrapped: D1PreparedStatement = {
+        bind(...values: unknown[]) {
+          statement.bind(...values);
+          return wrapped;
+        },
+        run: () => statement.run(),
+        all: <T>() => statement.all<T>(),
+        first: async <T>() => {
+          const result = await statement.first<T>();
+          if (
+            query.includes("COUNT(*) AS count") &&
+            query.includes("intake_reconciliation_required=0")
+          ) {
+            db.prepare(
+              "UPDATE atlasez_member_applications SET intake_reconciliation_required=1 WHERE id=?",
+            ).run("turns-unresolved");
+          }
+          return result;
+        },
+      };
+      return wrapped;
+    },
+    batch: async () => [],
+  };
+
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    await expect(
+      runPersonalDataRetention(database, now, {
+        deleteTerminalApplications: true,
+      }),
+    ).resolves.toMatchObject({ resolvedApplicationsDeleted: 0 });
+    expect(
+      db
+        .prepare(
+          "SELECT id,intake_reconciliation_required FROM atlasez_member_applications",
+        )
+        .all(),
+    ).toEqual([{ id: "turns-unresolved", intake_reconciliation_required: 1 }]);
+  } finally {
+    info.mockRestore();
+  }
+});
