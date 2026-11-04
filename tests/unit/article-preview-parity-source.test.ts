@@ -67,5 +67,11 @@ describe("article preview parity source of truth", () => {
       expect(editor).toContain(variable);
       expect(articleContent).toContain(variable);
     }
+    expect(editor).toContain(
+      ".published-article-preview .proof-details { border:0; border-radius:0;",
+    );
+    expect(articleContent).toContain(
+      '.article-body[data-article-subject="mathematics"] details.proof-details.folding',
+    );
   });
 });

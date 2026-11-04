@@ -364,6 +364,14 @@
 .article-body .folding-content {
   padding: 0.8rem 1rem;
 }
+
+.article-body[data-article-subject="mathematics"]
+  details.proof-details.folding {
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+
 .article-body .tikz-diagram,
 .article-preview .tikz-diagram,
 .published-article-preview .tikz-diagram {
