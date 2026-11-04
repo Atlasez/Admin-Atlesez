@@ -41,3 +41,17 @@ for (const path of pages) {
     ).toEqual([]);
   });
 }
+
+test("テーマ切替のアクセシブル名に表示ラベルを含める", async ({ page }) => {
+  await page.goto("./");
+
+  const toggle = page.locator("[data-theme-toggle]");
+  const visibleLabel = toggle.locator("[data-theme-label]");
+  const modes = ["ダーク表示", "ブラック表示", "ライト表示"];
+
+  for (const [index, label] of modes.entries()) {
+    await expect(visibleLabel).toHaveText(label);
+    await expect(toggle).toHaveAccessibleName(label);
+    if (index < modes.length - 1) await toggle.click();
+  }
+});
