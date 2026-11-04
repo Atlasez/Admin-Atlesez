@@ -14,16 +14,20 @@
 
 **一項目でも未完了なら外部サービスを使う試験を開始しない。** ローカルSQLite/Mock試験は本番・stagingへの接続なしで継続できる。
 
-## 専用stagingと合成サービスを用意する手順
+## 既存stagingのread-backと合成サービス準備
 
-ここに記す名称は環境分離用の例であり、Cloudflare上の既存Worker、DNS、OAuth client、Resend project、Discord guildを示さない。環境所有者が専用識別子を決め、承認記録へ記入する。作業中に本番 `atlasez-admin`、本番D1、`admin.atlasez.org` のroute/secretを参照・変更しない。
+2026-11-04 UTCのread-only確認で、Cloudflare上の専用Worker `atlasez-admin-staging` と別D1 `atlasez-admin-staging-reports` が存在し、専用 `workers.dev` originを使い、Custom Routeとscheduled triggerはありません。候補migration一式（0134を含む）を指定したD1 migration listはpendingなしでした。WorkerはVersion prefix `ef25f36d`が100%配信、Source `Unknown`で、live `build-info.json`は古いcommit `a509d52b5ad766d5cd41ad438ddf0040c7c13daa`, `ref=unknown`を返しました。current candidateの配信証拠ではありません。
+
+既存staging D1には運営者identityと試験データがあるため保持します。**既存Worker/D1を作り直す、削除する、空にする、role tableをresetする、またはrestoreする操作をしないでください。** Google Cloud Consoleの専用client/callback/test-user一覧は未確認で、運営者とは異なるsynthetic applicant/member・project reviewerは未準備です。Resend/Discordは設定上disabledですが、provider呼出し回数は計測していません。これらのread-back以降に設定差分を見つけた場合も、修正やresource作成の前に別途承認を取得します。
+
+以下の新規Worker/D1作成・空DB migration手順は、**新たな使い捨て環境が必要と判断され、個別変更承認が得られた場合のみ**の条件付き手順です。現在のstagingには適用しません。作業中に本番 `atlasez-admin`、本番D1、`admin.atlasez.org` のroute/secretを参照・変更しないでください。
 
 ### 1. Cloudflare WorkerとD1
 
-1. Cloudflare管理者がstaging用hostname（例: `admin-staging.atlasez.org`）、専用Worker（例: `atlasez-admin-staging`）、専用D1を選び、所有者・cleanup担当・Cloudflare account識別子を運営保管先へ記録する。実環境のIDやsecret値はこのrepo、Issue、PRへ書かない。
-2. ADMIN maintainerが専用config（例: `wrangler.admin.staging.jsonc`）を別PRで追加する。`name`、route、`ADMIN_PUBLIC_ORIGIN`、`SITE_URL`、D1 `database_name` / `database_id` はstaging専用値にし、`wrangler.admin.jsonc`の本番Worker名・route・D1 IDをコピーしない。staging D1を公開サイト、本番ADMIN、他のWorkerと共有しない。
-3. Cloudflare管理者が専用Worker/D1 bindingと環境変数名だけをread-onlyで確認する。stagingのCronは専用DBだけを使い、メールproviderはsink、Discord providerはtest guildにしか到達しないよう確認する。隔離を証明できなければ停止する。
-4. config PRでADMIN buildとdry-runを確認する。専用configが用意された後の例:
+1. Cloudflare管理者はまず既存Worker/D1の名前・匿名resource ID・owner・cleanup担当をread-onlyで記録する。現在確認済みのWorker/D1を再作成しない。欠落またはproductionとの混在が見つかった場合は、対象を使わず個別変更承認を待つ。
+2. ADMIN maintainerは既存のignored staging configをread-backと照合する。`name`、origin、D1 bindingはstaging専用値とし、本番の`wrangler.admin.jsonc`設定をコピーしない。現在のread-backと一致しなければdry-run/deployへ進まず停止する。
+3. Cloudflare管理者がWorker/D1 binding、route、Cron状態、環境変数名だけをread-onlyで確認する。現在のread-backはCustom Routeなし、Cron 0件です。Cronを追加・変更せず、メールproviderはdisabled、Discord providerはdisabledの状態を維持する。隔離を証明できなければ停止する。
+4. 対象SHAのADMIN buildと専用configのdry-runをローカルで確認する。dry-runは実環境の分離やdeploy許可を証明しない。現Workerへの配信はstaging専用の明示承認後だけ行う:
 
    ```bash
    npm run verify:deploy-config
@@ -34,7 +38,7 @@
 
    `<STAGING_HOST>`は承認済みのstaging hostnameへ置き換える。dry-runのWorker名とD1 bindingを二名で確認する。Stagingへの配信は専用staging手順で別途承認し、本番Deploy手順を流用しない。
 
-5. 空の隔離D1へ全migrationをstaging専用configで適用する。先に一覧を記録し、対象名・D1識別子を二名で確認してから実行する。
+5. **次のapply例は別途承認された新しい使い捨てD1だけに使用する。既存staging D1には実行しない。** その場合も対象名・D1識別子とmigration listを先にread-backし、個別のD1変更承認を得る。
 
    ```bash
    npx wrangler d1 migrations list <STAGING_D1_NAME> --remote --config wrangler.admin.staging.jsonc
@@ -42,12 +46,12 @@
    npx wrangler d1 migrations list <STAGING_D1_NAME> --remote --config wrangler.admin.staging.jsonc
    ```
 
-   stagingでのmigration適用記録と`0134_application_intake_reconciliation.sql`を含む対象SHAを保存する。本番名 `atlasez-reports`、本番config `wrangler.admin.jsonc`、本番D1 UUIDはコマンドへ指定しない。
+   新規の使い捨てD1演習でだけmigration適用記録と`0134_application_intake_reconciliation.sql`を含む対象SHAを保存する。本番名 `atlasez-reports`、本番config `wrangler.admin.jsonc`、本番D1 UUIDはコマンドへ指定しない。既存staging D1は2026-11-04のread-only listでpendingなしを確認済みのため、追加migrationは適用しない。
 
 ### 2. Google OAuthの合成アカウント
 
-1. Google Cloud管理者が専用OAuth clientをstaging専用projectに作り、承認済みstaging originだけをAuthorized JavaScript originへ、`https://<STAGING_HOST>/auth/google/callback`だけをAuthorized redirect URIへ登録する。コードのcallback routeは `/auth/google/callback`。
-2. 管理されたsynthetic Google accountを用意する。個人・運営者の通常アカウントを試験用に転用しない。test account pseudonym、OAuth client pseudonym、cleanup ownerだけを台帳へ記録する。
+1. Google Cloud管理者はまず既存専用OAuth clientのAuthorized JavaScript origin、`https://<STAGING_HOST>/auth/google/callback` redirect URI、test-user一覧をread-onlyで確認する。コードのcallback routeは `/auth/google/callback`。既存clientがないことを確認した場合に限り、Google管理者の個別変更承認後に作成する。
+2. 運営者identityとは異なる管理下synthetic applicant/memberとproject-scoped reviewerを用意する。アカウント作成・test-user登録にはGoogle Cloud管理者の承認が必要。個人・運営者の通常アカウントをrole境界の証拠に転用しない。test account pseudonym、OAuth client pseudonym、cleanup ownerだけを台帳へ記録する。
 3. Client ID/Secretはstaging Workerの専用secret storeへだけ登録する。secret値、OAuth `state`、認証code、Cookieを記録しない。OAuth同意・callback・logout後の再login・取消からの回復をSTG-01で確認する。
 
 ### 3. Resendのtest sink
@@ -58,7 +62,7 @@
 
 ### 4. Discordのtest guild
 
-1. Discord管理者が本番guildから分離したtest guildとsynthetic Discord userを用意する。Botには試験に必要な権限だけを与え、対象test roleより上位に置く。role ID・user IDはpseudonymで記録する。
+1. Discordはdisabledのまま維持する。OPSD-08でSTG-08が承認された場合に限り、Discord管理者が本番guildから分離したtest guildとsynthetic Discord userを用意する。Botには試験に必要な権限だけを与え、対象test roleより上位に置く。role ID・user IDはpseudonymで記録する。
 2. 専用OAuth applicationのredirect URIを `https://<STAGING_HOST>/auth/discord/callback` に設定する。staging Workerの `DISCORD_OAUTH_REDIRECT_URI` を同じURIにする。Guild ID、OAuth client ID、client secret、Bot token、token encryption keyはstaging専用値とする。
 3. secretと32-byte暗号化鍵はstaging secret storeへ登録し、鍵/tokenの値を証跡に含めない。本人同意を得たsynthetic userだけでSTG-08を行う。grant/revoke前にOPSD-08を承認し、失効後はサイトAPIとDiscord側read-backを別に確認する。
 
@@ -89,7 +93,9 @@ STG-01〜09の開始前に、Cloudflare管理者はWorker名・route・D1 bindin
 
 ## staging環境・合成アカウント台帳
 
-実施環境はユーザー向けの本番URLと見間違えない名前にする。staging専用Google OAuth client/callback、Resend送信設定またはsink、Discord test guild/bot/role、別のD1を用意する。stagingアプリに本番secretや本番D1 bindingが残っていないことを、値を表示せずbinding名・環境IDで確認する。
+既存の専用staging Worker/D1をread-onlyで識別し、worker.dev origin・Google OAuth・provider設定・bindingが本番と分離されているか確認する。新しいstaging resourceやproviderは不足が明確で、個別の変更承認がある場合だけ準備する。既存の試験データと運営者identityを保持し、cleanupやresetをしない。stagingアプリに本番secretや本番D1 bindingが残っていないことを、値を表示せずbinding名・環境IDで確認する。
+
+下記の空DB migration/apply手順は新しい使い捨てD1の演習専用です。既存 `atlasez-admin-staging-reports` は2026-11-04 read-only確認で0134を含むcandidate migrationにpendingなしでした。既存D1にapply、初期seed削除、reset、restoreをしません。
 
 | Pseudonym            | 初期状態・role                       | 用途                                    | cleanup owner | 準備状態 |
 | -------------------- | ------------------------------------ | --------------------------------------- | ------------- | -------- |
