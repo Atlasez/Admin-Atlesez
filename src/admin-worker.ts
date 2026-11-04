@@ -13379,9 +13379,14 @@ const interviewHistory = (
   after: unknown,
   actorEmail: string,
   createdAt: string,
+  requirePreviousChange = false,
 ) =>
   env.REPORTS.prepare(
-    `INSERT INTO atlasez_application_interview_history
+    requirePreviousChange
+      ? `INSERT INTO atlasez_application_interview_history
+      (id,application_id,interview_id,review_id,event_type,before_json,after_json,actor_email,created_at)
+     SELECT ?,?,?,?,?,?,?,?,? WHERE changes()=1`
+      : `INSERT INTO atlasez_application_interview_history
       (id,application_id,interview_id,review_id,event_type,before_json,after_json,actor_email,created_at)
      VALUES (?,?,?,?,?,?,?,?,?)`,
   ).bind(
@@ -13600,8 +13605,6 @@ async function saveApplicationInterview(
   ).bind(id).first<ApplicationInterviewRow>();
   if (current?.status === "completed")
     return json({ error: "終了済みの面談は変更できません。" }, 409);
-  const now = new Date().toISOString();
-  const interviewId = current?.id ?? crypto.randomUUID();
   const next = {
     scheduled_at: scheduledAt,
     timezone,
@@ -13610,11 +13613,41 @@ async function saveApplicationInterview(
     location: mode === "in_person" ? location : "",
     status: "scheduled",
   };
+  if (
+    current?.status === "scheduled" &&
+    current.scheduled_at === next.scheduled_at &&
+    current.timezone === next.timezone &&
+    current.mode === next.mode &&
+    current.zoom_url === next.zoom_url &&
+    current.location === next.location
+  )
+    return json({
+      ok: true,
+      interview: {
+        id: current.id,
+        ...next,
+        notified_at: current.notified_at,
+      },
+    });
+  const wallClockNow = new Date().toISOString();
+  const currentUpdatedAt = current ? Date.parse(current.updated_at) : Number.NaN;
+  const now =
+    current &&
+    Number.isFinite(currentUpdatedAt) &&
+    Date.parse(wallClockNow) <= currentUpdatedAt
+      ? new Date(currentUpdatedAt + 1).toISOString()
+      : wallClockNow;
+  const interviewId = current?.id ?? crypto.randomUUID();
   const statement = current
     ? env.REPORTS.prepare(
         `UPDATE atlasez_application_interviews
-            SET scheduled_at=?,timezone=?,mode=?,zoom_url=?,location=?,status='scheduled',updated_by=?,updated_at=?
-          WHERE id=? AND application_id=?`,
+            SET scheduled_at=?,timezone=?,mode=?,zoom_url=?,location=?,status='scheduled',notified_at=NULL,updated_by=?,updated_at=?
+          WHERE id=? AND application_id=? AND status=? AND updated_at=?
+          AND NOT EXISTS (
+            SELECT 1 FROM atlasez_application_email_deliveries
+             WHERE application_id=? AND kind='applicant_interview_invitation'
+               AND status IN ('pending','retry','sending')
+          )`,
       ).bind(
         next.scheduled_at,
         next.timezone,
@@ -13624,12 +13657,23 @@ async function saveApplicationInterview(
         access.access.scope.email,
         now,
         interviewId,
+        id,
+        current.status,
+        current.updated_at,
         id,
       )
     : env.REPORTS.prepare(
         `INSERT INTO atlasez_application_interviews
           (id,application_id,scheduled_at,timezone,mode,zoom_url,location,status,created_by,created_at,updated_by,updated_at)
-         VALUES (?,?,?,?,? ,?,?, 'scheduled',?,?,?,?)`,
+         SELECT ?,?,?,?,?,?,?,'scheduled',?,?,?,?
+          WHERE NOT EXISTS (
+            SELECT 1 FROM atlasez_application_interviews WHERE application_id=?
+          )
+            AND NOT EXISTS (
+              SELECT 1 FROM atlasez_application_email_deliveries
+               WHERE application_id=? AND kind='applicant_interview_invitation'
+                 AND status IN ('pending','retry','sending')
+          )`,
       ).bind(
         interviewId,
         id,
@@ -13642,8 +13686,10 @@ async function saveApplicationInterview(
         now,
         access.access.scope.email,
         now,
+        id,
+        id,
       );
-  await env.REPORTS.batch([
+  const results = await env.REPORTS.batch([
     statement,
     interviewHistory(
       env,
@@ -13655,8 +13701,76 @@ async function saveApplicationInterview(
       next,
       access.access.scope.email,
       now,
+      true,
     ),
   ]);
+  const changes = (result: unknown): number | null => {
+    const value = (result as { meta?: { changes?: unknown } } | undefined)?.meta
+      ?.changes;
+    return typeof value === "number" ? value : null;
+  };
+  const interviewChanges = changes(results[0]);
+  const historyChanges = changes(results[1]);
+  if (interviewChanges === 0) {
+    let activeDelivery:
+      | { status: "pending" | "retry" | "sending" }
+      | null;
+    try {
+      activeDelivery = await env.REPORTS.prepare(
+        `SELECT status FROM atlasez_application_email_deliveries
+          WHERE application_id=? AND kind='applicant_interview_invitation'
+            AND status IN ('pending','retry','sending')
+          LIMIT 1`,
+      )
+        .bind(id)
+        .first<{ status: "pending" | "retry" | "sending" }>();
+    } catch {
+      console.error("application interview conflict read-back failed");
+      return json(
+        {
+          error: "面談情報の保存結果を確認できません。再読み込みして状態を確認してください。",
+          code: "INTERVIEW_SAVE_UNCONFIRMED",
+        },
+        503,
+      );
+    }
+    if (activeDelivery)
+      return json(
+        {
+          error: "前の面談通知を処理中のため、面談情報を変更できません。通知状態を確認してから再試行してください。",
+          code: "INTERVIEW_NOTIFICATION_IN_PROGRESS",
+        },
+        409,
+      );
+    return json(
+      {
+        error: "面談情報が別の担当者によって更新されました。再読み込みしてください。",
+        code: "INTERVIEW_CHANGED",
+      },
+      409,
+    );
+  }
+  if (interviewChanges !== 1) {
+    console.error("application interview save result unconfirmed");
+    return json(
+      {
+        error: "面談情報の保存結果を確認できません。再読み込みして状態を確認してください。",
+        code: "INTERVIEW_SAVE_UNCONFIRMED",
+      },
+      503,
+    );
+  }
+  if (historyChanges !== 1) {
+    console.error("application interview history result unconfirmed");
+    return json(
+      {
+        error: "面談情報は保存されましたが、履歴の確定を確認できません。状態を再読み込みしてください。",
+        code: "INTERVIEW_HISTORY_UNCONFIRMED",
+        interviewSaved: true,
+      },
+      503,
+    );
+  }
   return json({ ok: true, interview: { id: interviewId, ...next, notified_at: null } });
 }
 
@@ -13876,24 +13990,121 @@ async function saveApplicationInterviewReview(
   const interview = await env.REPORTS.prepare(
     "SELECT id,status FROM atlasez_application_interviews WHERE application_id=?",
   ).bind(id).first<{ id: string; status: string }>();
-  const now = new Date().toISOString();
-  const reviewId = current?.id ?? crypto.randomUUID();
+  if (current?.finalized_at)
+    return json(
+      {
+        error: "採否が確定済みの面談メモは変更できません。運営責任者へ連絡してください。",
+        code: "INTERVIEW_REVIEW_FINALIZED",
+      },
+      409,
+    );
   const next = { note, assigned_subjects: assignedSubjects.join(","), decision };
+  if (
+    current &&
+    current.interview_id === (interview?.id ?? null) &&
+    current.note === next.note &&
+    current.assigned_subjects === next.assigned_subjects &&
+    current.decision === next.decision
+  )
+    return json({
+      ok: true,
+      review: { id: current.id, ...next, assignedSubjects },
+    });
+  const wallClockNow = new Date().toISOString();
+  const currentUpdatedAt = current ? Date.parse(current.updated_at) : Number.NaN;
+  const now =
+    current &&
+    Number.isFinite(currentUpdatedAt) &&
+    Date.parse(wallClockNow) <= currentUpdatedAt
+      ? new Date(currentUpdatedAt + 1).toISOString()
+      : wallClockNow;
+  const reviewId = current?.id ?? crypto.randomUUID();
   const statement = current
     ? env.REPORTS.prepare(
         `UPDATE atlasez_application_interview_reviews
             SET note=?,assigned_subjects=?,decision=?,updated_by=?,updated_at=?
-          WHERE id=? AND application_id=?`,
-      ).bind(note, next.assigned_subjects, decision, access.access.scope.email, now, reviewId, id)
+          WHERE id=? AND application_id=? AND updated_at=? AND finalized_at IS NULL`,
+      ).bind(
+        note,
+        next.assigned_subjects,
+        decision,
+        access.access.scope.email,
+        now,
+        reviewId,
+        id,
+        current.updated_at,
+      )
     : env.REPORTS.prepare(
         `INSERT INTO atlasez_application_interview_reviews
           (id,application_id,interview_id,note,assigned_subjects,decision,created_by,created_at,updated_by,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      ).bind(reviewId, id, interview?.id ?? null, note, next.assigned_subjects, decision, access.access.scope.email, now, access.access.scope.email, now);
-  await env.REPORTS.batch([
+         SELECT ?,?,?,?,?,?,?,?,?,?
+          WHERE NOT EXISTS (
+            SELECT 1 FROM atlasez_application_interview_reviews WHERE application_id=?
+          )`,
+      ).bind(
+        reviewId,
+        id,
+        interview?.id ?? null,
+        note,
+        next.assigned_subjects,
+        decision,
+        access.access.scope.email,
+        now,
+        access.access.scope.email,
+        now,
+        id,
+      );
+  const results = await env.REPORTS.batch([
     statement,
-    interviewHistory(env, id, interview?.id ?? null, reviewId, "review_saved", current, next, access.access.scope.email, now),
+    interviewHistory(
+      env,
+      id,
+      interview?.id ?? null,
+      reviewId,
+      "review_saved",
+      current,
+      next,
+      access.access.scope.email,
+      now,
+      true,
+    ),
   ]);
+  const changes = (result: unknown): number | null => {
+    const value = (result as { meta?: { changes?: unknown } } | undefined)?.meta
+      ?.changes;
+    return typeof value === "number" ? value : null;
+  };
+  const reviewChanges = changes(results[0]);
+  const historyChanges = changes(results[1]);
+  if (reviewChanges === 0)
+    return json(
+      {
+        error: "面談メモが別の担当者によって更新または確定されました。再読み込みしてください。",
+        code: "INTERVIEW_REVIEW_CHANGED",
+      },
+      409,
+    );
+  if (reviewChanges !== 1) {
+    console.error("application interview review save result unconfirmed");
+    return json(
+      {
+        error: "面談メモの保存結果を確認できません。状態を再読み込みしてください。",
+        code: "INTERVIEW_REVIEW_SAVE_UNCONFIRMED",
+      },
+      503,
+    );
+  }
+  if (historyChanges !== 1) {
+    console.error("application interview review history unconfirmed");
+    return json(
+      {
+        error: "面談メモは保存されましたが、履歴の確定を確認できません。採否確定を停止しました。状態を再読み込みしてください。",
+        code: "INTERVIEW_REVIEW_HISTORY_UNCONFIRMED",
+        reviewSaved: true,
+      },
+      503,
+    );
+  }
   return json({ ok: true, review: { id: reviewId, ...next, assignedSubjects } });
 }
 

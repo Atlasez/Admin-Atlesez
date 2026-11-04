@@ -734,15 +734,21 @@ const projectLabel = selectedProject?.[1] ?? "";
       try{
         const saveResponse=await fetch(`/api/admin/applications/${encodeURIComponent(id)}/interview?project=${encodeURIComponent(projectSlug)}`,{method:'PUT',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(values)});
         const saveData=await saveResponse.json().catch(()=>({}));
-        if(!saveResponse.ok)throw Error(saveData.error??'面談情報を保存できませんでした。');
-        saved=true;
+        const markInterviewSaved=()=>{
+          saved=true;
+          const current=applications.find(item=>item.id===id);
+          if(current)current.interview={...interviewFor(current),...values};
+          const latestDraft=interviewDrafts.get(id);
+          if(submitted&&(!latestDraft||sameInterview(latestDraft,submitted)))interviewDrafts.delete(id);
+          updateDraftNotice(id);
+        };
+        if(!saveResponse.ok){
+          if(saveData.interviewSaved===true)markInterviewSaved();
+          throw Error(saveData.error??'面談情報を保存できませんでした。');
+        }
         // Update the local baseline immediately; a notification or list reload
         // failure must not pretend that the successful save was rolled back.
-        const current=applications.find(item=>item.id===id);
-        if(current)current.interview={...interviewFor(current),...values};
-        const latestDraft=interviewDrafts.get(id);
-        if(submitted&&(!latestDraft||sameInterview(latestDraft,submitted)))interviewDrafts.delete(id);
-        updateDraftNotice(id);
+        markInterviewSaved();
         if(action==='notify'){
           const notifyResponse=await fetch(`/api/admin/applications/${encodeURIComponent(id)}/interview/notify?project=${encodeURIComponent(projectSlug)}`,{method:'POST',credentials:'same-origin'});
           const notifyData=await notifyResponse.json().catch(()=>({}));

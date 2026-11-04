@@ -640,3 +640,58 @@ test("面談通知の成功表示は配送完了ではなくキュー登録を�
     "応募者へ通知しました",
   );
 });
+
+test("面談保存済み・履歴未確定の応答は通知せず保存状態を案内する", async ({
+  page,
+}) => {
+  const id = "33333333-3333-4333-8333-333333333333";
+  let notificationCalls = 0;
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/admin/applications") {
+      await route.fulfill({
+        json: {
+          project: { slug: "thinking-cafe", name: "Thinking Cafe" },
+          applications: [
+            {
+              id,
+              family_name: "検証",
+              given_name: "応募者",
+              email: "applicant@example.invalid",
+              status: "new",
+              project_slug: "thinking-cafe",
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (
+      url.pathname.endsWith("/interview") &&
+      route.request().method() === "PUT"
+    ) {
+      await route.fulfill({
+        status: 503,
+        json: {
+          error: "履歴の確定を確認できません。状態を再読み込みしてください。",
+          interviewSaved: true,
+        },
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/interview/notify")) notificationCalls++;
+    await route.fulfill({ json: { ok: true } });
+  });
+
+  await page.goto("./admin/applications/?project=thinking-cafe");
+  await page.locator(`[data-interview-date="${id}"]`).fill("2026-11-15T10:00");
+  await page
+    .locator(`[data-interview-format="${id}"]`)
+    .selectOption("in_person");
+  await page.locator(`[data-interview-location="${id}"]`).fill("検証会場");
+  await page.locator(`[data-interview-notify="${id}"]`).click();
+  await expect(page.locator("[data-notice]")).toContainText(
+    "面談情報は保存済みです。履歴の確定を確認できません",
+  );
+  expect(notificationCalls).toBe(0);
+});
