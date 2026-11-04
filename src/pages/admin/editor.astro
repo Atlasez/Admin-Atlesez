@@ -1073,11 +1073,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   }
 
   .published-article-preview .article-body[data-article-subject="mathematics"] details.proof-details.folding { border:0; border-radius:0; margin:1.2rem 0; overflow:visible; }
-  .published-article-preview .proof-details > summary { align-items:center; background:var(--background-secondary); border:1px solid var(--border); border-radius:.4rem; cursor:pointer; display:inline-flex; font-weight:800; gap:.45rem; list-style:none; padding:.35rem .8rem .35rem 2rem; position:relative; }
+  .published-article-preview .proof-details > summary { background:var(--background-secondary); border:1px solid var(--border); border-radius:.4rem; cursor:pointer; display:inline-block; font-weight:800; list-style:none; padding:.35rem .8rem .35rem 2rem; position:relative; }
   .published-article-preview .proof-details > summary::-webkit-details-marker { display:none; }
   .published-article-preview .proof-details > summary::marker { content:""; }
-  .published-article-preview .proof-details > summary::before { border-bottom:2px solid var(--muted); border-right:2px solid var(--muted); content:""; height:.45rem; left:.8rem; position:absolute; top:.65rem; transform:rotate(45deg); transition:transform .15s ease; width:.45rem; }
-  .published-article-preview .proof-details[open] > summary::before { transform:rotate(225deg); }
+  .published-article-preview .proof-details > summary::before { border-bottom:2px solid var(--muted); border-right:2px solid var(--muted); content:""; height:.45rem; left:.8rem; position:absolute; top:.65rem; transform:rotate(-45deg); transition:transform .15s ease; width:.45rem; }
+  .published-article-preview .proof-details[open] > summary::before { transform:rotate(45deg); }
   .published-article-preview .proof-details > summary:hover { border-color:var(--accent); }
   .published-article-preview .supp-details { border:0; margin:1rem 0; }
   .published-article-preview .supp-details > summary { align-items:center; background:var(--background-secondary); border:1px solid var(--border); border-radius:.45rem; cursor:pointer; font-weight:800; list-style:none; padding:.55rem 2rem .55rem .8rem; position:relative; text-align:center; }
