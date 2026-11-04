@@ -1,9 +1,18 @@
 # ADMIN専用stagingの実行基盤
 
-作成日: 2026-11-03 JST
-状態: **ローカル隔離試験を実装済み。専用stagingと実サービス受入は未構築・未実施。**
+作成日: 2026-11-03 JST / read-only状態更新: 2026-11-04 UTC
+状態: **専用staging Worker/D1は存在し、migration一覧のread-only確認済み。実サービス受入は未実施。**
 
 本書は [PR #547のADMIN新規メンバー受入チェックリスト](https://github.com/Atlasez/Admin-Atlesez/pull/547) と連携し、設定ガード、fixture、migration drillを定めます。Cloudflare設定変更、staging deploy/migration、Google/Resend/Discordの実接続は、このPRだけでは実行しません。
+
+## 0. 既存stagingのread-only状態（2026-11-04）
+
+- Cloudflare上に専用Worker `atlasez-admin-staging` と専用D1 binding `atlasez-admin-staging-reports` が既にあります。production Worker/D1とは別資源です。Workerは専用 `workers.dev` originを使い、read-backではCustom Routeとscheduled triggerはありません。**既存資源を再作成、削除、初期化しないでください。**
+- 隔離統合候補のmigration一式（0134を含む）を指定した `wrangler d1 migrations list ... --remote` は `No migrations to apply!` を返しました（2026-11-04 read-only）。これは現在のmigrationディレクトリに対する適用状況であり、backup/restore、データ整合性、production D1の状態を証明しません。既存D1へmigration、role seed reset、restoreを行わないでください。
+- staging Workerのdeployment read-backはVersion prefix `ef25f36d` が100%配信、Source `Unknown`、時刻 `2026-11-03 09:54 UTC`。同Workerの `build-info.json` はADMIN commit `a509d52b5ad766d5cd41ad438ddf0040c7c13daa`、ref `unknown`、target `admin`、builtAt `2026-11-03T09:53:59Z` を返しました。現在の#549 HEAD `20eb2a5610509a1dfcdec2357812eb438582e442` と統合候補はこのWorkerに配信されていません。Source `Unknown`のため、このVersionを検証可能なsource provenanceとは扱いません。
+- staging D1には既存の運営者identityと試験データがあります。データを保持し、削除・初期化・復元をしません。Google Cloud ConsoleのOAuth origin/callback/test-user一覧は独立read-backできておらず、運営者と異なるsynthetic applicant/member・reviewer identityは未準備です。
+- Resend/Discordはstaging設定上disabledです。provider呼出し数は直接計測していないため、0回とは主張しません。実利用試験は行っていません。
+- 従ってCloudflare Worker/D1の作成は現在の開始条件ではありません。STG-01〜06は、独立Google identities、対象Worker buildのprovenanceとdeploy承認、role別live試験承認が揃うまでBLOCKEDです。read-back時刻以降に状態が変わっていれば、変更前に再確認します。
 
 ## 1. 隔離設定と検査
 
@@ -39,7 +48,7 @@ npm run test:admin-staging:isolated
 
 ## 3. 管理されたstaging deploy
 
-実Workerへ配信する前に、Cloudflare管理者が専用Worker/D1を作成し、必要なGoogle secret名をread-backします。DiscordとResendは無効のまま、STG-01〜06に不要なsecretを登録しません。secret値をGit、Issue、shell historyへ記録しません。Workerには別用途のGitHub、公開サイト、本番Discord、本番メールsecretを設定しません。staging D1の0134 ledgerが適用済みで、旧Worker互換性の確認が終わるまで新Workerは配信しません。
+現在は既存Worker/D1を再利用します。read-onlyのbinding・route・secret名・migration確認を行い、専用の実行承認なしに設定変更やdeployをしません。DiscordとResendは無効のまま、STG-01〜06に不要なsecretを登録しません。secret値をGit、Issue、shell historyへ記録しません。Workerには別用途のGitHub、公開サイト、本番Discord、本番メールsecretを設定しません。現在のD1に0134を含む未適用migrationはread-back上ありませんが、これは旧Worker互換性や復元試験の証拠ではありません。対象Worker buildの由来とstaging deploy承認が確認できるまで配信しません。
 
 ```bash
 cp wrangler.admin.staging.example.jsonc wrangler.admin.staging.jsonc
@@ -59,15 +68,15 @@ npm run deploy:admin:staging -- --deploy
 
 Resendのtest sinkを明示的に使う時だけ `ATLASEZ_STAGING_RESEND_SINK_CONFIRMED=1` も設定します。test-sink以外の宛先、または確認されていないAPI keyは配信しません。このdeploy scriptは固定のignored staging configしか読み込まず、本番の `wrangler.admin.jsonc` へfallbackせず、migrationは一切実行しません。Cloudflare D1 operatorが後続の専用手順で対象名を二名照合してmigrationを適用します。
 
-## 4. Cloudflare管理者がstagingを用意する手順
+## 4. Cloudflare管理者による既存stagingのread-back
 
 ### Cloudflare Account admin / D1 operator
 
-1. staging Worker `atlasez-admin-staging` と専用D1 `atlasez-admin-staging-reports` を作成し、D1 IDを運営の安全な台帳へ記録します。同じCloudflare Accountを使う場合もWorkerとD1は本番と別資源にします。
-2. `workers.dev` の専用URLを有効にし、`preview_urls=false` のままにします。この基盤はzone Custom Routeを使わないため、staging WorkerにWorkers Routes権限を付与しません。
-3. Worker bindingは専用D1だけにします。`atlasez-reports`、本番の編集室Durable Object、production Queue、公開サイトbindingを追加しません。member intake以外の編集室画面は試験対象外です。
-4. Staging secretsには専用Google OAuth secretだけを必要に応じて登録します。Resendは確認済みtest sinkが準備されるまで、DiscordはSTG-08のOPSD-08承認まで、関連secretを設定せず無効に保ちます。いずれも `vars`へsecretを置かず、production secretを複製しません。WorkerにGitHub App/token、公開サイト連携、production webhook/token、Turnstile secretなど不要secretが存在しないことをsecret名だけでread-backします。
-5. `wrangler.admin.staging.example.jsonc` をローカル専用設定にコピーし、Cloudflareから取得したstaging Account ID、D1 ID、workers.dev host、Google test client ID、synthetic sender addressだけを記入します。Discord disabledのままならGuild/Client IDもsecretも設定しません。完成後に静的検査を実行し、値はIssueへ貼らず、resource名・匿名識別子・検査時刻だけを記録します。
+1. Dashboardまたは限定read-only APIで既存Worker `atlasez-admin-staging`、専用 `workers.dev` origin、D1 binding `atlasez-admin-staging-reports`、Worker/D1 IDを照合します。production Worker/D1と一致せず、別のWorker/API/routeへ接続しないことを確認します。**存在しない場合や差異がある場合は、作成・変更せず、権限者の個別変更承認を待ちます。**
+2. `preview_urls=false`、Custom Routeなし、scheduled triggers 0件、Worker bindingが専用D1だけであることをread-backします。`atlasez-reports`、編集室Durable Object、production Queue、公開サイトbindingがあれば停止し、是正承認を得ます。既存Cron枠を削除・追加・変更しません。
+3. `wrangler d1 migrations list atlasez-admin-staging-reports --remote --config wrangler.admin.staging.jsonc` をread-onlyで照合します。2026-11-04の確認では、候補のmigration一式に対してpendingなしでした。対象の現在値と異なる結果が出た場合は、apply/reset/restoreせずD1 operatorへ調査依頼します。
+4. secret **名**とvars名だけをread-backします。値は表示・記録しません。Google専用clientの既存設定があればその利用可否をGoogle Cloud管理者がread-backします。未確認・未作成なら既存clientの有無を先に調べ、重複作成や設定変更はGoogle管理者の個別承認後だけ行います。Resendはsink確認まで、DiscordはSTG-08のOPSD-08承認まで無効を維持します。production secretsを複製しません。
+5. ignored local configは既存資源のread-back値と照合するためだけに使います。設定が現状と一致しない場合は、現在のWorkerを変更したり別resourceへdeployしたりせず停止します。検査結果はresource名・値を伏せた匿名識別子・確認時刻だけで記録し、ID・host・secret valueをIssueへ貼りません。
 
 CloudflareのAccount adminは専用資源を作る権限、D1 operatorは専用D1 migration/read-back/Time Travelの権限、Worker deploy担当はstaging Workerのscript/settings write権限が必要です。本番Route権限は不要です。
 
@@ -81,6 +90,8 @@ CloudflareのAccount adminは専用資源を作る権限、D1 operatorは専用D
 
 ## 5. migration 0134の実staging試験
 
+**現在のstaging D1は既存の運営者identity・試験データを含みます。この節の「空の新規D1」「全migration apply」「role seed reset」「restore」は、別途承認された使い捨てD1演習専用です。既存の `atlasez-admin-staging-reports` には実行しません。** 2026-11-04のread-only migration listでは現在のmigration一式（0134を含む）にpendingなしでした。既存stagingを空にする・作り直す・旧snapshotへ戻す操作は禁止です。
+
 Cloudflare D1 Time Travelは現在のbookmarkをread-onlyで取得できます。restoreはそのD1の全状態を指定時点へ上書きする破壊的操作です。公式手順では `wrangler d1 time-travel info` でbookmarkを取得し、`wrangler d1 time-travel restore` で指定時点へ戻します。[Cloudflare D1 Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/)
 
 専用staging D1だけを対象に、D1 operatorが次の順で実施します。
@@ -88,9 +99,9 @@ Cloudflare D1 Time Travelは現在のbookmarkをread-onlyで取得できます�
 1. Cloudflare dashboard/WranglerでWorker名・D1名・完全なD1 IDを二名照合し、production IDでないことを確認します。対象の旧Worker build/SHA、D1 migration ledger、CI runを記録します。
 2. `wrangler d1 info atlasez-admin-staging-reports --remote --config wrangler.admin.staging.jsonc` でD1 storage versionを確認します。Time Travelを使用できる状態であることを記録します。
 3. `wrangler d1 time-travel info atlasez-admin-staging-reports --config wrangler.admin.staging.jsonc` でmigration前bookmarkを取得し、安全な運用記録に保存します。出力をIssueへ丸ごと貼らず、bookmarkは権限を持つ担当者間だけで共有します。
-4. `wrangler d1 migrations list atlasez-admin-staging-reports --remote --config wrangler.admin.staging.jsonc` で新規D1のpending migration一覧と最終番号を確認します。新規D1では0134だけでなく全migrationがpendingであるのが想定です。途中migrationが一部適用済みなら作業を止め、状態を調査します。
-5. 事前backup/bookmarkと専用D1を再確認し、承認されたD1 operatorが `wrangler d1 migrations apply atlasez-admin-staging-reports --remote --config wrangler.admin.staging.jsonc` を実行します。本番D1名やproduction configを指定しません。適用後、read-only migration listで0134を含む全migrationのledgerを確認します。
-6. **旧migrationの固定運営者をstagingへ持ち込まないための初期role resetを、新規D1でOAuth account/試験データを追加する前に一度実施します。** Migration `0004`/`0090` は本番の全体管理者、`0079` は本番のproject leader、`0091` は本番管理者のDiscord除外を固定値でseedします。新規D1へ全migrationを適用するとこれらの行も作られます。ステージングD1 operatorは対象のD1名/IDを二名照合した後、次のSQLを `atlasez-admin-staging-reports` のみへ実行します。`<DEDICATED_STAGING_GOOGLE_OPERATOR_EMAIL>` はGoogle test userとして既に登録した専用合成アカウントの小文字メールへ置換し、実メンバーのメールは使いません。
+4. **使い捨てD1演習の場合のみ** migration一覧を確認します。新規D1では0134だけでなく全migrationがpendingであるのが想定です。部分適用なら作業を止めます。既存staging D1では前節のread-only照合結果を使い、migration applyをしません。
+5. **使い捨てD1演習に対する個別D1変更承認がある場合のみ**、事前backup/bookmarkと専用D1を再確認し、承認されたD1 operatorがmigration applyを実行します。本番D1名やproduction configを指定しません。適用後、read-only migration listで0134を含む全migrationのledgerを確認します。既存staging D1へはapplyしません。
+6. **初期role resetは、新規の使い捨てD1演習だけに適用します。既存staging D1へ次のDELETE/INSERT SQLを実行してはいけません。** 既存stagingには運営者identityと試験データが保存されています。migration `0004`/`0090`、`0079`、`0091` の固定seed除去が必要な新規D1演習では、演習用D1を二名照合してから、個別承認済み手順として次のSQLを使用します。
 
    ```sql
    DELETE FROM report_admin_permissions;
@@ -105,7 +116,7 @@ Cloudflare D1 Time Travelは現在のbookmarkをread-onlyで取得できます�
 
    Read-backで全体権限が専用staging operatorの1行だけ、他2表が0行であることを確認します。この初期化は新規staging D1限定で、後続の試験roleを作成した後に再実行しません。失敗/途中成功時はrole試験を開始せず、operatorが同じ初期化を再実行して上記状態を確認します。SQL結果やメールアドレスをIssueへ貼らず、匿名fixture key・row counts・実施者role・UTC時刻を記録します。
 
-7. 0134後の旧Worker互換性は、migration前のADMIN main SHAをrelease ownerが固定し、そのSHAをtemporary worktreeへcheckoutしてCloudflareのstaging Workerだけへ一時配信して検証します。旧コードはstaging Cron markerを解釈しないため、旧Workerの配信前にDashboardでそのWorkerの全scheduled triggersを無効化し、配信後も0件であることをread-backします。`wrangler.admin.staging.compat.jsonc` は専用staging Worker/D1/originだけを含むローカル設定から `triggers` を削除して作成し、通常worktreeで `npm run verify:admin-staging-config:compat` を通した後、対象旧SHAのworktreeへコピーします。旧SHA側でAdmin build・build-infoを検証し、次のdry-runまでを行います。
+7. 0134後の旧Worker互換性を実Cloudflareで調べる場合は、共有中のstaging Workerを旧SHAで置き換えるため、staging-onlyのdeploy承認・停止条件・復帰手順が別途必要です。承認前はworktree、build、dry-runまでに留め、既存Workerへ配信しません。旧コードはstaging Cron markerを解釈しないため、承認済み演習ではCron 0件をread-backしてから実施します。既存stagingのCronを無断で変更・削除しません。
 
    ```bash
    git worktree add --detach ../admin-staging-pre-0134 <PRE_0134_ADMIN_MAIN_SHA>
@@ -131,16 +142,16 @@ Cloudflare D1 Time Travelは現在のbookmarkをread-onlyで取得できます�
 
 ResendとDiscordを無効のままでも、STG-01〜06のWeb/API側検証は実施できます。STG-02では応募・運営task・メールqueueの状態を照合し、Resend dispatch/provider呼出しが0件であることを確認します。実配達はverified test sinkがread-backされるまでSTG-07へ分離します。STG-06では既存sessionからのサイトAPI拒否・membership/role状態を確認し、Discordのgrant/revokeはOPSD-08承認後のSTG-08に限ります。
 
-最初の開始操作と担当は次の順です。これは作業手順であり、未実施のCloudflare/provider変更を実施済みとは扱いません。
+次の順で既存資源をread-backします。これは作業手順であり、未実施のCloudflare/provider変更を実施済みとは扱いません。
 
-1. **Staging owner / Cloudflare Account admin:** 専用Worker・D1を作成し、`wrangler.admin.staging.jsonc` をignored local configとして完成。`npm run verify:admin-staging-config` と `npm run deploy:admin:staging -- --dry-run` が通るまでdeployしません。Resource ID、worker.dev URL、binding/secret名だけを二名でread-backします。
-2. **Google Cloud admin:** 専用OAuth clientにstaging worker.dev originと `/auth/google/callback` を登録し、運営が管理する合成Google test usersを用意します。アカウントのメール/secretはGitHubに記録せず、内部の権限台帳でfixture keyに対応付けます。
-3. **D1 operator:** migration/backup手順に従い全migrationを専用D1だけへ適用し、上記のbootstrap SQLでmigrationに埋め込まれた本番role seedを除去してsynthetic global operatorだけを作成します。operatorがGoogle OAuthでログインでき、global route/APIにだけscopeを持つ read-only 確認が終わるまで他roleをseedしません。
-4. **Cloudflare staging operator + release owner:** 0134後の旧Worker互換性試験を開始する時は、DashboardのScheduled Triggersを0件にし、専用worker.dev URL・D1だけのcompat configで固定したpre-0134 main SHAを一時配信します。試験APIとrow countsのread-backが終わったら同SHA/Versionを記録し、staging-only新Workerをguarded Cron付きの通常config/wrapperから配信します。Cronの0件化と後続の1件化をそれぞれread-backするまで次へ進みません。
+1. **Staging owner / Cloudflare Account admin:** 既存Worker/D1、ID、origin、binding、route、Cron状態をread-onlyで確認し、匿名化して記録します。現在確認済みの資源を再作成しません。`wrangler.admin.staging.jsonc`を実際のread-back値と比較し、不一致ならstopします。
+2. **Google Cloud admin:** 既存専用OAuth clientのorigin/callback、test-user一覧をread-backします。既存clientが無い場合に限り、Google adminの個別承認後に新規作成します。運営者と異なるsynthetic applicant/memberとproject reviewerをそれぞれ用意し、メール/secretはGitHubに記録せずfixture keyだけを内部台帳へ対応付けます。
+3. **D1 operator:** 既存staging D1ではmigration一覧をread-only確認するだけです。現在は0134を含むcandidate migration一覧にpendingなしと確認済みです。既存identity/試験データがあるためbootstrap SQL、再seed、clear、apply、restoreをしません。global operatorの画面/API確認をsynthetic applicant/reviewerの結果と混同しません。
+4. **Cloudflare staging operator + release owner:** 実stagingで旧Worker互換性を検証する前に、既存Workerを置き換えるstaging-only実行承認、対象SHA、backup/復旧・停止手順を確認します。approvalがない間はcompat configのverify/build/dry-runまでにし、Worker、Cron、D1に変更を加えません。実施が承認された場合もCron状態変更は別途個別承認が必要です。
 5. **Staging owner + QA/role owner:** applicant/accepted/member/manager/coordinator/suspended/withdrawn用の合成Google accountsを管理台帳で各fixture keyへ割当てます。`@atlasez.test` fixtureはローカル専用なので実Google loginに流用しません。応募者と受入memberはUI/APIから作り、権限fixtureはglobal operatorでstaging API経由に作成します。直接SQL seedする場合は対象role・必要最小行・cleanupを別途レビューし、全API権限は付与しません。
-6. **Release owner:** staging Worker deployとSTG-01 OAuth smokeを開始します。Resend/DiscordはOPSD-08を含む承認・test sink/guildのread-backが完了するまで無効のままとし、STG-02〜09はそれぞれ表の事前条件を満たしてから開始します。
+6. **Release owner:** 現Workerのprovenanceと、候補SHAをstagingへ配信する個別承認が揃ってからSTG-01 OAuth smokeを開始します。現時点のWorker build-infoは#549 HEADより古く`ref=unknown`で、distinct synthetic identitiesもないため、まだ開始しません。Resend/Discordはsink/guild・承認が揃うまで無効のままとし、STG-02〜09は各表の前提条件を満たしてから開始します。
 
-したがって、現時点ではSTG-01から開始できません。最初に必要なのはCloudflare Account adminが隔離Worker/D1を作成し、Staging ownerが匿名化したresource metadataを揃えることです。Google/Resend/Discordの担当者はそのstaging hostnameが確定した後に専用client/sink/guildを紐付けます。
+したがって、現時点ではSTG-01から開始できません。Worker/D1作成は不要で、再作成や初期化をしてはいけません。次に必要なのはGoogle Cloud adminによる既存OAuth設定のread-backと、別identityの合成applicant/member・project reviewerの準備、およびrelease ownerによる対象staging build配信の個別承認です。これらが完了するまで実OAuth・staging write・deployは行いません。
 
 | STG                 | 開始前に必要なもの                                                    | 合格証拠                                                                                                     |
 | ------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
