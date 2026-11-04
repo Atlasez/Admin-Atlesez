@@ -160,6 +160,11 @@ export async function dispatchApplicationEmails(
         OR (status='sending' AND first_attempt_at>?
             AND COALESCE(claimed_at,updated_at)<=?)
       )
+      AND EXISTS (
+        SELECT 1 FROM atlasez_member_applications a
+         WHERE a.id=atlasez_application_email_deliveries.application_id
+           AND a.intake_reconciliation_required=0
+      )
       ORDER BY CASE WHEN status='sending' THEN COALESCE(claimed_at,updated_at) ELSE next_attempt_at END ASC,
                created_at ASC LIMIT ?`,
   )

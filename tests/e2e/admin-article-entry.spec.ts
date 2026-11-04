@@ -645,6 +645,14 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-list]")).toContainText(
       "更新前も表示される記事",
     );
+    // The initial document request renders before the public catalog lookup
+    // finishes. Wait for that first load to settle before simulating a later
+    // visibility refresh; otherwise the test can dispatch while `load()` is
+    // intentionally coalescing the in-flight initial request.
+    await expect(page.locator("[data-catalog-summary]")).toHaveAttribute(
+      "data-state",
+      /^(ready|error)$/,
+    );
     await page.evaluate(() => {
       Object.defineProperty(document, "visibilityState", {
         configurable: true,
