@@ -12607,7 +12607,7 @@ async function updateApplication(
       return json({ error: "応募の状態が先に更新されています。再読み込みしてください。", code: "STALE_STATE" }, 409);
     if (Number(workflowEvent?.meta?.changes ?? 0) !== 1)
       throw new Error("Application transition event was not recorded with its state update.");
-    await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, application.name || application.email, `応募の状態を変更：${application.name || application.email}`, { entityType: "application", fromState: application.status, toState: status, projectSlug: application.project_slug });
+    await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, "応募", "応募の状態を変更", { entityType: "application", fromState: application.status, toState: status, projectSlug: application.project_slug });
     return json({ ok: true, status });
   }
 
@@ -12739,7 +12739,7 @@ async function updateApplication(
     );
   }
 
-  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, application.name || application.email, `応募の状態を変更：${application.name || application.email}`, { entityType: "application", fromState: application.status, toState: "accepted", projectSlug: application.project_slug });
+  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, "応募", "応募の状態を変更", { entityType: "application", fromState: application.status, toState: "accepted", projectSlug: application.project_slug });
 
   const discord = await provisionAcceptedApplication(env, id);
   let acceptanceEmailQueued = false;
