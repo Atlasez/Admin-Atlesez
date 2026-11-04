@@ -653,6 +653,10 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       "data-state",
       /^(ready|error)$/,
     );
+    await expect(page.locator("[data-admin-load-surface]")).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
     await page.evaluate(() => {
       Object.defineProperty(document, "visibilityState", {
         configurable: true,
