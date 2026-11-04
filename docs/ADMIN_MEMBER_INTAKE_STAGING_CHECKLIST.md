@@ -177,7 +177,8 @@ before/afterの行数・状態 / PIIを除いた画像またはログ / cleanup�
 
 ## 現在の準備状況と承認欄
 
-- 専用staging Worker/D1/OAuth client/Resend sink/Discord test guild: **未確認・BLOCKED**。
+- 専用Worker `atlasez-admin-staging` とD1 `atlasez-admin-staging-reports` は、2026-11-04のread-only read-backで存在と本番資源からの分離を確認済みです。既存の運営者identityと試験データは保持し、初期化・restore・書込みを行いません。Worker VersionのSourceはUnknownで、今回の候補SHAが配信済みとは確認できていません。
+- Google OAuth clientの登録内容とtest-user一覧は未確認で、運営者とは異なるsynthetic applicant/member・project reviewer identityは未準備です。Resend test sinkとDiscord test guildも未確認で、両providerは無効のままです。
 - 実Google OAuth callback、実メール到達、Discord実role grant/revoke、role別Chrome受入: **未実施**。
 - SQLite/Worker/Mock providerを使う自動試験: 該当するPRのexact-head CIとテスト報告で確認する。これらは実サービス到達の代替ではない。
 - OPSD-01〜09: **未承認**。候補・推奨は運営決定ではない。
