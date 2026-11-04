@@ -1299,10 +1299,13 @@ test("新規記事には概念IDを初期値として設定する", async ({ pag
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
+  const slug = page.locator('[name="slug"]');
+  const draftSlug = await slug.inputValue();
+  expect(draftSlug).toMatch(/^new-article-[a-z0-9-]+$/);
   await expect(page.locator('[name="conceptId"]')).toHaveValue(
-    "math.overview.new-article",
+    `math.overview.${draftSlug}`,
   );
-  await page.locator('[name="slug"]').fill("new-definition");
+  await slug.fill("new-definition");
   await expect(page.locator('[name="conceptId"]')).toHaveValue(
     "math.overview.new-definition",
   );
@@ -1530,6 +1533,55 @@ test("公開予約済みの日時を編集画面へ表示する", async ({ page 
   await expect(
     page.getByRole("button", { name: "公開予約を変更" }),
   ).toBeVisible();
+});
+
+test("自動保存中に公開予約ダイアログを開いても入力中の日時を保持する", async ({
+  page,
+}) => {
+  const approvedDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    published_at: null,
+    scheduled_publish_at: null,
+    publication_pr_url: null,
+  };
+  await mockAdminApi(page, undefined, approvedDocument);
+  let firstPatchStarted!: () => void;
+  const firstPatchStartedPromise = new Promise<void>((resolve) => {
+    firstPatchStarted = resolve;
+  });
+  let releaseFirstPatch!: () => void;
+  const firstPatchGate = new Promise<void>((resolve) => {
+    releaseFirstPatch = resolve;
+  });
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    firstPatchStarted();
+    await firstPatchGate;
+    await route.fulfill({
+      json: { ok: true, updatedAt: "2026-11-04T00:00:00.000Z" },
+    });
+  });
+
+  await page.goto("./admin/editor/?document=doc-1");
+  const scheduleButton = page.getByRole("button", { name: "公開予約" });
+  await expect(scheduleButton).toBeVisible();
+  const body = page.locator(
+    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
+  );
+  await body.fill("$$x$$");
+  await firstPatchStartedPromise;
+  await scheduleButton.click();
+  const scheduleDialog = page.locator("[data-schedule-dialog]");
+  await expect(scheduleDialog).toBeVisible();
+  const scheduleAt = scheduleDialog.locator("[data-schedule-at]");
+  await scheduleAt.fill("2026-11-11T12:34");
+
+  releaseFirstPatch();
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力内容を自動保存しました",
+  );
+  await expect(scheduleAt).toHaveValue("2026-11-11T12:34");
 });
 
 test("公開済み記事の未反映変更は運営サイトから再公開できる", async ({
@@ -2227,6 +2279,88 @@ test("画像参照を含む未保存の変更を公開前に保存してからPR
   );
 });
 
+test("LaTeXの自動保存中に公開すると最新の数式を保存してから公開する", async ({
+  page,
+}) => {
+  const approvedDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    published_at: null,
+    publication_pr_url: null,
+  };
+  await mockAdminApi(page, undefined, approvedDocument);
+  const patches: Array<Record<string, unknown>> = [];
+  const events: string[] = [];
+  let firstPatchStarted!: () => void;
+  const firstPatchStartedPromise = new Promise<void>((resolve) => {
+    firstPatchStarted = resolve;
+  });
+  let releaseFirstPatch!: () => void;
+  const firstPatchGate = new Promise<void>((resolve) => {
+    releaseFirstPatch = resolve;
+  });
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    patches.push(route.request().postDataJSON() as Record<string, unknown>);
+    events.push(`PATCH:${patches.length}`);
+    if (patches.length === 1) {
+      firstPatchStarted();
+      await firstPatchGate;
+    }
+    await route.fulfill({
+      json: { ok: true, updatedAt: "2026-11-04T00:00:00.000Z" },
+    });
+  });
+  let publishFormState: { body: string; dirty: string | null } | null = null;
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/publish",
+    async (route) => {
+      publishFormState = await page.evaluate(() => ({
+        body:
+          document.querySelector<HTMLTextAreaElement>("[data-body]")?.value ??
+          "",
+        dirty:
+          document.querySelector<HTMLElement>("[data-editor-workspace]")
+            ?.dataset.unsavedChanges ?? null,
+      }));
+      events.push("publish");
+      await route.fulfill({ json: { ok: true, pending: true } });
+    },
+  );
+
+  await page.goto("./admin/editor/?document=doc-1");
+  await expect(
+    page.locator('[data-editor-workspace][data-editor-initialized="true"]'),
+  ).toBeVisible();
+  const body = page.locator(
+    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
+  );
+  const bodySource = page.locator("[data-body]");
+  await expect(bodySource).toHaveValue(documentItem.body);
+  await body.fill("$$x$$");
+  await expect(bodySource).toHaveValue("$$x$$");
+  await firstPatchStartedPromise;
+  expect(patches[0]?.body).toBe("$$x$$");
+  await body.fill("$$x + 1$$");
+  await expect(bodySource).toHaveValue("$$x + 1$$");
+  await expect(page.locator("[data-editor-workspace]")).toHaveAttribute(
+    "data-unsaved-changes",
+    "true",
+  );
+  await page.getByRole("button", { name: "公開する" }).click();
+  await page
+    .locator("[data-approval-dialog]")
+    .getByRole("button", { name: "はい（公開する）" })
+    .click();
+
+  releaseFirstPatch();
+  await expect.poll(() => patches.length).toBe(2);
+  await expect.poll(() => events.includes("publish")).toBe(true);
+  expect(events.indexOf("PATCH:2")).toBeLessThan(events.indexOf("publish"));
+  expect(patches[1]?.body).toBe("$$x + 1$$");
+  expect(publishFormState).toMatchObject({ body: "$$x + 1$$" });
+});
+
 test("E-14: 編集画面から戻ると編集・フィードバック一覧へ移動する", async ({
   page,
 }) => {
@@ -2253,40 +2387,148 @@ test("既存記事を一覧から開いても編集画面は先頭から表示�
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 });
 
-test("E-8: 自動保存設定を利用者のブラウザ単位で保持する", async ({ page }) => {
-  await mockAdminApi(page);
-  await page.goto("./admin/editor/?new=1");
-  const toggle = page.locator("[data-autosave-toggle]");
-
-  await expect(toggle).toBeChecked();
-  await toggle.uncheck();
-  await expect
-    .poll(() =>
-      page.evaluate(() => localStorage.getItem("atlasez-editor-autosave")),
-    )
-    .toBe("off");
-  await page.reload();
-  await expect(toggle).not.toBeChecked();
-});
-
-test("自動保存をオフにすると保留中の保存タイマーも実行しない", async ({
+test("E-8: 入力内容は自動保存され、手動保存UIを表示しない", async ({
   page,
 }) => {
   await mockAdminApi(page);
-  let documentPatchCount = 0;
-  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
-    if (route.request().method() === "PATCH") documentPatchCount += 1;
-    await route.fallback();
+  let documentCreateCount = 0;
+  let createdPayload: Record<string, unknown> | undefined;
+  await page.route("**/api/admin/editor/documents", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    documentCreateCount += 1;
+    createdPayload = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({ status: 201, json: { ok: true, id: "doc-new" } });
   });
+  let revisionLoads = 0;
+  await page.route(
+    "**/api/admin/editor/documents/doc-new/revisions",
+    async (route) => {
+      revisionLoads += 1;
+      await route.fulfill({ json: { revisions: [] } });
+    },
+  );
+  await page.goto("./admin/editor/?new=1");
+  await expect(page.locator("[data-autosave-toggle]")).toHaveCount(0);
+  await expect(page.locator("[data-save-document]")).toHaveCount(0);
+  const latexBody = "数式も入力時に保存されます。\n\n$$\n\\frac{a}{b}\n$$";
+  await page.locator("[data-body]").fill(latexBody);
+  await expect.poll(() => documentCreateCount).toBe(1);
+  expect(createdPayload).toMatchObject({
+    title: "",
+    summary: "",
+    status: "draft",
+    body: latexBody,
+  });
+  expect(createdPayload?.slug).toMatch(/^new-article-[a-z0-9-]+$/);
+  await expect(page).toHaveURL(/\?document=doc-new$/);
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力内容を自動保存しました",
+  );
+  await expect.poll(() => revisionLoads).toBe(1);
+});
+
+test("新規原稿の自動保存中に別の記事へ切り替えても入力先を混同しない", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  const payloads: Record<string, unknown>[] = [];
+  let firstPostStarted!: () => void;
+  const firstPostStartedPromise = new Promise<void>((resolve) => {
+    firstPostStarted = resolve;
+  });
+  let releaseFirstPost!: () => void;
+  const firstPostReleasePromise = new Promise<void>((resolve) => {
+    releaseFirstPost = resolve;
+  });
+  await page.route("**/api/admin/editor/documents", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    payloads.push(route.request().postDataJSON() as Record<string, unknown>);
+    if (payloads.length === 1) {
+      firstPostStarted();
+      await firstPostReleasePromise;
+      try {
+        await route.fulfill({
+          status: 201,
+          json: { ok: true, id: "doc-first" },
+        });
+      } catch {
+        // 別記事への切り替えで最初のリクエストが中断される場合がある。
+      }
+      return;
+    }
+    await route.fulfill({ status: 201, json: { ok: true, id: "doc-second" } });
+  });
+
+  await page.goto("./admin/editor/?new=1");
+  await page.locator("[data-body]").fill("最初の新規原稿");
+  await firstPostStartedPromise;
+  await expect(page.locator('[data-document-id="doc-1"]')).toHaveCount(1);
+  await page
+    .locator('[data-document-id="doc-1"]')
+    .evaluate((button: HTMLButtonElement) => button.click());
+  await expect(page.locator('[name="documentId"]')).toHaveValue("doc-1");
+  releaseFirstPost();
+  await expect(page).not.toHaveURL(/\?document=doc-first$/);
+  await expect(page.locator('[name="title"]')).toHaveValue("群の定義");
+  await expect(page.locator("[data-body]")).toHaveValue(documentItem.body);
+  expect(payloads).toHaveLength(1);
+});
+
+test("既存記事を承認へ自動保存すると公開操作と版履歴を更新する", async ({
+  page,
+}) => {
+  let savedDocument: Record<string, unknown> = {
+    ...documentItem,
+    status: "draft",
+    published_at: null,
+    publication_pr_url: null,
+  };
+  await mockAdminApi(page, undefined, savedDocument);
+  let patchCount = 0;
+  let revisionLoads = 0;
+  await page.route(editorDocumentListRoute, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    await route.fulfill({
+      json: {
+        documents: [savedDocument],
+        mentionNames: [],
+        scope: {
+          email: "alice@example.com",
+          subjects: ["mathematics"],
+          isManager: true,
+        },
+      },
+    });
+  });
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (route.request().method() === "PATCH") {
+      patchCount += 1;
+      savedDocument = {
+        ...savedDocument,
+        ...(route.request().postDataJSON() as Record<string, unknown>),
+        updated_at: "2026-11-04T00:00:00.000Z",
+      };
+      await route.fulfill({
+        json: { ok: true, updatedAt: "2026-11-04T00:00:00.000Z" },
+      });
+    } else await route.fallback();
+  });
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/revisions",
+    async (route) => {
+      revisionLoads += 1;
+      await route.fulfill({ json: { revisions: [] } });
+    },
+  );
+
   await page.goto("./admin/editor/?document=doc-1");
-  const body = page.locator("[data-body]");
-  const bodyEditor = page.locator(".body-codemirror .cm-content").first();
-  if (await bodyEditor.count())
-    await bodyEditor.fill(`${documentItem.body}\n\nタイマー停止の確認`);
-  else await body.fill(`${documentItem.body}\n\nタイマー停止の確認`);
-  await page.locator("[data-autosave-toggle]").uncheck();
-  await page.waitForTimeout(2_300);
-  expect(documentPatchCount).toBe(0);
+  await expect.poll(() => revisionLoads).toBe(1);
+  await page.locator("details.metadata > summary").click();
+  await page.locator('[name="status"]').selectOption("approved");
+  await expect.poll(() => patchCount).toBe(1);
+  await expect(page.locator("[data-publish-document]")).toBeVisible();
+  await expect(page.locator("[data-schedule-document]")).toBeVisible();
+  await expect.poll(() => revisionLoads).toBe(2);
 });
 
 test("公開済み記事の本文は更新案を作成するまでロックする", async ({ page }) => {
@@ -2406,9 +2648,6 @@ test("更新案の保存成功と現行版への切り替えを独立して扱�
     body: `${canonical.body}\n\n更新案の本文です。`,
   };
   await mockAdminApi(page, undefined, canonical);
-  await page.addInitScript(() =>
-    localStorage.setItem("atlasez-editor-autosave", "off"),
-  );
   let proposalCreated = false;
   await page.route(/\/api\/admin\/editor\/documents\/doc-1$/, async (route) => {
     await route.fulfill({
@@ -2484,21 +2723,17 @@ test("更新案の保存成功と現行版への切り替えを独立して扱�
   if (await bodyEditor.count())
     await bodyEditor.fill(`${proposal.body}\n\n保存確認`);
   else await page.locator("[data-body]").fill(`${proposal.body}\n\n保存確認`);
-  await page.locator("[data-save-document]").click();
   await expect(page.locator("[data-save-message]")).toContainText(
-    "保存しました",
+    "入力内容を自動保存しました",
   );
   await expect(page.locator("[data-open-current-version]")).toBeVisible();
-  await page
-    .locator("[data-progress-dialog]")
-    .evaluate((dialog) => (dialog as HTMLDialogElement).close());
   await page.locator("[data-open-current-version]").click();
   await expect(page.locator("[data-document-version-label]")).toContainText(
     "更新案あり",
   );
 });
 
-test("保存中の連打は同じ原稿を二重保存しない", async ({ page }) => {
+test("連続入力中の自動保存は同じ原稿を重複更新しない", async ({ page }) => {
   await mockAdminApi(page);
   let patchCount = 0;
   await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
@@ -2511,11 +2746,7 @@ test("保存中の連打は同じ原稿を二重保存しない", async ({ page 
 
   await page.locator("details.metadata > summary").click();
   await page.locator('[name="title"]').fill("保存連打のテスト");
-  await Promise.all([
-    page.locator("[data-document-form]").dispatchEvent("submit"),
-    page.locator("[data-document-form]").dispatchEvent("submit"),
-  ]);
-  await expect(page.locator("[data-progress-dialog]")).toBeVisible();
+  await expect.poll(() => patchCount).toBe(1);
   expect(patchCount).toBe(1);
 });
 
@@ -3010,12 +3241,9 @@ test("CK-1: 自分の確認済み反応を再クリックして取り消せる",
   await expect(action.locator(".comment-action-count")).toHaveText("0");
 });
 
-test("CK-4: autosave OFFの未保存本文をコメント状態変更で保存・破棄しない", async ({
+test("CK-4: 自動保存した本文をコメント状態変更後も保持する", async ({
   page,
 }) => {
-  await page.addInitScript(() =>
-    localStorage.setItem("atlasez-editor-autosave", "off"),
-  );
   await mockAdminApi(page);
   let documentPatchCount = 0;
   page.on("request", (request) => {
@@ -3038,12 +3266,12 @@ test("CK-4: autosave OFFの未保存本文をコメント状態変更で保存�
     .click();
 
   await expect(body).toHaveValue(unsavedBody);
-  expect(documentPatchCount).toBe(0);
+  await expect.poll(() => documentPatchCount).toBe(1);
   const prevented = await page.evaluate(() => {
     const event = new Event("beforeunload", { cancelable: true });
     return !window.dispatchEvent(event);
   });
-  expect(prevented).toBe(true);
+  expect(prevented).toBe(false);
 });
 
 test("CK-3: 新規コメントは確認済み0件の対応待ちで表示する", async ({
@@ -3220,6 +3448,7 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
 }) => {
   const documentId = "22222222-2222-4222-8222-222222222222";
   const assetId = "33333333-3333-4333-8333-333333333333";
+  const secondAssetId = "66666666-6666-4666-8666-666666666666";
   const png = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
     "base64",
@@ -3284,14 +3513,25 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
             createdAt: "2026-08-21T00:00:00.000Z",
             marker: `asset://${assetId}`,
           },
+          {
+            id: secondAssetId,
+            filename: "second-diagram.png",
+            mediaType: "image/png",
+            bytes: png.byteLength,
+            alt: "別の図",
+            latexName: "second-diagram",
+            createdAt: "2026-08-21T00:00:00.000Z",
+            marker: `asset://${secondAssetId}`,
+          },
         ];
         await route.fulfill({ status: 201, json: { asset: assets[0] } });
       } else await route.fulfill({ json: { assets } });
       return;
     }
-    if (url.pathname === `/api/admin/editor/assets/${assetId}`) {
+    if (url.pathname.startsWith("/api/admin/editor/assets/")) {
+      const deletingAssetId = url.pathname.split("/").at(-1);
       if (request.method() === "DELETE") {
-        if (savedDocument?.body.includes(`asset://${assetId}`)) {
+        if (savedDocument?.body.includes(`asset://${deletingAssetId}`)) {
           await route.fulfill({
             status: 409,
             json: {
@@ -3300,7 +3540,7 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
             },
           });
         } else {
-          assets = [];
+          assets = assets.filter((asset) => asset.id !== deletingAssetId);
           deleteSucceeded = true;
           await route.fulfill({ json: { ok: true } });
         }
@@ -3343,30 +3583,40 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
     mimeType: "image/png",
     buffer: png,
   });
-  await expect(page.locator(".media-item-name b")).toHaveText("diagram.png");
+  await expect(page.locator(".media-item-name b").first()).toHaveText(
+    "diagram.png",
+  );
   const previewImage = page
     .locator(`[data-editorial-asset="${assetId}"]`)
     .last();
   await expect(previewImage).toHaveAttribute("src", /^blob:/);
 
-  await page.locator("[data-save-document]").click();
-  await page
-    .locator("[data-progress-dialog]")
-    .getByRole("button", { name: "編集を続ける" })
-    .click();
-  await page.locator("[data-body]").fill("## 画像\n\n画像参照を削除しました。");
-  await page.locator("[data-save-document]").click();
-  await page
-    .locator("[data-progress-dialog]")
-    .getByRole("button", { name: "編集を続ける" })
-    .click();
-
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "削除", exact: true }).click();
-  await expect(page.locator("[data-media-status]")).toHaveText(
-    "素材はまだありません",
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力内容を自動保存しました",
   );
-  await expect(page.locator(".media-item")).toHaveCount(0);
+  await page
+    .locator("[data-body]")
+    .fill(
+      `## 画像\n\n![図](asset://${assetId})\n![別の図](asset://${secondAssetId})`,
+    );
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力内容を自動保存しました",
+  );
+  await page
+    .locator("[data-body]")
+    .fill(
+      `## 画像\n\n![別の図](asset://${secondAssetId})\n参照を削除しました。`,
+    );
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力内容を自動保存しました",
+  );
+
+  const deleteFirstAsset = page.locator(`[data-delete-asset="${assetId}"]`);
+  await expect(deleteFirstAsset).toBeEnabled();
+  page.once("dialog", (dialog) => dialog.accept());
+  await deleteFirstAsset.click();
+  await expect(page.locator("[data-media-status]")).toHaveText("1件の素材");
+  await expect(page.locator(".media-item")).toHaveCount(1);
   expect(deleteSucceeded).toBe(true);
 });
 
