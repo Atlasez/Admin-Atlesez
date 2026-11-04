@@ -16388,14 +16388,20 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
       Number(application.applicant_notification_failed ?? 0) === 1,
     discordConnected: Boolean(application.oauth_connected_at || application.discord_user_id),
     intakeVerificationStatus: (() => {
+      const hasRecipientSnapshot =
+        application.operator_notification_recipients_json !== null;
       const expectedRecipients = parseApplicationOperatorRecipients(
         application.operator_notification_recipients_json,
       );
       const actualRecipients = parseApplicationOperatorRecipients(
         application.actual_operator_recipients_json,
       ) ?? [];
-      const operatorQueueMatches = expectedRecipients === null ||
-        (Number(application.operator_email_count ?? 0) === expectedRecipients.length &&
+      // NULL is the legacy format without an intake-time recipient snapshot.
+      // A present but invalid snapshot is corrupted state, so fail closed and
+      // surface it for operator follow-up instead of treating it as legacy.
+      const operatorQueueMatches = !hasRecipientSnapshot ||
+        (expectedRecipients !== null &&
+          Number(application.operator_email_count ?? 0) === expectedRecipients.length &&
           JSON.stringify([...actualRecipients].sort()) ===
             JSON.stringify([...expectedRecipients].sort()));
       const knownMissing =
@@ -16417,12 +16423,15 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
         (Number(application.response_task_count ?? 0) !== 1 ||
           Number(application.confirmation_email_count ?? 0) !== 1 ||
           (() => {
+            const hasRecipientSnapshot =
+              application.operator_notification_recipients_json !== null;
             const expected = parseApplicationOperatorRecipients(
               application.operator_notification_recipients_json,
             );
             const actual = parseApplicationOperatorRecipients(
               application.actual_operator_recipients_json,
             ) ?? [];
+            if (hasRecipientSnapshot && expected === null) return true;
             return expected !== null &&
               (Number(application.operator_email_count ?? 0) !== expected.length ||
                 JSON.stringify([...actual].sort()) !==

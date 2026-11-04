@@ -1925,6 +1925,58 @@ it("運営通知先の設定変更では過去応募を誤検知せず、保存q
   });
 });
 
+it("破損した応募時通知先snapshotと欠落queueをlegacy扱いせず要対応として返す", async () => {
+  const { db, request } = environment();
+  const email = "corrupt-recipient-snapshot@atlasez.test";
+  const profile = {
+    familyName: "通知先",
+    givenName: "snapshot破損",
+    familyNameKana: "つうちさき",
+    givenNameKana: "はそん",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+  await request("/api/application-profile", email, profile);
+  const submitted = await request("/api/apply", email, {
+    projectSlug: "thinking-cafe",
+    interests: "対話",
+    message: "通知先snapshotの整合性を検証",
+    referralSource: "隔離テスト",
+    interviewAvailability: "平日18時 Asia/Tokyo",
+    projectAnswers: { theme: "snapshot integrity" },
+  });
+  expect(submitted.status).toBe(201);
+  const applicationId = db
+    .prepare(
+      "SELECT id FROM atlasez_member_applications WHERE lower(email)=lower(?) AND project_slug='thinking-cafe'",
+    )
+    .get(email) as { id: string };
+  db.prepare(
+    "UPDATE atlasez_member_applications SET operator_notification_recipients_json='not-json' WHERE id=?",
+  ).run(applicationId.id);
+  db.prepare(
+    "DELETE FROM atlasez_application_email_deliveries WHERE application_id=? AND kind='operator_notification'",
+  ).run(applicationId.id);
+
+  const status = await request("/api/applicant/me", email);
+  expect(status.status).toBe(200);
+  expect(await status.json()).toMatchObject({
+    applications: [
+      expect.objectContaining({
+        intakeVerificationStatus: "attention_required",
+        intakeNeedsOperatorAttention: true,
+      }),
+    ],
+  });
+});
+
 it("applicant status reports a permanently failed applicant notification", async () => {
   const { db, request } = environment();
   const email = "failed-notification-status@atlasez.test";
