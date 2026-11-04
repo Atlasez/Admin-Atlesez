@@ -25415,13 +25415,43 @@ export default {
       return await handleAdminRequest(request, env, ctx);
     } catch (error) {
       const requestId = crypto.randomUUID();
+      const pathname = new URL(request.url).pathname;
+      const routeClass = pathname.startsWith("/api/admin/")
+        ? "admin_api"
+        : pathname.startsWith("/api/applicant/")
+          ? "applicant_api"
+          : pathname.startsWith("/api/")
+            ? "api"
+            : pathname.startsWith("/admin/")
+              ? "admin_page"
+              : pathname.startsWith("/applicant/")
+                ? "applicant_page"
+                : pathname.startsWith("/onboarding/")
+                  ? "onboarding_page"
+                  : "other";
+      const errorClass =
+        error instanceof DOMException
+          ? "dom_exception"
+          : error instanceof TypeError
+            ? "type_error"
+            : error instanceof RangeError
+              ? "range_error"
+              : error instanceof SyntaxError
+                ? "syntax_error"
+                : error instanceof URIError
+                  ? "uri_error"
+                  : error instanceof Error
+                    ? "error"
+                    : error === null
+                      ? "null"
+                      : typeof error;
       console.error("admin worker request failed", {
         requestId,
         method: request.method,
-        pathname: new URL(request.url).pathname,
-        error,
+        routeClass,
+        errorClass,
       });
-      if (new URL(request.url).pathname.startsWith("/api/"))
+      if (pathname.startsWith("/api/"))
         return json(
           {
             error:
