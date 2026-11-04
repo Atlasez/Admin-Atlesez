@@ -8337,6 +8337,23 @@ async function queueApplicationAcceptanceEmail(
     .run();
 }
 
+async function interviewNotificationDeliveryId(
+  applicationId: string,
+  subject: string,
+  textBody: string,
+  htmlBody: string,
+) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(
+      JSON.stringify([applicationId, subject, textBody, htmlBody]),
+    ),
+  );
+  return `interview-${[...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
 async function queueApplicationInterviewEmail(
   env: Env,
   application: {
@@ -8346,6 +8363,7 @@ async function queueApplicationInterviewEmail(
     formLanguage: string;
   },
   interview: {
+    id: string;
     scheduledAt: string;
     timezone: string;
     mode: "in_person" | "online";
@@ -8353,6 +8371,7 @@ async function queueApplicationInterviewEmail(
     location: string;
   },
   sentAt: string,
+  idempotency: { key: string; allowExplicitResend: boolean },
 ) {
   const projectLabel =
     APPLICATION_FORM_LABELS[application.projectSlug] ?? application.projectSlug;
@@ -8394,17 +8413,38 @@ async function queueApplicationInterviewEmail(
   const htmlBody = english
     ? `<h2>Interview details</h2><p>Your interview for ${emailSafe(projectLabel)} is scheduled for ${emailSafe(date)} (${emailSafe(interview.timezone)}).</p><p><b>Format:</b> ${emailSafe(mode)}${access ? `<br><b>${interview.mode === "online" ? "Zoom link" : "Location"}:</b> ${interview.mode === "online" ? `<a href="${emailSafe(access)}">${emailSafe(access)}</a>` : emailSafe(access)}` : ""}</p>`
     : `<h2>面談日時のお知らせ</h2><p>${emailSafe(projectLabel)}の面談日時が設定されました。</p><p><b>日時：</b>${emailSafe(date)}（${emailSafe(interview.timezone)}）<br><b>形式：</b>${emailSafe(mode)}${access ? `<br><b>${interview.mode === "online" ? "Zoomリンク" : "場所"}：</b>${interview.mode === "online" ? `<a href="${emailSafe(access)}">${emailSafe(access)}</a>` : emailSafe(access)}` : ""}</p>`;
-  await env.REPORTS.prepare(
+  const deliveryId =
+    idempotency.key ||
+    (await interviewNotificationDeliveryId(
+      application.id,
+      subject,
+      textBody,
+      htmlBody,
+    ));
+  const statement = env.REPORTS.prepare(
     `INSERT INTO atlasez_application_email_deliveries
      (id,application_id,recipient_email,kind,subject,text_body,html_body,status,attempt_count,next_attempt_at,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,'pending',0,?,?,?)
+     SELECT ?,?,?,?,?,?,?,'pending',0,?,?,?
+     WHERE EXISTS (
+       SELECT 1 FROM atlasez_application_interviews
+        WHERE id=? AND application_id=? AND status='scheduled'
+          AND scheduled_at=? AND timezone=? AND mode=? AND zoom_url=? AND location=?
+     )
      ON CONFLICT(application_id,recipient_email,kind) DO UPDATE SET
-       subject=excluded.subject,text_body=excluded.text_body,html_body=excluded.html_body,
+       id=excluded.id,subject=excluded.subject,text_body=excluded.text_body,html_body=excluded.html_body,
        status='pending',attempt_count=0,next_attempt_at=excluded.next_attempt_at,
-       claim_token=NULL,claimed_at=NULL,sent_at=NULL,last_error='',updated_at=excluded.updated_at`,
+       first_attempt_at=NULL,claim_token=NULL,claimed_at=NULL,sent_at=NULL,last_error='',updated_at=excluded.updated_at
+     WHERE atlasez_application_email_deliveries.status!='sending'
+       AND atlasez_application_email_deliveries.id!=excluded.id
+       AND (
+         atlasez_application_email_deliveries.subject IS NOT excluded.subject
+         OR atlasez_application_email_deliveries.text_body IS NOT excluded.text_body
+         OR atlasez_application_email_deliveries.html_body IS NOT excluded.html_body
+         OR ?=1
+       )`,
   )
     .bind(
-      crypto.randomUUID(),
+      deliveryId,
       application.id,
       application.email,
       "applicant_interview_invitation",
@@ -8414,8 +8454,16 @@ async function queueApplicationInterviewEmail(
       sentAt,
       sentAt,
       sentAt,
-    )
-    .run();
+      interview.id,
+      application.id,
+      interview.scheduledAt,
+      interview.timezone,
+      interview.mode,
+      interview.zoomUrl,
+      interview.location,
+      idempotency.allowExplicitResend ? 1 : 0,
+    );
+  return { statement, id: deliveryId, subject, textBody, htmlBody };
 }
 
 async function queueApplicationDiscordEmail(
@@ -13632,9 +13680,24 @@ async function notifyApplicationInterview(
   ).bind(id).first<ApplicationInterviewRow>();
   if (!interview || interview.status !== "scheduled")
     return json({ error: "通知できる面談予定がありません。" }, 409);
+  let payload: Record<string, unknown> = {};
+  if (request.headers.get("content-type")?.includes("application/json")) {
+    const parsed = (await request.json().catch(() => null)) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return json({ error: "通知内容を確認してください。" }, 400);
+    payload = parsed as Record<string, unknown>;
+  }
+  const requestedKey = text(payload.idempotencyKey, 80).trim();
+  if (
+    requestedKey &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      requestedKey,
+    )
+  )
+    return json({ error: "通知操作キーを確認してください。" }, 400);
   const now = new Date().toISOString();
   try {
-    await queueApplicationInterviewEmail(
+    const delivery = await queueApplicationInterviewEmail(
       env,
       {
         id: access.application.id,
@@ -13643,6 +13706,7 @@ async function notifyApplicationInterview(
         formLanguage: access.application.form_language,
       },
       {
+        id: interview.id,
         scheduledAt: interview.scheduled_at,
         timezone: interview.timezone,
         mode: interview.mode,
@@ -13650,21 +13714,127 @@ async function notifyApplicationInterview(
         location: interview.location,
       },
       now,
+      { key: requestedKey, allowExplicitResend: Boolean(requestedKey) },
     );
+    const [queueResult, interviewResult, historyResult] =
+      await env.REPORTS.batch([
+        delivery.statement,
+        env.REPORTS.prepare(
+          `UPDATE atlasez_application_interviews
+              SET notified_at=?,notification_count=notification_count+1,updated_by=?,updated_at=?
+            WHERE id=? AND application_id=? AND status='scheduled'
+              AND scheduled_at=? AND timezone=? AND mode=? AND zoom_url=? AND location=?
+              AND changes()=1`,
+        ).bind(
+          now,
+          access.access.scope.email,
+          now,
+          interview.id,
+          id,
+          interview.scheduled_at,
+          interview.timezone,
+          interview.mode,
+          interview.zoom_url,
+          interview.location,
+        ),
+        env.REPORTS.prepare(
+          `INSERT INTO atlasez_application_interview_history
+             (id,application_id,interview_id,review_id,event_type,before_json,after_json,actor_email,created_at)
+           SELECT ?,?,?,NULL,'notification_queued',?,?,?,? WHERE changes()=1`,
+        ).bind(
+          crypto.randomUUID(),
+          id,
+          interview.id,
+          JSON.stringify({ notifiedAt: interview.notified_at ?? null }),
+          JSON.stringify({
+            notifiedAt: now,
+            scheduledAt: interview.scheduled_at,
+          }),
+          access.access.scope.email,
+          now,
+        ),
+      ]);
+    const changes = (result: unknown) =>
+      Number(
+        (result as { meta?: { changes?: number } } | undefined)?.meta?.changes ??
+          0,
+      );
+    if (changes(queueResult) !== 1) {
+      const existing = await env.REPORTS.prepare(
+        `SELECT id,status,subject,text_body,html_body,sent_at
+           FROM atlasez_application_email_deliveries
+          WHERE application_id=? AND recipient_email=? AND kind='applicant_interview_invitation'`,
+      )
+        .bind(id, access.application.email)
+        .first<{
+          id: string;
+          status: string;
+          subject: string;
+          text_body: string;
+          html_body: string;
+          sent_at: string | null;
+        }>();
+      if (!existing)
+        return json(
+          {
+            error: "面談情報が更新されました。再読み込みしてから通知してください。",
+            code: "STALE_INTERVIEW",
+          },
+          409,
+        );
+      const sameContent =
+        existing.subject === delivery.subject &&
+        existing.text_body === delivery.textBody &&
+        existing.html_body === delivery.htmlBody;
+      if (existing.id === delivery.id && !sameContent)
+        return json(
+          {
+            error: "同じ操作キーが別の面談内容に使われています。再読み込みして通知してください。",
+            code: "IDEMPOTENCY_KEY_REUSED",
+          },
+          409,
+        );
+      if (!sameContent && existing.status === "sending")
+        return json(
+          {
+            error: "前の面談通知を送信中です。完了後に最新の面談情報を通知してください。",
+            code: "INTERVIEW_NOTIFICATION_IN_FLIGHT",
+          },
+          409,
+        );
+      if (!sameContent)
+        return json(
+          {
+            error: "面談情報が更新されました。再読み込みしてから通知してください。",
+            code: "STALE_INTERVIEW",
+          },
+          409,
+        );
+      return json({
+        ok: true,
+        notificationQueued: false,
+        alreadyQueued: true,
+        deliveryStatus: existing.status,
+        sentAt: existing.sent_at,
+      });
+    }
+    if (changes(interviewResult) !== 1 || changes(historyResult) !== 1) {
+      console.error("application interview notification metadata incomplete");
+      return json(
+        {
+          error: "通知キューには保存されましたが、面談履歴の確定を確認できません。状態を再読み込みしてください。",
+          code: "INTERVIEW_NOTIFICATION_COMMIT_UNCERTAIN",
+          notificationQueued: true,
+        },
+        503,
+      );
+    }
+    ctx?.waitUntil(dispatchApplicationEmails(env));
+    return json({ ok: true, notifiedAt: now, notificationQueued: true });
   } catch {
     console.error("application interview email queue failed");
     return json({ error: "面談通知を準備できませんでした。" }, 500);
   }
-  await env.REPORTS.prepare(
-    "UPDATE atlasez_application_interviews SET notified_at=?,notification_count=notification_count+1,updated_by=?,updated_at=? WHERE id=?",
-  ).bind(now, access.access.scope.email, now, interview.id).run();
-  await env.REPORTS.prepare(
-    "INSERT INTO atlasez_application_interview_history (id,application_id,interview_id,review_id,event_type,before_json,after_json,actor_email,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-  ).bind(
-    crypto.randomUUID(), id, interview.id, null, "notification_queued", "", JSON.stringify({ notifiedAt: now }), access.access.scope.email, now,
-  ).run();
-  ctx?.waitUntil(dispatchApplicationEmails(env));
-  return json({ ok: true, notifiedAt: now, notificationQueued: true });
 }
 
 async function saveApplicationInterviewReview(

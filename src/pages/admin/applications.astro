@@ -672,6 +672,7 @@ const projectLabel = selectedProject?.[1] ?? "";
     // Interview details stay only in this page's memory, never browser storage.
     const interviewDrafts = new Map<string, InterviewDraft>();
     const pendingInterviews = new Set<string>();
+    const pendingInterviewNotificationKeys = new Map<string, string>();
     const persistedInterview = (application:any):InterviewDraft => {
       const interview = interviewFor(application);
       return {date: formatDateTimeLocal(interview.scheduledAt), mode: interview.mode ?? 'online', zoomUrl: interview.zoomUrl ?? '', location: interview.location ?? ''};
@@ -687,6 +688,7 @@ const projectLabel = selectedProject?.[1] ?? "";
       if (!input) return;
       const id = input.dataset.interviewDate ?? input.dataset.interviewFormat ?? input.dataset.interviewZoom ?? input.dataset.interviewLocation;
       if (!id) return;
+      pendingInterviewNotificationKeys.delete(id);
       const find = (attribute:string) => list.querySelector<HTMLInputElement|HTMLSelectElement>(`[${attribute}="${CSS.escape(id)}"]`)?.value ?? '';
       const draft = {date:find('data-interview-date'),mode:find('data-interview-format'),zoomUrl:find('data-interview-zoom'),location:find('data-interview-location')};
       const application = applications.find(item => item.id === id);
@@ -744,9 +746,19 @@ const projectLabel = selectedProject?.[1] ?? "";
         if(submitted&&(!latestDraft||sameInterview(latestDraft,submitted)))interviewDrafts.delete(id);
         updateDraftNotice(id);
         if(action==='notify'){
-          const notifyResponse=await fetch(`/api/admin/applications/${encodeURIComponent(id)}/interview/notify?project=${encodeURIComponent(projectSlug)}`,{method:'POST',credentials:'same-origin'});
+          const idempotencyKey=pendingInterviewNotificationKeys.get(id)??crypto.randomUUID();
+          pendingInterviewNotificationKeys.set(id,idempotencyKey);
+          const notifyResponse=await fetch(`/api/admin/applications/${encodeURIComponent(id)}/interview/notify?project=${encodeURIComponent(projectSlug)}`,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({idempotencyKey})});
           const notifyData=await notifyResponse.json().catch(()=>({}));
           if(!notifyResponse.ok)throw Error(notifyData.error??'面談通知を準備できませんでした。');
+          pendingInterviewNotificationKeys.delete(id);
+          if(notifyData.notificationQueued===false){
+            const state=String(notifyData.deliveryStatus??'');
+            const message=state==='sent'?'同じ面談内容の通知は送信済みです。重複送信しませんでした。':state==='failed'?'同じ面談内容の通知は送信失敗で終了しています。自動再送は行っていません。運営で確認してください。':state==='sending'?'同じ面談内容の通知を送信中です。重複送信しませんでした。':'同じ面談内容の通知はすでにキューにあります。重複登録しませんでした。';
+            setNotice(`面談情報を保存しました。${message}`,state==='failed');
+            await load();
+            return;
+          }
         }
         setNotice(action==='notify'?'面談情報を保存し、応募者へ通知しました。':'面談情報を保存しました。');
         await load();
