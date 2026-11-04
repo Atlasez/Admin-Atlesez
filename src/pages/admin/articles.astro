@@ -1340,13 +1340,15 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const article = row.kind === "editorial" ? row.article : null;
         const title = rowTitle(row);
         const editedAt = formatDate(rowUpdatedAt(row));
-        const publicState = article
-          ? article.published_at
-            ? '<span class="badge public-live">公開中</span>'
-            : article.scheduled_publish_at
-              ? `<span class="badge public-scheduled">公開予約・${esc(formatSchedule(article.scheduled_publish_at))}</span>`
-              : '<span class="badge public-draft">未公開</span>'
-          : '<span class="badge public-live">公開中</span>';
+        const publicState = row.publicArticle
+          ? '<span class="badge public-live">公開中</span>'
+          : article
+            ? article.published_at
+              ? '<span class="badge public-live">公開中</span>'
+              : article.scheduled_publish_at
+                ? `<span class="badge public-scheduled">公開予約・${esc(formatSchedule(article.scheduled_publish_at))}</span>`
+                : '<span class="badge public-draft">未公開</span>'
+            : '<span class="badge public-live">公開中</span>';
         const linkageState = linkageLabels[rowLinkageState(row)] ?? linkageLabels.unknown;
         const editorialState = article
           ? `<span class="article-status-group"><span class="article-status-group__label">編集</span><span class="badge ${article.status}">${labels[article.status]}</span></span>`

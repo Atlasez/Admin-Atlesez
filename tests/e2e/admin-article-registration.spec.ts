@@ -29,7 +29,19 @@ test("一括登録は編集権限内の非テスト未登録記事だけを送�
     if (url.pathname === "/api/admin/editor/documents") {
       await route.fulfill({
         json: {
-          documents: [],
+          documents: [
+            {
+              id: "managed-document",
+              source_article_id: "article-managed",
+              subject: "mathematics",
+              category: "group-theory",
+              slug: "managed-article",
+              title: "公開記事と連携済み",
+              status: "draft",
+              updated_at: "2026-09-02T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
           pagination: { hasMore: false, nextCursor: null },
           scope: {
             email: "writer@example.com",
@@ -162,6 +174,15 @@ test("一括登録は編集権限内の非テスト未登録記事だけを送�
   await expect(page.locator("[data-catalog-summary]")).toContainText(
     "公開中の記事 8件",
   );
+  const adoptedArticle = page.locator(
+    '[data-list] article[data-document-id="managed-document"]',
+  );
+  await expect(
+    adoptedArticle.locator(".article-status-group").nth(0),
+  ).toContainText("下書き");
+  await expect(
+    adoptedArticle.locator(".article-status-group").nth(1),
+  ).toContainText("公開中");
   const conflictCard = page.locator(
     '[data-list] article[aria-label*="重複確認の記事"]',
   );
