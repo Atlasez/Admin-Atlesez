@@ -1405,6 +1405,43 @@ it("仮の新規利用者の基本情報保存・応募・二重応募防止・�
   });
   expect(appliedResult.emailQueueCount).toBeGreaterThan(0);
   expect(appliedResult).not.toHaveProperty("emailDelivered");
+  const applicationId = String(
+    db
+      .prepare("SELECT id FROM atlasez_member_applications WHERE email=?")
+      .get(email)?.id,
+  );
+  const responseTaskOutsiderUpdate = await request(
+    `/api/admin/operations/tasks/${encodeURIComponent(`application-response:${applicationId}`)}`,
+    "outsider@atlasez.test",
+    { status: "done" },
+    "https://admin.atlasez.test",
+    "PATCH",
+  );
+  expect(responseTaskOutsiderUpdate.status).toBe(403);
+  const responseTaskUpdate = await request(
+    `/api/admin/operations/tasks/${encodeURIComponent(`application-response:${applicationId}`)}`,
+    "global@atlasez.test",
+    { status: "doing" },
+    "https://admin.atlasez.test",
+    "PATCH",
+  );
+  expect(
+    responseTaskUpdate.status,
+    await responseTaskUpdate.clone().text(),
+  ).toBe(200);
+  expect(
+    db
+      .prepare("SELECT status FROM editorial_tasks WHERE id=?")
+      .get(`application-response:${applicationId}`),
+  ).toEqual({ status: "doing" });
+  const responseTaskCompletion = await request(
+    `/api/admin/operations/tasks/${encodeURIComponent(`application-response:${applicationId}`)}`,
+    "global@atlasez.test",
+    { status: "done" },
+    "https://admin.atlasez.test",
+    "PATCH",
+  );
+  expect(responseTaskCompletion.status).toBe(200);
   const duplicate = await request("/api/apply", email, application);
   expect(duplicate.status).toBe(409);
   expect(await duplicate.json()).toMatchObject({
@@ -2249,6 +2286,31 @@ it("補完と復旧記録がともに失敗してもCron照合が欠損を修復
         intake_reconciliation_required: false,
         intake_recovery_task_open: true,
       }),
+    ],
+  });
+  const recoveryTaskUpdate = await request(
+    `/api/admin/operations/tasks/${encodeURIComponent(`application-recovery:${row.id}`)}`,
+    "global@atlasez.test",
+    { status: "doing" },
+    "https://admin.atlasez.test",
+    "PATCH",
+  );
+  expect(
+    recoveryTaskUpdate.status,
+    await recoveryTaskUpdate.clone().text(),
+  ).toBe(200);
+  const recoveryTaskCompletion = await request(
+    `/api/admin/operations/tasks/${encodeURIComponent(`application-recovery:${row.id}`)}`,
+    "global@atlasez.test",
+    { status: "done" },
+    "https://admin.atlasez.test",
+    "PATCH",
+  );
+  expect(recoveryTaskCompletion.status).toBe(200);
+  const applicantStatus = await request("/api/applicant/me", email);
+  expect(await applicantStatus.json()).toMatchObject({
+    applications: [
+      expect.objectContaining({ intakeNeedsOperatorAttention: false }),
     ],
   });
   expect(

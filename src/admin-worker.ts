@@ -22382,6 +22382,11 @@ const memberScopedApiMethods = new Map<string, ReadonlySet<string>>([
   ["/api/admin/operations/availability-blocks", new Set(["POST"])],
   ["/api/admin/operations/availability-rules", new Set(["POST"])],
 ]);
+// Application intake creates deterministic, UUID-backed task IDs. Keep the
+// operation-task route narrowly compatible with those IDs while preserving
+// the handler's project membership and assignment checks.
+const operationTaskPath =
+  /^\/api\/admin\/operations\/tasks\/((?:[0-9a-f-]{36}|application-(?:response|recovery)(?::|%3a)[0-9a-f-]{36}))$/i;
 const memberScopedApiDynamicMethods: Array<{
   path: RegExp;
   methods: ReadonlySet<string>;
@@ -22395,7 +22400,7 @@ const memberScopedApiDynamicMethods: Array<{
   { path: /^\/api\/admin\/task-templates\/[0-9a-f-]{36}$/i, methods: new Set(["PATCH"]) },
   { path: /^\/api\/admin\/task-templates\/[0-9a-f-]{36}\/create$/i, methods: new Set(["POST"]) },
   {
-    path: /^\/api\/admin\/operations\/tasks\/[0-9a-f-]{36}$/i,
+    path: operationTaskPath,
     methods: new Set(["PATCH"]),
   },
   {
@@ -24974,11 +24979,9 @@ async function handleAdminRequest(
   );
   if (availabilityRuleMatch && request.method === "DELETE")
     return deleteAvailabilityRule(request, env, availabilityRuleMatch[1]);
-  const taskMatch = url.pathname.match(
-    /^\/api\/admin\/operations\/tasks\/([0-9a-f-]{36})$/i,
-  );
+  const taskMatch = url.pathname.match(operationTaskPath);
   if (taskMatch && request.method === "PATCH")
-    return updateTask(request, env, taskMatch[1]);
+    return updateTask(request, env, decodeURIComponent(taskMatch[1]));
   const availabilityMatch = url.pathname.match(
     /^\/api\/admin\/operations\/events\/([0-9a-f-]{36})\/availability$/i,
   );

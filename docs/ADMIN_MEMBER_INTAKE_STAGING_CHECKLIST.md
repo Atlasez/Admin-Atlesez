@@ -1,6 +1,6 @@
 # ADMIN新規メンバー受入：運営決定・staging実施チェックリスト
 
-作成日: 2026-11-03 JST  
+作成日: 2026-11-03 JST
 状態: **未実施／未承認**。このチェックリストは運営判断と隔離環境の準備票であり、募集開始・実ユーザーへの通知・本番変更を許可するものではない。
 
 ## 実施前の停止条件
@@ -88,7 +88,7 @@ STG-01〜09の開始前に、Cloudflare管理者はWorker名・route・D1 bindin
 | OPSD-08 Discord roleの停止・退会・復帰  | [ ] 休止/退会時に全roleを解除 [ ] Atlasez内scopeだけ停止しDiscord role維持 [ ] 対象project roleだけ解除 [ ] 状態ごとに異なる方針を表で決定。休止、project離脱、恒久退会、復帰、連携失敗時を分け、本人への説明、Bot失敗時の停止状態、手動確認者、再連携条件を記入。                          | role grant/revokeとサイト認可が一致するstaging結果を保存。本人同意と運営承認のない連携・削除をしない。未決定中はDiscord依存の受入を停止。 | 運営責任者、Discord管理者                | 状態: ____　決定日: ____　承認者role/署名: ____ |
 | OPSD-09 隔離staging・合成roleアカウント | [ ] 専用staging Worker/D1 [ ] provider別sandbox [ ] まずMockのみ。staging URL、Worker識別、D1 UUID、OAuth client識別、Resend環境、Discord test guild/bot、各synthetic account pseudonymとrole、fixture作成・削除担当を記入する。secret値・個人メールはここへ書かない。                      | 本番からの隔離を読み取りで確認し、各roleのUI/API matrix、test data初期化・cleanup、利用者の承認が完了。                                   | ADMIN maintainer、各role owner           | 状態: ____　決定日: ____　承認者role/署名: ____ |
 
-決定票の記録先（承認済み運営記録。個人情報をこのrepoへ保存しない）: ____  
+決定票の記録先（承認済み運営記録。個人情報をこのrepoへ保存しない）: ____
 根拠・関連Issue/PR: ____　公開文面/手順の更新担当: ____　次回見直し日: ____
 
 ## staging環境・合成アカウント台帳
@@ -183,8 +183,8 @@ before/afterの行数・状態 / PIIを除いた画像またはログ / cleanup�
 - SQLite/Worker/Mock providerを使う自動試験: 該当するPRのexact-head CIとテスト報告で確認する。これらは実サービス到達の代替ではない。
 - OPSD-01〜09: **未承認**。候補・推奨は運営決定ではない。
 
-運営責任者: ____　決定日: ____　承認対象環境: ____　承認対象commit: ____  
-セキュリティ/プライバシー確認role: ____　staging owner: ____　cleanup owner: ____  
+運営責任者: ____　決定日: ____　承認対象環境: ____　承認対象commit: ____
+セキュリティ/プライバシー確認role: ____　staging owner: ____　cleanup owner: ____
 限定受入への判断: [ ] NO-GO [ ] 別途承認後に再判定　根拠記録: ____
 
 このチェックリストへの署名だけで、本番配信、D1変更、実メール、Discord変更、実ユーザー招待、募集開始を許可しない。各行為は既存の明示承認・変更手順に従う。
