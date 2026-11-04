@@ -23583,16 +23583,10 @@ async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
   const canAccessAdmin = !isResponse(adminScope);
   const scope = canAccessAdmin ? adminScope : memberScope;
   const identity = scope.email;
-  const managerProjects = scope.isManager
-    ? await env.REPORTS.prepare(
-        "SELECT id FROM atlasez_projects ORDER BY id",
-      ).all<{ id: string }>()
-    : await env.REPORTS.prepare(
-        `SELECT project_id AS id FROM atlasez_project_memberships
-         WHERE email=? AND role='manager' ORDER BY project_id`,
-      )
-        .bind(identity)
-        .all<{ id: string }>();
+  // Keep navigation hints aligned with the same live lifecycle checks used by
+  // project APIs. A stale manager row must not make a paused/withdrawn project
+  // appear active in the portal after the same session loses that scope.
+  const managerProjects = await accessibleOperationProjects(env, scope);
   const token = cookieValue(request, ADMIN_SESSION_COOKIE);
   const googleSession = token
     ? await env.REPORTS.prepare(
@@ -23604,7 +23598,7 @@ async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
   return json({
     email: identity,
     isManager: scope.isManager,
-    managerProjects: (managerProjects.results ?? []).map((row) => row.id),
+    managerProjects: managerProjects.map((project) => project.id),
     canAccessAdmin,
     canAccessScopedAdminPages:
       canAccessAdmin &&

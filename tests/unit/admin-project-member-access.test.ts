@@ -836,3 +836,31 @@ it("Atlasだけの責任者にも対象自己紹介の承認導線とAPIを許�
     (await request("/api/admin/profile-change-requests", manager)).status,
   ).toBe(403);
 });
+
+it("auth-status hides paused manager projects while preserving another active membership", async () => {
+  const { db, member, request, now } = fixture();
+  const manager = "multi-project-manager@atlasez.test";
+  member(manager, "thinking-cafe", "manager");
+  member(manager, "secretariat", "manager");
+  db.prepare(
+    `INSERT INTO atlasez_project_member_lifecycle
+       (project_id,email,state,role_snapshot,last_request_id,updated_at)
+     VALUES ('thinking-cafe',?,'paused','manager','lifecycle-fixture',?)`,
+  ).run(manager, now);
+
+  const response = await request("/api/admin/auth-status", manager);
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(await response.json()).toMatchObject({
+    isManager: false,
+    canAccessAdmin: false,
+    managerProjects: ["secretariat"],
+  });
+  expect(
+    (await request("/api/admin/member-calendar?project=thinking-cafe", manager))
+      .status,
+  ).toBe(403);
+  expect(
+    (await request("/api/admin/member-calendar?project=secretariat", manager))
+      .status,
+  ).toBe(200);
+});
