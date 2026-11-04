@@ -1,8 +1,12 @@
 .DS_Store
 node_modules/
+/prototypes/admin-ui-review/node_modules
+/prototypes/xai/node_modules
 .env
 .env.*
 .dev.vars
+wrangler.admin.staging.jsonc
+wrangler.admin.staging.compat.jsonc
 *.log
 dist/
 /dist-macos/
