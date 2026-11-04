@@ -6,6 +6,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
   <section class="applicant-page" data-applicant-page>
     <h1>Atlasezスタートページ</h1>
     <p class="intro">基本情報の登録、複数プロジェクトへの応募、応募状況の確認をここから進められます。</p>
+    <p class="notice submission-confirmation" data-submission-confirmation aria-live="polite" hidden></p>
 
     <section class="start-card" aria-live="polite">
       <p class="start-status" data-start-status>状態を確認しています…</p>
@@ -84,6 +85,12 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
       : new Intl.DateTimeFormat("ja-JP", { dateStyle: "long", timeStyle: "short" }).format(date);
   };
   if (root) {
+    const submissionMode = new URLSearchParams(location.search).get("submission");
+    const submissionConfirmation = root.querySelector<HTMLElement>("[data-submission-confirmation]")!;
+    if (submissionMode === "already-received" || submissionMode === "check") {
+      submissionConfirmation.hidden = false;
+      submissionConfirmation.textContent = "応募状況を確認しています。";
+    }
     const setText = (selector: string, value: string) => {
       const target = root.querySelector<HTMLElement>(selector);
       if (target) target.textContent = value;
@@ -105,20 +112,45 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
         error?: string;
         stage?: string;
         basicProfileComplete?: boolean;
-        application?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean };
-        applications?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean }[];
+        application?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean; intakeNeedsOperatorAttention?: boolean; intakeVerificationStatus?: string };
+        applications?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean; intakeNeedsOperatorAttention?: boolean; intakeVerificationStatus?: string }[];
         discord?: { connected?: boolean; oauthConnected?: boolean };
       } }))
       .then(({ response, data }) => {
         if (!response.ok) throw new Error(data.error ?? "参加状況を読み込めませんでした。");
         const applications = data.applications?.length ? data.applications : data.application ? [data.application] : [];
+        const needsOperatorAttention = applications.some((item) => item.intakeNeedsOperatorAttention === true);
+        const legacyIntakeUnverified = applications.some((item) => item.intakeVerificationStatus === "legacy_unverified");
         const profileComplete = data.basicProfileComplete === true;
         const isMember = data.stage === "MEMBER";
+        if (submissionMode === "already-received") {
+          submissionConfirmation.textContent = needsOperatorAttention
+            ? "応募内容は保存されていますが、受付処理に運営の確認が必要です。重複送信せず、下の状態をご確認ください。"
+            : applications.length
+            ? "このアカウントにはすでに応募情報があります。下の一覧でプロジェクトごとの現在の状態をご確認ください。"
+            : isMember
+              ? "このアカウントにはすでに参加情報があります。メンバー用サイトから現在の所属をご確認ください。"
+              : "応募状況を表示できる応募情報がありません。下の案内から応募フォームへ戻れます。";
+        } else if (submissionMode === "check") {
+          submissionConfirmation.textContent = needsOperatorAttention
+            ? "応募内容は保存されていますが、受付処理に運営の確認が必要です。重複送信せず、下の状態をご確認ください。"
+            : legacyIntakeUnverified
+            ? "応募状況は確認できました。以前の受付通知先の記録がないため通知queueは自動照合できません。応募を再送せず、必要な場合は運営へお問い合わせください。"
+            : applications.length
+            ? "保存済みの応募が見つかりました。重複を避けるため、再送せず下の状態をご確認ください。"
+            : "現在、応募は表示されていません。下の案内から応募フォームへ戻って再送できます。";
+        }
         memberLink.hidden = !isMember;
-        startStatus.textContent = stageLabels[data.stage ?? "NEW_USER"] ?? "参加準備中";
+        startStatus.textContent = needsOperatorAttention
+          ? "運営確認が必要です"
+          : stageLabels[data.stage ?? "NEW_USER"] ?? "参加準備中";
         if (applications.length) {
-          startHeading.textContent = "応募状況を確認できます";
-          startMessage.textContent = "複数のプロジェクトへ応募できます。追加で応募する場合は、下のボタンからプロジェクトを選択してください。";
+          startHeading.textContent = needsOperatorAttention
+            ? "応募内容を運営が確認しています"
+            : "応募状況を確認できます";
+          startMessage.textContent = needsOperatorAttention
+            ? "応募内容は保存されています。受付処理の確認が必要なため、同じ応募を再送せず、運営からの連絡をお待ちください。"
+            : "複数のプロジェクトへ応募できます。追加で応募する場合は、下のボタンからプロジェクトを選択してください。";
           if (isMember) {
             startHeading.textContent = "活動を始められます";
             startMessage.textContent = "参加先のタスクや予定はメンバー用サイトで確認できます。別のプロジェクトへの応募中も、参加済みのプロジェクトで活動できます。";
@@ -133,7 +165,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
           if (applicationList) {
             applicationList.replaceChildren(...applications.map((item) => {
               const entry = document.createElement("li");
-              entry.textContent = `${item.project}：${statusLabels[item.status] ?? item.status}（${formatSubmittedAt(item.submittedAt)}）`;
+              entry.textContent = `${item.project}：${statusLabels[item.status] ?? item.status}${item.intakeNeedsOperatorAttention ? "（運営確認中）" : item.intakeVerificationStatus === "legacy_unverified" ? "（受付通知履歴は未検証）" : ""}（${formatSubmittedAt(item.submittedAt)}）`;
               return entry;
             }));
           }
@@ -142,11 +174,13 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
           const hasAccepted = applications.some((item) => item.status === "accepted");
           setText(
             "[data-application-status]",
-            hasReviewing ? "確認中" : allRejected ? "今回は見送り" : hasAccepted ? "受入済み" : "応募済み",
+            needsOperatorAttention ? "運営確認中" : hasReviewing ? "確認中" : allRejected ? "今回は見送り" : hasAccepted ? "受入済み" : "応募済み",
           );
           setText(
             "[data-application-message]",
-            allRejected
+            needsOperatorAttention
+              ? "応募内容は保存されていますが、受付処理に運営の確認が必要です。重複送信せず、運営からの案内をお待ちください。"
+              : allRejected
               ? "今回の応募は見送りとなりました。プロジェクトごとの結果をご確認ください。"
               : hasAccepted
                 ? isMember
@@ -202,6 +236,8 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
       })
       .catch((error) => {
         const message = error instanceof Error ? error.message : "応募状況を読み込めませんでした。";
+        if (submissionMode === "already-received" || submissionMode === "check")
+          submissionConfirmation.textContent = "応募状況を取得できませんでした。重複送信を避けるため、画面を再読み込みしてからもう一度ご確認ください。";
         startStatus.textContent = "読み込みエラー";
         startHeading.textContent = "参加状況を確認できませんでした";
         startMessage.textContent = message;
