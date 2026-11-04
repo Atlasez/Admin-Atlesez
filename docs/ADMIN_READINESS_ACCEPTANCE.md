@@ -82,7 +82,11 @@
 
 ### staging / 外部サービス / 運営決定
 
-PR #547の `docs/ADMIN_MEMBER_INTAKE_STAGING_CHECKLIST.md` は専用Cloudflare Worker/D1、Google OAuth client/callback、合成Google account、Resend test sink、Discord test guildの設定要件、STG-01〜09の実施手順・期待結果・PIIなし証拠形式、API/role matrix、停止条件を記録する。環境・credential・実アカウントはまだ用意されていないため各項目はBLOCKED。STG-08 Discord grant/revokeは本人consentとOPSD-08承認後のみ行う。
+2026-11-04 UTCのread-only更新: 専用Cloudflare Worker `atlasez-admin-staging` と別D1 `atlasez-admin-staging-reports` は存在し、専用 `workers.dev` origin、Custom Routeなし、scheduled trigger 0件を確認した。candidate migrations（0134を含む）を指定したD1 migration listは `No migrations to apply!`。既存D1には運営者identityと試験データがあるため、削除・reset・restoreをしない。
+
+現Worker deploymentはVersion prefix `ef25f36d`が100%配信、Source `Unknown`。live `build-info.json`はcommit `a509d52b5ad766d5cd41ad438ddf0040c7c13daa`, `ref=unknown`を返し、現在のPR/candidateのprovenanceを示さない。Google Cloud ConsoleのOAuth origin/callback/test-user listは未確認で、運営者と異なるsynthetic applicant/member・project reviewerは未準備。Resend/Discordは設定上disabledだが、provider呼出し件数は計測していない。
+
+したがってCloudflare Worker/D1の新規作成は不要で、実staging受入は未開始。STG-01〜06は、独立したsynthetic identities、OAuth設定read-back、candidate Worker配信の個別承認とprovenance、role別HTTP試験が揃うまでBLOCKED。STG-08 Discord grant/revokeは本人consentとOPSD-08承認後のみ行う。
 
 - 実Google OAuth login/callback/state/Cookie/CSRF: NOT TESTED（専用client/account待ち）。
 - Resend実sink到達・providerイベント・再送/timeout: NOT TESTED（test sink/credential待ち）。queue作成と配達を混同しない。
@@ -119,18 +123,18 @@ PR #547の `docs/ADMIN_MEMBER_INTAKE_STAGING_CHECKLIST.md` は専用Cloudflare W
 
 ### 受入判定
 
-| Gate                  | 判定    | 根拠                                                                                                                                                            |
-| --------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Code Ready            | BLOCKED | #545/#546の自動検証と統合隔離試験はpass。ただしPR未統合、role/API matrixとlifecycle session失効の全網羅がなく、0134も本番未確認。                               |
-| Staging Ready         | BLOCKED | 専用Worker/D1/OAuth/Resend/Discord環境・合成accountが未準備。チェックリストは実行前手順であって受入結果ではない。                                               |
-| Production Verified   | BLOCKED | build-info SHAはmainと一致するが、Worker VersionとWorkers Builds runのprovenance、最新Build設定、認証済みChrome受入が欠落。D1 ledgerはread-onlyで0134 pending。 |
-| Limited Intake GO     | NO-GO   | 0134、production provenance、staging OAuth/provider/role tests、OPSD-01/02/03/05/06/07/08/09の決定・証跡が未完了。                                              |
-| Public Recruitment GO | NO-GO   | 限定受入実績、受付容量/停止基準、privacy公開文、backup/incident/provider受入、公開側PR #140の判断が未完了。                                                     |
+| Gate                  | 判定    | 根拠                                                                                                                                                                                               |
+| --------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code Ready            | BLOCKED | #545/#546の自動検証と統合隔離試験はpass。ただしPR未統合、role/API matrixとlifecycle session失効の全網羅がなく、0134も本番未確認。                                                                  |
+| Staging Ready         | BLOCKED | 専用Worker/D1は存在し、candidate migration listにpendingなし。ただし現Worker provenance/candidate配信、OAuth read-back、独立synthetic identities、role別live受入が未完。Resend/Discordはdisabled。 |
+| Production Verified   | BLOCKED | build-info SHAはmainと一致するが、Worker VersionとWorkers Builds runのprovenance、最新Build設定、認証済みChrome受入が欠落。D1 ledgerはread-onlyで0134 pending。                                    |
+| Limited Intake GO     | NO-GO   | 0134、production provenance、staging OAuth/provider/role tests、OPSD-01/02/03/05/06/07/08/09の決定・証跡が未完了。                                                                                 |
+| Public Recruitment GO | NO-GO   | 限定受入実績、受付容量/停止基準、privacy公開文、backup/incident/provider受入、公開側PR #140の判断が未完了。                                                                                        |
 
 ### 次の作業と責任者
 
 1. Cloudflare/release ownerはDashboardでWorkers Builds接続・Production branch・Preview・commandsをread-only記録し、main mergeがproduction deployを起動するか判定する。成功Build run→checkout SHA→Worker `atlasez-admin` Version→100%配信→公開build-infoを証拠で結ぶ。
 2. D1 operator/Securityはread-only確認済みの0134 pendingを照合し、backup/rollbackを含む承認済み手順を作る。適用は別途明示承認後にのみ行い、Worker配信/mergeより前に適用済みを再確認する。現時点で適用しない。
-3. Staging owner/Google admin/Resend admin/Discord adminは隔離Worker/D1、OAuth clientとsynthetic account、test sink、test guild/botを作成し、秘密値は管理対象secret storeに入れる。STG-01〜09を実施して証拠を添付する。Discord操作はOPSD-08の承認前に行わない。
+3. Staging ownerは既存Worker/D1のresource ID、origin、binding、route、Cron、secret名だけをread-onlyで照合し、再作成/reset/restoreしない。Google adminは既存client/callback/test-user設定をread-backし、運営者と異なるsynthetic applicant/member・project reviewerを作る場合は個別承認後に実施する。candidate Workerのstaging配信にも個別承認が必要。Resend/Discordはdisabledのままにし、provider設定や外部操作を行わずSTG-01〜06を始めない。
 4. 運営・Privacy・Security・SRE責任者はOPSD-01〜09の記入欄を承認し、限定人数・担当/代理・保持/削除・backup/restore・incident停止/再開・Discord方針を決める。候補値を承認済みとして扱わない。
 5. 各PR担当は#546を先行させる統合計画に合わせてrebase/exact CIを実行する。mainへのmergeはBuildsの自動deploy挙動と0134を含むリリース順が承認され、未承認の本番変更が発生しない状態になってから実施する。
