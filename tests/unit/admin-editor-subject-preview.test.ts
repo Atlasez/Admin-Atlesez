@@ -57,6 +57,60 @@ describe("admin editor subject preview", () => {
     expect(body?.querySelector(".katex")).not.toBeNull();
   });
 
+  it("normalizes math statements and opens proofs before folding preview chapters", async () => {
+    const rendered = await renderArticleMarkdown(
+      [
+        "## 定義、命題枠",
+        "",
+        "定義 1 (タイトル $ab$).",
+        "",
+        "$$",
+        "\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}",
+        "$$",
+        "",
+        "命題 2 (タイトル $ab$).",
+        "",
+        "命題の本文",
+        "",
+        "証明.",
+        "",
+        "証明の内容",
+        "",
+        "## 次の章",
+        "",
+        "続き",
+      ].join("\n"),
+    );
+    const preview = mountPreview(rendered.code)!;
+
+    applySubjectPreviewProfile(preview, "mathematics");
+
+    const chapters = preview.querySelectorAll<HTMLDetailsElement>(
+      ".article-body > details.preview-chapter",
+    );
+    const firstChapter = chapters[0];
+    const chapterBody = firstChapter?.querySelector<HTMLElement>(
+      ":scope > .preview-chapter-body",
+    );
+    const definition = chapterBody?.querySelector<HTMLElement>(".defi");
+    const proposition = chapterBody?.querySelector<HTMLElement>(".prop");
+    const proof = chapterBody?.querySelector<HTMLDetailsElement>(
+      "details.proof-details",
+    );
+
+    expect(chapters).toHaveLength(2);
+    expect(firstChapter?.open).toBe(true);
+    expect(definition?.querySelector(".thmtitle")?.textContent).toContain(
+      "定義 1",
+    );
+    expect(definition?.querySelector(".katex")).not.toBeNull();
+    expect(proposition?.querySelector(".thmtitle")?.textContent).toContain(
+      "命題 2",
+    );
+    expect(proof?.open).toBe(true);
+    expect(proof?.textContent).toContain("証明の内容");
+  });
+
   it("renders ::: defi with the same directive transform used by published Markdown", async () => {
     const rendered = await renderArticleMarkdown(
       ["::: defi 定義 1 (群)", "", "集合 $G$ を考える。", "", ":::"].join("\n"),
