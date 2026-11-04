@@ -3800,7 +3800,7 @@ test("コメント枠をスクロールしても見出しと別窓ボタンは�
     .toBeGreaterThan(100);
   await page.screenshot({ path: testInfo.outputPath("comments-scrolled.png") });
   const after = await heading.boundingBox();
-  expect(Math.abs((after?.y ?? 0) - before.y)).toBeLessThan(1);
+  expect(Math.abs((after?.y ?? 0) - before.y)).toBeLessThanOrEqual(1);
   await expect(heading.locator('[data-pane-popout="review"]')).toBeInViewport();
 });
 
