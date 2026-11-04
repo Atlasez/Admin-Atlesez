@@ -6,6 +6,7 @@ import {
   validateAdminStagingConfig,
 } from "./lib/admin-staging-config.mjs";
 import {
+  buildAdminStagingWranglerArgs,
   matchesAdminStagingDeploySha,
   missingAdminStagingDeployConfirmations,
   parseAdminStagingDeployArgs,
@@ -122,15 +123,9 @@ function run(command, args, env) {
 try {
   run("npm", ["run", "build"], buildEnvironment);
   run("npm", ["run", "verify:build-info"], buildEnvironment);
-  const wranglerArgs = [
-    "exec",
-    "--",
-    "wrangler",
-    "deploy",
-    "--config",
-    configRelativePath,
-  ];
-  if (mode === "--dry-run") wranglerArgs.push("--dry-run");
+  const wranglerArgs = buildAdminStagingWranglerArgs(configRelativePath, {
+    dryRun: mode === "--dry-run",
+  });
   run("npm", wranglerArgs, buildEnvironment);
 } catch {
   console.error(

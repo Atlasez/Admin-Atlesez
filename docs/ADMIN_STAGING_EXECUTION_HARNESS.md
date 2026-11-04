@@ -70,7 +70,7 @@ ATLASEZ_STAGING_NO_CRON_CONFIRMED=1 \
 npm run deploy:admin:staging -- --deploy --no-cron
 ```
 
-`--no-cron`は `wrangler.admin.staging.compat.jsonc` だけを読み、Cronなしを明示確認し、Cronを配信対象へ追加しません。
+`--no-cron`は `wrangler.admin.staging.compat.jsonc` だけを読み、Cronなしを明示確認し、Cronを配信対象へ追加しません。deploy commandはWranglerの `--keep-vars` を指定し、Dashboardでread-backしたOAuth・provider・routing用の実行変数をconfigで上書きしないようにします。secret値はdeployで削除されませんが、値を読み取ったり新規登録したりしません。
 
 Resendのtest sinkを明示的に使う時だけ `ATLASEZ_STAGING_RESEND_SINK_CONFIRMED=1` も設定します。test-sink以外の宛先、または確認されていないAPI keyは配信しません。このdeploy scriptは固定のignored staging configしか読み込まず、本番の `wrangler.admin.jsonc` へfallbackせず、migrationは一切実行しません。Cloudflare D1 operatorが後続の専用手順で対象名を二名照合してmigrationを適用します。
 

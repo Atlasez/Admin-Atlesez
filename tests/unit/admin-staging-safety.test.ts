@@ -7,6 +7,7 @@ import {
   validateAdminStagingConfig,
 } from "../../scripts/lib/admin-staging-config.mjs";
 import {
+  buildAdminStagingWranglerArgs,
   matchesAdminStagingDeploySha,
   missingAdminStagingDeployConfirmations,
   parseAdminStagingDeployArgs,
@@ -246,6 +247,34 @@ describe("ADMIN staging isolation preflight", () => {
     expect(matchesAdminStagingDeploySha(`${sha}0`, sha)).toBe(false);
     expect(matchesAdminStagingDeploySha("main", sha)).toBe(false);
     expect(matchesAdminStagingDeploySha("", sha)).toBe(false);
+  });
+
+  it("preserves dashboard-managed staging variables on deploy and dry-run", () => {
+    expect(
+      buildAdminStagingWranglerArgs("wrangler.admin.staging.compat.jsonc"),
+    ).toEqual([
+      "exec",
+      "--",
+      "wrangler",
+      "deploy",
+      "--config",
+      "wrangler.admin.staging.compat.jsonc",
+      "--keep-vars",
+    ]);
+    expect(
+      buildAdminStagingWranglerArgs("wrangler.admin.staging.compat.jsonc", {
+        dryRun: true,
+      }),
+    ).toEqual([
+      "exec",
+      "--",
+      "wrangler",
+      "deploy",
+      "--config",
+      "wrangler.admin.staging.compat.jsonc",
+      "--keep-vars",
+      "--dry-run",
+    ]);
   });
 
   it("rejects the production Worker, D1, route, or Discord guild/client", () => {

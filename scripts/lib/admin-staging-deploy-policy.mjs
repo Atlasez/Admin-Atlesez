@@ -43,3 +43,20 @@ export function matchesAdminStagingDeploySha(expectedSha, actualSha) {
     expectedSha.trim().toLowerCase() === actualSha.trim().toLowerCase()
   );
 }
+
+export function buildAdminStagingWranglerArgs(
+  configPath,
+  { dryRun = false } = {},
+) {
+  const args = [
+    "exec",
+    "--",
+    "wrangler",
+    "deploy",
+    "--config",
+    configPath,
+    "--keep-vars",
+  ];
+  if (dryRun) args.push("--dry-run");
+  return args;
+}
