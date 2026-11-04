@@ -55,12 +55,19 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       <button type="button" data-workflow-action="revise"><strong>加筆・修正</strong></button>
       <button type="button" data-workflow-action="review"><strong>フィードバック</strong></button>
     </nav>
-    <div class="catalog-toolbar">
-      <p class="catalog-note" data-catalog-summary data-state="loading">公開記事との対応状態を確認しています…</p>
-      <button type="button" class="article-action" data-reset-filters>絞り込みをリセット</button>
-      <button type="button" class="article-action" data-run-catalog-diagnostics>カタログを診断</button>
-      <button type="button" class="article-action" data-register-unregistered hidden>未登録記事を一括登録</button>
-    </div>
+    <section class="catalog-overview" aria-labelledby="catalog-overview-heading">
+      <div class="catalog-overview__heading">
+        <div>
+          <h2 id="catalog-overview-heading">学習サイト公開記事との連携</h2>
+          <p data-catalog-summary data-state="loading" aria-live="polite">公開記事カタログを確認しています…</p>
+        </div>
+        <div class="catalog-overview__tools">
+          <button type="button" class="article-action" data-run-catalog-diagnostics>連携状態を診断</button>
+          <button type="button" class="article-action" data-register-unregistered hidden>運営原稿を一括作成</button>
+        </div>
+      </div>
+      <div class="catalog-statuses" data-catalog-counts aria-label="公開記事の運営原稿との連携状況"></div>
+    </section>
     <details class="catalog-diagnostics" data-catalog-diagnostics hidden>
       <summary>公開記事カタログの診断結果</summary>
       <p data-catalog-diagnostics-summary>診断を実行してください。</p>
@@ -69,77 +76,103 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     <section class="subject-browser" aria-labelledby="subject-browser-heading">
       <div class="subject-browser__heading">
         <div>
-          <h2 id="subject-browser-heading">分野から見る</h2>
-          <p data-subject-browser-summary>分野を選ぶと、その分野の記事だけを表示します。</p>
+          <h2 id="subject-browser-heading">分野・カテゴリから探す</h2>
+          <p data-subject-browser-summary>件数は現在の表示条件に一致する記事です。</p>
         </div>
         <button type="button" class="article-action" data-subject-browser-all>すべて表示</button>
       </div>
       <div class="subject-browser__items" data-subject-browser></div>
     </section>
     <section class="filters" id="article-list" aria-label="原稿一覧の絞り込み">
-      <label class="filter-control filter-control-search">
-        <span>キーワード</span>
-        <input data-query placeholder="タイトル・分野・カテゴリで検索" />
-      </label>
-      <label class="filter-control">
-        <span>分野</span>
-        <select data-subject disabled aria-busy="true">
-          <option value="all">すべての分野</option>
-          {subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}
-        </select>
-      </label>
-      <label class="filter-control">
-        <span>カテゴリ</span>
-        <select data-category>
-          <option value="all">すべてのカテゴリ</option>
-          {categories.map((category) => <option value={category.slug} data-subjects={category.subjects.join(",")}>{category.name}</option>)}
-        </select>
-      </label>
-      <label class="filter-control">
-        <span>状態</span>
-        <select data-status>
-          <option value="all">すべての状態</option>
-          <option value="draft">下書き</option>
-          <option value="in-review">フィードバック中</option>
-          <option value="on-hold">保留</option>
-          <option value="approved">フィードバック済み</option>
-        </select>
-      </label>
-      <label class="filter-control">
-        <span>公開状況</span>
-        <select data-public>
-          <option value="all">公開状況：すべて</option>
-          <option value="published">公開済み</option>
-          <option value="scheduled">公開予約済み</option>
-          <option value="unpublished">未公開</option>
-        </select>
-      </label>
-      <label class="filter-control">
-        <span>テスト原稿</span>
-        <select data-test>
-          <option value="exclude">テスト原稿を除く</option>
-          <option value="all">テスト原稿を含む</option>
-          <option value="only">テスト原稿のみ</option>
-        </select>
-      </label>
-      <label class="filter-control">
-        <span>作業対象</span>
-        <select data-workflow-filter aria-label="作業対象">
-          <option value="all">作業対象：すべて</option>
-          <option value="revise">作業対象：自分が加筆・修正する記事</option>
-          <option value="review">作業対象：フィードバック対象</option>
-          <option value="request">作業対象：フィードバックを依頼する記事</option>
-        </select>
-      </label>
-      <label class="filter-control">
-        <span>アーカイブ</span>
-        <select data-archive aria-label="アーカイブ表示">
-          <option value="active">未アーカイブ</option>
-          <option value="archived">アーカイブ済み</option>
-          <option value="all">すべて</option>
-        </select>
-      </label>
-      <output data-count></output>
+      <div class="filters__primary">
+        <label class="filter-control filter-control-search">
+          <span>キーワード</span>
+          <input data-query placeholder="タイトル・分野・カテゴリで検索" />
+        </label>
+        <label class="filter-control">
+          <span>分野</span>
+          <select data-subject disabled aria-busy="true">
+            <option value="all">すべての分野</option>
+            {subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}
+          </select>
+        </label>
+        <label class="filter-control">
+          <span>カテゴリ</span>
+          <select data-category>
+            <option value="all">すべてのカテゴリ</option>
+            {categories.map((category) => <option value={category.slug} data-subjects={category.subjects.join(",")}>{category.name}</option>)}
+          </select>
+        </label>
+        <label class="filter-control">
+          <span>編集状況</span>
+          <select data-status>
+            <option value="all">すべて</option>
+            <option value="draft">下書き</option>
+            <option value="in-review">フィードバック中</option>
+            <option value="on-hold">保留</option>
+            <option value="approved">フィードバック済み</option>
+          </select>
+        </label>
+      </div>
+      <div class="filters__result">
+        <div>
+          <output data-count aria-live="polite">—件</output>
+          <span data-filter-summary>現在の表示条件</span>
+        </div>
+        <div class="filters__tools">
+          <button type="button" class="article-action" data-reset-filters>条件をリセット</button>
+          <details class="advanced-filters">
+            <summary>詳細な絞り込み</summary>
+            <div class="advanced-filters__grid">
+              <label class="filter-control">
+                <span>学習サイトの公開状況</span>
+                <select data-public>
+                  <option value="all">すべて</option>
+                  <option value="published">公開中</option>
+                  <option value="scheduled">公開予約済み</option>
+                  <option value="unpublished">未公開</option>
+                </select>
+              </label>
+              <label class="filter-control">
+                <span>運営原稿との連携</span>
+                <select data-linkage>
+                  <option value="all">すべて</option>
+                  <option value="managed">公開記事と連携済み</option>
+                  <option value="needs-registration">原稿あり・公開記事ID未連携</option>
+                  <option value="unmanaged">運営原稿未登録</option>
+                  <option value="conflict">重複・紐付け要確認</option>
+                  <option value="unknown">連携状態を判定できない</option>
+                </select>
+              </label>
+              <label class="filter-control">
+                <span>テスト原稿</span>
+                <select data-test>
+                  <option value="exclude">除く</option>
+                  <option value="all">含める</option>
+                  <option value="only">テスト原稿のみ</option>
+                </select>
+              </label>
+              <label class="filter-control">
+                <span>作業対象</span>
+                <select data-workflow-filter aria-label="作業対象">
+                  <option value="all">すべての原稿</option>
+                  <option value="revise">自分が加筆・修正する記事</option>
+                  <option value="review">フィードバック対象</option>
+                  <option value="request">フィードバックを依頼する記事</option>
+                </select>
+              </label>
+              <label class="filter-control">
+                <span>アーカイブ</span>
+                <select data-archive aria-label="アーカイブ表示">
+                  <option value="active">未アーカイブ</option>
+                  <option value="archived">アーカイブ済み</option>
+                  <option value="all">すべて</option>
+                </select>
+              </label>
+            </div>
+          </details>
+        </div>
+      </div>
     </section>
     <p class="catalog-feedback" data-catalog-feedback role="status" aria-live="polite"></p>
     <section class="list loading-state" data-list data-admin-load-surface aria-busy="true">原稿一覧を取得しています…</section>
@@ -739,17 +772,235 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     }
   }
 </style>
+<style is:global>
+  .catalog-overview {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.9rem;
+    margin: 0 auto 1.1rem;
+    max-width: 60rem;
+    padding: 0.9rem 1rem;
+  }
+  .catalog-overview__heading {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+  }
+  .catalog-overview__heading h2 {
+    font-size: 0.92rem;
+    margin: 0;
+  }
+  .catalog-overview__heading p {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    margin: 0.2rem 0 0;
+  }
+  .catalog-overview__heading p[data-state="error"] { color: var(--danger); }
+  .catalog-overview__tools {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    justify-content: end;
+  }
+  .catalog-statuses {
+    display: grid;
+    gap: 0.45rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-top: 0.75rem;
+  }
+  .catalog-status-card {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.65rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: grid;
+    gap: 0.15rem;
+    min-width: 0;
+    padding: 0.55rem 0.65rem;
+    text-align: left;
+  }
+  .catalog-status-card:hover,
+  .catalog-status-card:focus-visible,
+  .catalog-status-card[aria-pressed="true"] {
+    border-color: var(--accent-primary);
+    outline: none;
+  }
+  .catalog-status-card[aria-pressed="true"] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 22%, transparent); }
+  .catalog-status-card__label { font-size: 0.68rem; font-weight: 800; line-height: 1.35; }
+  .catalog-status-card strong { font-size: 1.18rem; line-height: 1.1; }
+  .catalog-status-card small { color: var(--text-secondary); font-size: 0.62rem; line-height: 1.35; }
+  .catalog-status-card--linked { border-top: 3px solid #3d9c68; }
+  .catalog-status-card--needs-registration,
+  .catalog-status-card--unmanaged { border-top: 3px solid #d7a132; }
+  .catalog-status-card--conflict,
+  .catalog-status-card--unknown { border-top: 3px solid #b95b4d; }
+  .subject-browser {
+    border-bottom: 0;
+    margin: 0 auto 0.9rem;
+    max-width: 60rem;
+    padding: 0;
+  }
+  .subject-browser__heading { margin-bottom: 0.55rem; }
+  .subject-browser__heading h2 { font-size: 0.95rem; }
+  .subject-browser__heading p { font-size: 0.72rem; }
+  .subject-browser__items { gap: 0.4rem; }
+  .subject-browser__item {
+    border-radius: 0.6rem;
+    gap: 0.55rem;
+    min-height: 2.45rem;
+    padding: 0.35rem 0.7rem;
+  }
+  .subject-browser__item strong { font-size: 0.82rem; }
+  .subject-browser__item small { font-size: 0.68rem; }
+  .subject-browser__item:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+  .subject-browser__item--all { border-style: solid; }
+  .subject-browser__empty { margin-top: 0.6rem; }
+  .subject-browser__empty summary { font-size: 0.72rem; }
+  .filters {
+    align-items: stretch;
+    display: grid;
+    gap: 0.8rem;
+    margin: 0 auto 0.8rem;
+    max-width: 60rem;
+    padding: 0.9rem;
+  }
+  .filters__primary {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: minmax(13rem, 2fr) repeat(3, minmax(8rem, 1fr));
+  }
+  .filters__primary .filter-control { min-width: 0; }
+  .filters__result {
+    align-items: center;
+    border-top: 1px solid var(--border-default);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem 1rem;
+    justify-content: space-between;
+    padding-top: 0.7rem;
+  }
+  .filters__result > div:first-child { align-items: baseline; display: flex; flex-wrap: wrap; gap: 0.45rem; }
+  .filters__result output { color: var(--text-primary); font-size: 0.9rem; font-weight: 900; }
+  .filters__result [data-filter-summary] { color: var(--text-secondary); font-size: 0.72rem; }
+  .filters__tools { align-items: center; display: flex; flex-wrap: wrap; gap: 0.45rem; }
+  .advanced-filters { position: relative; }
+  .advanced-filters > summary {
+    align-items: center;
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.45rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.72rem;
+    font-weight: 800;
+    min-height: 2rem;
+    padding: 0.35rem 0.55rem;
+  }
+  .advanced-filters[open] > summary { border-color: var(--accent-primary); }
+  .advanced-filters__grid {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.7rem;
+    box-shadow: 0 0.5rem 1.5rem #0003;
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: repeat(3, minmax(9rem, 1fr));
+    margin-top: 0.45rem;
+    padding: 0.75rem;
+    width: min(42rem, calc(100vw - 3rem));
+  }
+  .advanced-filters .filter-control { min-width: 0; }
+  .advanced-filters .filter-control > span { font-size: 0.66rem; }
+  .article-group { display: grid; gap: 0.4rem; min-width: 0; }
+  .article-group__heading {
+    align-items: baseline;
+    border-bottom: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    display: flex;
+    gap: 0.4rem;
+    margin: 0.55rem 0 0.15rem;
+    padding: 0 0.15rem 0.35rem;
+  }
+  .article-group__heading strong { color: var(--text-primary); font-size: 0.78rem; }
+  .article-group__heading span { color: var(--text-secondary); font-size: 0.76rem; }
+  .article-group__heading small { color: var(--text-secondary); font-size: 0.66rem; margin-left: auto; }
+  .article-group__items { display: grid; gap: 0.35rem; min-width: 0; }
+  .article {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 0.75rem 0.85rem;
+  }
+  .article-main { min-width: 0; }
+  .article-meta {
+    align-items: baseline;
+    color: var(--text-secondary) !important;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.69rem !important;
+    font-weight: 700;
+    gap: 0.28rem;
+    margin: 0.25rem 0 0 !important;
+  }
+  .article-meta__updated { font-size: 0.68rem; font-weight: 500; }
+  .article h2 { font-size: 0.98rem; }
+  .article-statuses { align-items: center; display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin-top: 0.45rem; }
+  .article-status-group { align-items: center; display: inline-flex; flex-wrap: wrap; gap: 0.25rem; min-width: 0; }
+  .article-status-group__label { color: var(--text-secondary); font-size: 0.68rem; font-weight: 800; }
+  .article-status-group .badge { font-size: 0.7rem; }
+  .badge.public-live { background: color-mix(in srgb, #368d5d 15%, var(--background-primary)); border-color: color-mix(in srgb, #368d5d 45%, var(--border-default)); color: var(--text-primary); }
+  .badge.public-scheduled { background: color-mix(in srgb, #d49a26 15%, var(--background-primary)); border-color: color-mix(in srgb, #d49a26 50%, var(--border-default)); color: var(--text-primary); }
+  .badge.public-draft,
+  .badge.linkage-none { background: var(--background-secondary); color: var(--text-secondary); }
+  .badge.linked { background: color-mix(in srgb, #368d5d 15%, var(--background-primary)); border-color: color-mix(in srgb, #368d5d 45%, var(--border-default)); color: var(--text-primary); }
+  .badge.linkage-attention,
+  .badge.linkage-missing { background: color-mix(in srgb, #d49a26 16%, var(--background-primary)); border-color: color-mix(in srgb, #d49a26 50%, var(--border-default)); color: var(--text-primary); }
+  .badge.linkage-conflict,
+  .badge.linkage-unknown { background: color-mix(in srgb, #b95b4d 14%, var(--background-primary)); border-color: color-mix(in srgb, #b95b4d 45%, var(--border-default)); color: var(--text-primary); }
+  .article-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: end; }
+  .article-actions > .catalog-action { white-space: normal; }
+  @media (max-width: 900px) {
+    .filters__primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .filter-control-search { grid-column: span 2; }
+    .catalog-statuses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 600px) {
+    .catalog-overview { padding: 0.75rem; }
+    .catalog-overview__heading { align-items: stretch; flex-direction: column; }
+    .catalog-overview__tools { justify-content: stretch; }
+    .catalog-overview__tools button { flex: 1 1 auto; }
+    .catalog-statuses { gap: 0.35rem; }
+    .catalog-status-card { padding: 0.45rem 0.5rem; }
+    .catalog-status-card__label { font-size: 0.63rem; }
+    .catalog-status-card small { font-size: 0.58rem; }
+    .subject-browser__heading { align-items: start; }
+    .subject-browser__heading p { max-width: 11rem; text-align: right; }
+    .filters { padding: 0.75rem; }
+    .filters__primary { grid-template-columns: minmax(0, 1fr); }
+    .filter-control-search { grid-column: auto; }
+    .filters__result { align-items: stretch; }
+    .filters__tools { justify-content: space-between; }
+    .advanced-filters__grid { grid-template-columns: minmax(0, 1fr); width: min(20rem, calc(100vw - 2.5rem)); }
+    .article-group__heading { margin-top: 0.35rem; }
+    .article { grid-template-columns: minmax(0, 1fr); }
+    .article-actions { justify-content: start; }
+    .article-statuses { gap: 0.3rem 0.5rem; }
+  }
+</style>
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
   import { readAdminApiJson } from "../../lib/admin-api";
   import { canRegisterArticleInSubject, isBulkArticleRegistrationCandidate, isTestArticleTitle } from "../../lib/admin-article-registration";
   type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;scheduled_publish_at?:string|null;archived_at?:string|null;archive_expires_at?:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
-  type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;test:string;workflow:string;archive:string};
+  type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;linkage:string;test:string;workflow:string;archive:string};
   type ArticleScope={email:string;subjects?:string[];coordinatorSubjects?:string[];allSubjects?:boolean;isManager?:boolean;isProjectLeader?:boolean};
   type ArticlePagination={limit:number;nextCursor:string|null;hasMore:boolean};
   type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string;managementState?:string;documentId?:string;duplicateDocumentIds?:string[]};
   type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown;state?:unknown;editorial_document_id?:unknown;duplicate_document_ids?:unknown};
-  type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"} | {kind:"needs-registration";publicArticle:PublicArticle;documentId?:string;management:"managed"} | {kind:"conflict";publicArticle:PublicArticle;management:"conflict"};
+  type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"} | {kind:"needs-registration";publicArticle:PublicArticle;documentId?:string;management:"managed"} | {kind:"conflict";publicArticle:PublicArticle;management:"conflict"} | {kind:"unknown";publicArticle:PublicArticle;management:"unknown"};
   const initializeArticleIndex = () => {
     const root = document.querySelector<HTMLElement>("[data-article-index]");
     if (!root || root.dataset.ready === "true") return;
@@ -760,11 +1011,14 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const category = root.querySelector<HTMLSelectElement>("[data-category]")!;
     const status = root.querySelector<HTMLSelectElement>("[data-status]")!;
     const publication = root.querySelector<HTMLSelectElement>("[data-public]")!;
+    const linkage = root.querySelector<HTMLSelectElement>("[data-linkage]")!;
     const test = root.querySelector<HTMLSelectElement>("[data-test]")!;
     const workflow = root.querySelector<HTMLSelectElement>("[data-workflow-filter]")!;
     const archive = root.querySelector<HTMLSelectElement>("[data-archive]")!;
     const count = root.querySelector<HTMLOutputElement>("[data-count]")!;
     const catalogSummary = root.querySelector<HTMLElement>("[data-catalog-summary]")!;
+    const catalogCounts = root.querySelector<HTMLElement>("[data-catalog-counts]")!;
+    const filterSummary = root.querySelector<HTMLElement>("[data-filter-summary]")!;
     const scopeNote = root.querySelector<HTMLElement>("[data-scope-note]")!;
     const catalogFeedback = root.querySelector<HTMLElement>("[data-catalog-feedback]")!;
     const catalogDiagnosticsButton = root.querySelector<HTMLButtonElement>("[data-run-catalog-diagnostics]")!;
@@ -780,6 +1034,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const paginationStatus = root.querySelector<HTMLElement>("[data-article-pagination-status]")!;
     const loadMoreButton = root.querySelector<HTMLButtonElement>("[data-article-load-more]")!;
     const subjectOptions = [...subject.options].map((option) => ({ value: option.value, label: option.textContent ?? "", subjects: option.dataset.subjects }));
+    const subjectNameBySlug = new Map(subjectOptions.filter((option) => option.value !== "all").map((option) => [option.value, option.label]));
+    const categoryNameBySlug = new Map([...category.options].filter((option) => option.value !== "all").map((option) => [option.value, option.textContent ?? option.value]));
     let retry: ReturnType<typeof createAdminLoadRetry> | null = null;
     const catalogElement = root.querySelector<HTMLScriptElement>("[data-public-articles]");
     let publicArticles = catalogElement ? JSON.parse(catalogElement.textContent ?? "[]") as PublicArticle[] : [];
@@ -794,7 +1050,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     let hasMore = false;
     let loadedPageCount = 0;
     const filterStorageKey = "atlasez-admin-article-filters";
-    const defaultFilterState: ArticleFilterState = { query: "", subject: "all", category: "all", status: "all", publication: "all", test: "exclude", workflow: "all", archive: "active" };
+    const defaultFilterState: ArticleFilterState = { query: "", subject: "all", category: "all", status: "all", publication: "all", linkage: "all", test: "exclude", workflow: "all", archive: "active" };
 
     const requestedMode = new URLSearchParams(location.search).get("mode");
     const readStoredFilters = (): Partial<ArticleFilterState> => {
@@ -818,6 +1074,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     assignSelectValue(category, storedFilters.category, defaultFilterState.category);
     assignSelectValue(status, storedFilters.status, defaultFilterState.status);
     assignSelectValue(publication, storedFilters.publication, defaultFilterState.publication);
+    assignSelectValue(linkage, storedFilters.linkage, defaultFilterState.linkage);
     assignSelectValue(test, storedFilters.test, defaultFilterState.test);
     assignSelectValue(workflow, requestedMode === "review" || requestedMode === "revise" || requestedMode === "request" ? requestedMode : storedFilters.workflow, defaultFilterState.workflow);
     assignSelectValue(archive, storedFilters.archive, defaultFilterState.archive);
@@ -862,6 +1119,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         category: category.value,
         status: status.value,
         publication: publication.value,
+        linkage: linkage.value,
         test: test.value,
         workflow: workflow.value,
         archive: archive.value,
@@ -935,6 +1193,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         else if (publicArticle.managementState === "needs-registration") rows.push({ kind: "needs-registration", publicArticle, documentId: publicArticle.documentId, management: "managed" });
         else if (publicArticle.managementState === "duplicate" || publicArticle.managementState === "identity-conflict") rows.push({ kind: "conflict", publicArticle, management: "conflict" });
         else if (publicArticle.managementState === "unmanaged") rows.push({ kind: "unregistered", publicArticle, management: "unregistered" });
+        else rows.push({ kind: "unknown", publicArticle, management: "unknown" });
       }
       return rows;
     };
@@ -942,6 +1201,17 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const rowSubject = (row: CatalogRow) => row.kind === "editorial" ? row.article.subject : row.publicArticle.subject;
     const rowCategory = (row: CatalogRow) => row.kind === "editorial" ? row.article.category : row.publicArticle.category;
     const rowUpdatedAt = (row: CatalogRow) => row.kind === "editorial" ? row.article.updated_at : row.publicArticle.updatedAt;
+    const normalizeLinkageState = (state?: string) => state === "duplicate" || state === "identity-conflict" ? "conflict" : ["managed", "needs-registration", "unmanaged"].includes(state ?? "") ? state! : "unknown";
+    const rowLinkageState = (row: CatalogRow) => {
+      if (row.kind === "editorial") return row.publicArticle ? registeredPublicArticleIds.has(publicArticleKey(row.publicArticle)) ? "managed" : normalizeLinkageState(row.publicArticle.managementState) : row.article.published_at ? "unknown" : "not-applicable";
+      if (row.kind === "registered") return "managed";
+      if (row.kind === "needs-registration") return "needs-registration";
+      if (row.kind === "unregistered") return "unmanaged";
+      if (row.kind === "conflict") return "conflict";
+      return "unknown";
+    };
+    const subjectDisplayName = (slug: string) => subjectNameBySlug.get(slug) ?? slug.replaceAll("-", " ");
+    const categoryDisplayName = (slug: string) => categoryNameBySlug.get(slug) ?? slug.replaceAll("-", " ");
     const canRegisterPublicArticle = (article: PublicArticle) => canRegisterArticleInSubject(articleScope, article.subject);
     const bulkRegistrationCandidates = () => catalogRows().flatMap((row) =>
       row.kind === "unregistered" && isBulkArticleRegistrationCandidate(row.publicArticle, canRegisterPublicArticle(row.publicArticle)) ? [row.publicArticle] : [],
@@ -955,19 +1225,17 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       };
       const activeOptions = options.filter((option) => (counts.get(option.value) ?? []).length > 0);
       const emptyOptions = options.filter((option) => (counts.get(option.value) ?? []).length === 0);
-      const emptySubjects = emptyOptions.length
-        ? `<details class="subject-browser__empty"><summary>記事のない分野を表示（${emptyOptions.length}）</summary><div class="subject-browser__empty-items">${emptyOptions.map((option) => renderButton(option.value, option.textContent ?? option.value, [])).join("")}</div></details>`
+      const emptySubjects = subject.value === "all" && emptyOptions.length
+        ? `<details class="subject-browser__empty"><summary>現在の条件に一致する記事が0件の分野（${emptyOptions.length}）</summary><div class="subject-browser__empty-items">${emptyOptions.map((option) => renderButton(option.value, option.textContent ?? option.value, [])).join("")}</div></details>`
         : "";
       subjectBrowser.innerHTML = [
         renderButton("all", "すべての分野", shown, true),
         ...activeOptions.map((option) => renderButton(option.value, option.textContent ?? option.value, counts.get(option.value) ?? [])),
         emptySubjects,
       ].join("");
-      if (subjectBrowserSummary) {
-        subjectBrowserSummary.textContent = subject.value === "all"
-          ? `全分野・${shown.length}件`
-          : `${subject.selectedOptions[0]?.textContent ?? subject.value}・${shown.length}件`;
-      }
+      if (subjectBrowserSummary) subjectBrowserSummary.textContent = subject.value === "all"
+        ? `全分野・${shown.length}件`
+        : `${subject.selectedOptions[0]?.textContent ?? subject.value}・${shown.length}件`;
     };
     const hasUnpublishedPublicationChanges = (article: Pick<Article, "published_at" | "updated_at">) => {
       if (!article.published_at) return false;
@@ -981,15 +1249,33 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       const mode = currentWorkflow();
       const normalizedQuery = query.value.toLowerCase();
       const rows = catalogRows();
-      const registeredCount = publicArticles.filter((article) => article.managementState === "managed" || article.managementState === "needs-registration").length;
-      const unregisteredCount = publicArticles.filter((article) => article.managementState === "unmanaged").length;
-      const conflictCount = publicArticles.filter((article) => article.managementState === "identity-conflict" || article.managementState === "duplicate").length;
       catalogSummary.dataset.state = catalogReady ? catalogSource === "api" ? "ready" : "error" : "loading";
       catalogSummary.textContent = catalogReady
         ? catalogSource === "api"
-          ? `公開記事 ${publicArticles.length}件 ・ 運営原稿あり ${registeredCount}件 ・ 未登録 ${unregisteredCount}件 ・ 要確認 ${conflictCount}件（APIカタログ）`
+          ? `学習サイトで公開中の記事 ${publicArticles.length}件を全分野から照合しています。`
           : "公開記事カタログを確認できませんでした。原稿一覧は表示しています。"
         : "公開記事カタログを確認しています…";
+      if (!catalogReady || catalogSource !== "api") {
+        catalogCounts.replaceChildren();
+      } else {
+        const totals = { managed: 0, "needs-registration": 0, unmanaged: 0, conflict: 0, unknown: 0 };
+        for (const publicArticle of publicArticles) {
+          const state = registeredPublicArticleIds.has(publicArticleKey(publicArticle)) ? "managed" : publicArticle.managementState;
+          if (state === "managed") totals.managed += 1;
+          else if (state === "needs-registration") totals["needs-registration"] += 1;
+          else if (state === "unmanaged") totals.unmanaged += 1;
+          else if (state === "duplicate" || state === "identity-conflict") totals.conflict += 1;
+          else totals.unknown += 1;
+        }
+        const metrics = [
+          { value: "managed", label: "公開記事と連携済み", note: "運営原稿あり", count: totals.managed, tone: "linked" },
+          { value: "needs-registration", label: "原稿あり・未連携", note: "公開記事IDの確認が必要", count: totals["needs-registration"], tone: "needs-registration" },
+          { value: "unmanaged", label: "運営原稿未登録", note: "公開記事から原稿を作成できます", count: totals.unmanaged, tone: "unmanaged" },
+          { value: "conflict", label: "重複・紐付け要確認", note: "対応する原稿を確認してください", count: totals.conflict, tone: "conflict" },
+        ];
+        if (totals.unknown) metrics.push({ value: "unknown", label: "連携状態を判定できない", note: "カタログ診断が必要です", count: totals.unknown, tone: "unknown" });
+        catalogCounts.innerHTML = metrics.map((metric) => `<button type="button" class="catalog-status-card catalog-status-card--${metric.tone}" data-catalog-filter="${metric.value}" aria-pressed="${String(linkage.value === metric.value)}"><span class="catalog-status-card__label">${metric.label}</span><strong>${metric.count}件</strong><small>${metric.note}</small></button>`).join("");
+      }
       const filtered = rows.filter((row) => {
         const isUnregistered = row.kind === "unregistered" || row.kind === "conflict";
         const article = row.kind === "editorial" ? row.article : null;
@@ -1001,6 +1287,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         if (subject.value !== "all" && rowSubject(row) !== subject.value) return false;
         if (category.value !== "all" && rowCategory(row) !== category.value) return false;
         if (status.value !== "all" && (!article || article.status !== status.value)) return false;
+        if (linkage.value !== "all" && rowLinkageState(row) !== linkage.value) return false;
         if (publication.value === "published" && (isUnregistered ? true : !article?.published_at)) return false;
         if (publication.value === "scheduled" && (isUnregistered || Boolean(article?.published_at) || !article?.scheduled_publish_at)) return false;
         if (publication.value === "unpublished" && (isUnregistered || Boolean(article?.published_at) || Boolean(article?.scheduled_publish_at))) return false;
@@ -1022,8 +1309,18 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       const registerableCount = bulkRegistrationCandidates().length;
       registerUnregisteredButton.hidden = !catalogReady || registerableCount === 0;
       registerUnregisteredButton.disabled = bulkRegistrationInFlight;
-      registerUnregisteredButton.textContent = bulkRegistrationInFlight ? "一括登録中…" : `未登録記事を一括登録（${registerableCount}件）`;
+      registerUnregisteredButton.textContent = bulkRegistrationInFlight ? "一括作成中…" : `未登録の運営原稿を一括作成（${registerableCount}件）`;
       count.textContent = `${shown.length}件`;
+      const activeScope = subject.value === "all" ? "全分野" : subjectDisplayName(subject.value);
+      const activeCategory = category.value === "all" ? "" : ` › ${categoryDisplayName(category.value)}`;
+      const activeStatus = status.value === "all" ? "" : ` ・ 編集状況：${labels[status.value as keyof typeof labels] ?? status.value}`;
+      const activePublication = publication.value === "all" ? "" : ` ・ 学習サイト：${publication.selectedOptions[0]?.textContent ?? publication.value}`;
+      const activeLinkage = linkage.value === "all" ? "" : ` ・ 運営連携：${linkage.selectedOptions[0]?.textContent ?? linkage.value}`;
+      const activeTest = test.value === "exclude" ? "" : ` ・ テスト原稿：${test.selectedOptions[0]?.textContent ?? test.value}`;
+      const activeWorkflow = mode === "all" ? "" : ` ・ 作業対象：${workflow.selectedOptions[0]?.textContent ?? workflow.value}`;
+      const activeArchive = archive.value === "active" ? "" : ` ・ ${archive.selectedOptions[0]?.textContent ?? archive.value}`;
+      const activeQuery = query.value.trim() ? ` ・ キーワード：「${query.value.trim()}」` : "";
+      filterSummary.textContent = `${activeScope}${activeCategory}${activeStatus}${activePublication}${activeLinkage}${activeTest}${activeWorkflow}${activeArchive}${activeQuery}`;
       renderSubjectBrowser(shown);
       const formatDate = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(value));
       const formatSchedule = (value: string) => {
@@ -1031,26 +1328,85 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         if (!Number.isFinite(instant.getTime())) return "日時未設定";
         return new Intl.DateTimeFormat("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Tokyo" }).format(instant);
       };
-      list.innerHTML = shown.length ? shown.map((row) => {
-        if (row.kind === "unregistered") { const registerAction = canRegisterPublicArticle(row.publicArticle) ? `<a class="catalog-action" href="/admin/editor/?sourceArticle=${encodeURIComponent(row.publicArticle.articleId)}&from=articles" data-register-link data-article-id="${esc(row.publicArticle.articleId)}" data-catalog-subject="${esc(row.publicArticle.subject)}" data-catalog-category="${esc(row.publicArticle.category)}" data-catalog-slug="${esc(row.publicArticle.slug)}">運営管理へ登録</a>` : '<span class="badge" title="公開記事を運営管理へ登録するには分野の編集権限が必要です">登録には編集権限が必要</span>'; return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は公開済み・運営管理未登録"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge unregistered">運営管理未登録</span>${registerAction}</div></article>`; }
-        if (row.kind === "registered") return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は公開済み・運営管理登録済み"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge published">運営管理登録済み</span>${row.documentId ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(row.documentId)}&mode=update&from=articles">更新案を作成</a>` : '<span class="badge">運営原稿を準備中</span>'}</div></article>`;
-        if (row.kind === "needs-registration") return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は運営原稿あり・公開記事ID未紐付け"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge unregistered">運営原稿あり・公開記事ID未紐付け</span>${row.documentId ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(row.documentId)}&from=articles">原稿を確認</a>` : ""}</div></article>`;
-        if (row.kind === "conflict") { const relatedDocumentId = row.publicArticle.duplicateDocumentIds?.[0] ?? row.publicArticle.documentId; return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は運営管理の紐付け要確認"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge unregistered">紐付け要確認</span>${relatedDocumentId ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(relatedDocumentId)}&from=articles">関連原稿を確認</a>` : ""}</div></article>`; }
-        const article = row.article;
-        const editing = activeEditorsFor(article);
-        const editingSummary = activeEditorSummary(article);
-        const editingBadge = editing.length ? `<span class="badge editing" aria-label="${editing.length}人が編集中">● ${editing.length}人が編集中</span>` : "";
-        const archiveBadge = isArchived(article) ? `<span class="badge archived">アーカイブ済み</span>` : "";
-        const archiveSummary = isArchived(article) && article.archive_expires_at ? ` ・ 復元期限 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.archive_expires_at))}` : "";
-        const scheduleSummary = article.scheduled_publish_at ? ` ・ 公開予約：${formatSchedule(article.scheduled_publish_at)}` : "";
-        const scheduleBadge = article.scheduled_publish_at ? `<span class="badge scheduled" aria-label="公開予約済み ${esc(formatSchedule(article.scheduled_publish_at))}">公開予約済み・${esc(formatSchedule(article.scheduled_publish_at))}</span>` : "";
-        const sourceLinkBadge = row.publicArticle?.managementState === "needs-registration" ? '<span class="badge unregistered" aria-label="運営原稿あり・公開記事ID未紐付け">公開記事ID未紐付け</span>' : "";
-        const archiveAction = article.status === "draft" && !article.published_at ? (isArchived(article) ? (archiveExpired(article) ? '<button type="button" class="article-action" disabled title="アーカイブ期限を過ぎています">期限切れ</button>' : `<button type="button" class="article-action" data-archive-action="unarchive" data-archive-document-id="${esc(article.id)}">復元</button>`) : `<button type="button" class="article-action" data-archive-action="archive" data-archive-document-id="${esc(article.id)}">アーカイブ</button>`) : "";
-        const updateInProgress = Boolean(article.published_at && hasUnpublishedPublicationChanges(article));
+      const linkageLabels: Record<string, { label: string; tone: string }> = {
+        managed: { label: "公開記事と連携済み", tone: "linked" },
+        "needs-registration": { label: "原稿あり・公開記事ID未連携", tone: "linkage-attention" },
+        unmanaged: { label: "運営原稿未登録", tone: "linkage-missing" },
+        conflict: { label: "重複・紐付け要確認", tone: "linkage-conflict" },
+        unknown: { label: "連携状態を判定できない", tone: "linkage-unknown" },
+        "not-applicable": { label: "公開前", tone: "linkage-none" },
+      };
+      const renderRow = (row: CatalogRow) => {
+        const article = row.kind === "editorial" ? row.article : null;
+        const title = rowTitle(row);
+        const editedAt = formatDate(rowUpdatedAt(row));
+        const publicState = article
+          ? article.published_at
+            ? '<span class="badge public-live">公開中</span>'
+            : article.scheduled_publish_at
+              ? `<span class="badge public-scheduled">公開予約・${esc(formatSchedule(article.scheduled_publish_at))}</span>`
+              : '<span class="badge public-draft">未公開</span>'
+          : '<span class="badge public-live">公開中</span>';
+        const linkageState = linkageLabels[rowLinkageState(row)] ?? linkageLabels.unknown;
+        const editorialState = article
+          ? `<span class="article-status-group"><span class="article-status-group__label">編集</span><span class="badge ${article.status}">${labels[article.status]}</span></span>`
+          : "";
+        const updatedLabel = article ? "最終更新" : "公開更新";
+        let action = "";
+        if (row.kind === "unregistered") {
+          action = canRegisterPublicArticle(row.publicArticle)
+            ? `<a class="catalog-action" href="/admin/editor/?sourceArticle=${encodeURIComponent(row.publicArticle.articleId)}&from=articles" data-register-link data-article-id="${esc(row.publicArticle.articleId)}" data-catalog-subject="${esc(row.publicArticle.subject)}" data-catalog-category="${esc(row.publicArticle.category)}" data-catalog-slug="${esc(row.publicArticle.slug)}">運営原稿を作成</a>`
+            : '<span class="badge" title="公開記事から運営原稿を作成するには分野の編集権限が必要です">登録には編集権限が必要</span>';
+        } else if (row.kind === "registered") {
+          action = row.documentId
+            ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(row.documentId)}&mode=update&from=articles">更新案を作成</a>`
+            : '<span class="badge">運営原稿を準備中</span>';
+        } else if (row.kind === "needs-registration" && row.documentId) {
+          action = `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(row.documentId)}&from=articles">運営原稿を確認</a>`;
+        } else if (row.kind === "conflict") {
+          const relatedDocumentId = row.publicArticle.duplicateDocumentIds?.[0] ?? row.publicArticle.documentId;
+          if (relatedDocumentId) action = `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(relatedDocumentId)}&from=articles">紐付け先を確認</a>`;
+        }
+        const archiveBadge = article && isArchived(article) ? '<span class="badge archived">アーカイブ済み</span>' : "";
+        const testBadge = isTestArticleTitle(title) ? '<span class="badge">テスト原稿</span>' : "";
+        const updateInProgress = article ? Boolean(article.published_at && hasUnpublishedPublicationChanges(article)) : false;
         const updateActionLabel = updateInProgress ? "更新案作成中" : "更新案を作成";
-        const updateAction = article.published_at ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(article.id)}&mode=update&from=articles" aria-label="${esc(article.title || "無題の記事")}の${updateActionLabel}" data-update-proposal-state="${updateInProgress ? "in-progress" : "available"}">${updateActionLabel}</a>` : "";
-        return `<article class="article" role="link" tabindex="0" data-document-id="${esc(article.id)}" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く${editingSummary ? `・${esc(editingSummary)}` : ""}${article.scheduled_publish_at ? `・公開予約済み ${esc(formatSchedule(article.scheduled_publish_at))}` : ""}"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${formatDate(article.updated_at)}${scheduleSummary}${archiveSummary}${mode === "review" && assignedToScope(article) ? " ・ 自分へのフィードバック依頼" : ""}${editingSummary ? `<span class="article-presence" data-active-editors="${esc(article.id)}"><span class="presence-dot" aria-hidden="true"></span>${esc(editingSummary)}</span>` : ""}</p></div><div class="article-actions"><div class="badges">${editingBadge}<span class="badge ${article.status}">${labels[article.status]}</span>${scheduleBadge}${archiveBadge}${sourceLinkBadge}${isTestArticleTitle(article.title) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み・運営管理中</span>' : ""}</div>${archiveAction}${updateAction}</div></article>`;
-      }).join("") : "<p>条件に一致する原稿はありません。</p>";
+        const updateAction = article?.published_at
+          ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(article.id)}&mode=update&from=articles" aria-label="${esc(title || "無題の記事")}の${updateActionLabel}" data-update-proposal-state="${updateInProgress ? "in-progress" : "available"}">${updateActionLabel}</a>`
+          : "";
+        const archiveAction = article && article.status === "draft" && !article.published_at
+          ? isArchived(article)
+            ? archiveExpired(article)
+              ? '<button type="button" class="article-action" disabled title="アーカイブ期限を過ぎています">期限切れ</button>'
+              : `<button type="button" class="article-action" data-archive-action="unarchive" data-archive-document-id="${esc(article.id)}">復元</button>`
+            : `<button type="button" class="article-action" data-archive-action="archive" data-archive-document-id="${esc(article.id)}">アーカイブ</button>`
+          : "";
+        const editingSummary = article ? activeEditorSummary(article) : "";
+        const editingBadge = article && activeEditorsFor(article).length
+          ? `<span class="badge editing" aria-label="${activeEditorsFor(article).length}人が編集中">● ${activeEditorsFor(article).length}人が編集中</span>`
+          : "";
+        const statusMarkup = `<div class="article-statuses">${editorialState}<span class="article-status-group"><span class="article-status-group__label">学習サイト</span>${publicState}</span><span class="article-status-group"><span class="article-status-group__label">運営連携</span><span class="badge ${linkageState.tone}">${linkageState.label}</span></span>${editingBadge}${archiveBadge}${testBadge}</div>`;
+        const presenceMarkup = article && editingSummary
+          ? `<span class="article-presence" data-active-editors="${esc(article.id)}"><span class="presence-dot" aria-hidden="true"></span>${esc(editingSummary)}</span>`
+          : "";
+        const cardClasses = `article${row.kind === "unregistered" || row.kind === "needs-registration" || row.kind === "conflict" || row.kind === "unknown" ? " article-unregistered" : ""}`;
+        const clickAttributes = article
+          ? ` role="link" tabindex="0" data-document-id="${esc(article.id)}" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}"`
+          : "";
+        return `<article class="${cardClasses}"${clickAttributes} aria-label="${esc(title)}。${esc(linkageState.label)}"><div class="article-main"><h2>${esc(title || "無題の原稿")}</h2><p class="article-meta"><span class="article-meta__updated">${updatedLabel} ${editedAt}</span></p>${statusMarkup}${presenceMarkup}</div><div class="article-actions">${action}${archiveAction}${updateAction}</div></article>`;
+      };
+      if (shown.length) {
+        const groups = new Map<string, { subject: string; category: string; rows: CatalogRow[] }>();
+        for (const row of shown) {
+          const key = `${rowSubject(row)}/${rowCategory(row)}`;
+          const group = groups.get(key) ?? { subject: rowSubject(row), category: rowCategory(row), rows: [] };
+          group.rows.push(row);
+          groups.set(key, group);
+        }
+        list.innerHTML = [...groups.values()].map((group) => `<section class="article-group"><h2 class="article-group__heading"><strong>${esc(subjectDisplayName(group.subject))}</strong><span aria-hidden="true">›</span><strong>${esc(categoryDisplayName(group.category))}</strong><small>${group.rows.length}件</small></h2><div class="article-group__items">${group.rows.map(renderRow).join("")}</div></section>`).join("");
+      } else {
+        list.innerHTML = "<p>条件に一致する原稿はありません。</p>";
+      }
       pagination.hidden = !hasMore;
       paginationStatus.textContent = loadedPageCount ? `${items.length}件を読み込み済み${hasMore ? "・続きがあります" : "・すべて読み込み済み"}` : "";
       loadMoreButton.disabled = false;
@@ -1313,7 +1669,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const data = await readApiResponse<{ ok?: boolean; registered?: boolean; documentId?: string; identityKey?: string; error?: string }>(response);
         if (!response.ok || data.ok !== true) throw new Error(data.error ?? "公開記事を運営管理へ登録できませんでした。");
         registeredPublicArticleIds.set(publicArticleKey(source), data.documentId);
-        setCatalogFeedback(data.registered === false ? `「${source.title}」はすでに運営管理へ登録されています。外部公開やPRは開始していません。` : `「${source.title}」を運営管理へ登録しました。外部公開やPRは開始していません。`);
+        setCatalogFeedback(data.registered === false ? `「${source.title}」の運営原稿はすでに登録されています。外部公開やPRは開始していません。` : `「${source.title}」の運営原稿を作成しました。外部公開やPRは開始していません。`);
         // Registration already returns the authoritative document id. Update
         // the local catalog immediately instead of reloading the editorial
         // list and GitHub catalog after every item; repeated reloads can
@@ -1321,7 +1677,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         render();
       } catch (error) {
         setCatalogFeedback(error instanceof Error ? error.message : "公開記事を運営管理へ登録できませんでした。", true);
-        link.textContent = "運営管理へ登録";
+        link.textContent = "運営原稿を作成";
       } finally {
         delete link.dataset.registering;
         link.removeAttribute("aria-busy");
@@ -1335,9 +1691,11 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       assignSelectValue(category, defaultFilterState.category, defaultFilterState.category);
       assignSelectValue(status, defaultFilterState.status, defaultFilterState.status);
       assignSelectValue(publication, defaultFilterState.publication, defaultFilterState.publication);
+      assignSelectValue(linkage, defaultFilterState.linkage, defaultFilterState.linkage);
       assignSelectValue(test, defaultFilterState.test, defaultFilterState.test);
       assignSelectValue(workflow, defaultFilterState.workflow, defaultFilterState.workflow);
       assignSelectValue(archive, defaultFilterState.archive, defaultFilterState.archive);
+      root.querySelector<HTMLDetailsElement>(".advanced-filters")!.open = false;
       updateCategoryOptions();
       saveFilterState();
       history.replaceState({}, "", `${location.pathname}#article-list`);
@@ -1357,11 +1715,20 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       if (!button) return;
       selectSubjectFromBrowser(button.dataset.subjectQuick ?? "all");
     });
+    catalogCounts.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-catalog-filter]");
+      const value = button?.dataset.catalogFilter;
+      if (!value || ![...linkage.options].some((option) => option.value === value)) return;
+      linkage.value = linkage.value === value ? "all" : value;
+      saveFilterState();
+      render();
+      root.querySelector("#article-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     subjectBrowserAll.addEventListener("click", () => selectSubjectFromBrowser("all"));
     loadingFallbackTimer = window.setTimeout(() => { if (list.textContent?.includes("取得しています")) list.textContent = "原稿一覧を取得できませんでした。ページを再読み込みしてください。"; }, 6_000);
     subject.addEventListener("change", () => { updateCategoryOptions(); render(); });
     query.addEventListener("input", render);
-    [category, status, publication, test, workflow].forEach((element) => element.addEventListener("change", render));
+    [category, status, publication, linkage, test, workflow].forEach((element) => element.addEventListener("change", render));
     archive.addEventListener("change", () => { render(); void load(false, { silent: true }); });
     loadMoreButton.addEventListener("click", () => { if (!hasMore || loadMoreButton.disabled) return; loadMoreButton.disabled = true; paginationStatus.textContent = "次の原稿を読み込んでいます…"; void load(true); });
     list.addEventListener("click", async (event) => {

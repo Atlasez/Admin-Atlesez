@@ -1082,9 +1082,11 @@ describe("既存公開記事の運営原稿移行契約", () => {
       "utf8",
     );
 
-    expect(articlesSource).toContain("運営管理未登録");
+    expect(articlesSource).toContain("運営原稿未登録");
     expect(articlesSource).not.toContain("data-management");
-    expect(articlesSource).toContain("運営管理へ登録");
+    expect(articlesSource).toContain("運営原稿を作成");
+    expect(articlesSource).toContain("公開記事と連携済み");
+    expect(articlesSource).toContain("原稿あり・公開記事ID未連携");
     expect(articlesSource).toContain(
       'fetch("/api/admin/editor/catalog/register"',
     );
