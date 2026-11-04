@@ -29,7 +29,19 @@ test("一括登録は編集権限内の非テスト未登録記事だけを送�
     if (url.pathname === "/api/admin/editor/documents") {
       await route.fulfill({
         json: {
-          documents: [],
+          documents: [
+            {
+              id: "managed-document",
+              source_article_id: "article-managed",
+              subject: "mathematics",
+              category: "group-theory",
+              slug: "managed-article",
+              title: "公開記事と連携済み",
+              status: "draft",
+              updated_at: "2026-09-02T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
           pagination: { hasMore: false, nextCursor: null },
           scope: {
             email: "writer@example.com",
@@ -83,6 +95,29 @@ test("一括登録は編集権限内の非テスト未登録記事だけを送�
               "担当範囲外の記事",
               "unmanaged",
             ),
+            catalogEntry(
+              "article-managed",
+              "mathematics",
+              "managed-article",
+              "公開記事と連携済み",
+              "managed",
+              "managed-document",
+            ),
+            catalogEntry(
+              "article-duplicate",
+              "physics",
+              "duplicate-article",
+              "重複確認の記事",
+              "duplicate",
+              "duplicate-document",
+            ),
+            catalogEntry(
+              "article-unknown",
+              "mathematics",
+              "unknown-state",
+              "状態未判定の記事",
+              "editorial-only",
+            ),
           ],
         },
       });
@@ -117,8 +152,63 @@ test("一括登録は編集権限内の非テスト未登録記事だけを送�
   await page.goto("admin/articles/?verify=registration-candidates");
 
   const bulkButton = page.locator("[data-register-unregistered]");
-  await expect(bulkButton).toHaveText("未登録記事を一括登録（1件）");
-  await expect(page.locator("[data-list]")).toContainText("公開記事ID未紐付け");
+  await expect(bulkButton).toHaveText("未登録の運営原稿を一括作成（1件）");
+  await expect(
+    page.getByRole("heading", { name: "学習サイト公開記事との連携" }),
+  ).toBeVisible();
+  await expect(page.locator('[data-catalog-filter="managed"]')).toContainText(
+    "1件",
+  );
+  await expect(
+    page.locator('[data-catalog-filter="needs-registration"]'),
+  ).toContainText("1件");
+  await expect(page.locator('[data-catalog-filter="unmanaged"]')).toContainText(
+    "4件",
+  );
+  await expect(page.locator('[data-catalog-filter="conflict"]')).toContainText(
+    "1件",
+  );
+  await expect(page.locator('[data-catalog-filter="unknown"]')).toContainText(
+    "1件",
+  );
+  await expect(page.locator("[data-catalog-summary]")).toContainText(
+    "公開中の記事 8件",
+  );
+  const adoptedArticle = page.locator(
+    '[data-list] article[data-document-id="managed-document"]',
+  );
+  await expect(
+    adoptedArticle.locator(".article-status-group").nth(0),
+  ).toContainText("下書き");
+  await expect(
+    adoptedArticle.locator(".article-status-group").nth(1),
+  ).toContainText("公開中");
+  const conflictCard = page.locator(
+    '[data-list] article[aria-label*="重複確認の記事"]',
+  );
+  await expect(conflictCard).toContainText("重複・紐付け要確認");
+  await expect(conflictCard).not.toContainText("連携状態を判定できない");
+  await page.locator('[data-catalog-filter="conflict"]').click();
+  await expect(page.locator("[data-list] .article")).toHaveCount(1);
+  await expect(page.locator("[data-list]")).toContainText("重複・紐付け要確認");
+  await page.locator('[data-catalog-filter="conflict"]').click();
+  await page.locator('[data-catalog-filter="unknown"]').click();
+  await expect(page.locator("[data-list] .article")).toHaveCount(1);
+  await expect(page.locator("[data-list]")).toContainText(
+    "連携状態を判定できない",
+  );
+  await page.locator('[data-catalog-filter="unknown"]').click();
+  await page.screenshot({
+    path: "test-results/admin-articles-status-redesign.png",
+    fullPage: true,
+  });
+  await page.locator('[data-catalog-filter="needs-registration"]').click();
+  await expect(page.locator("[data-list] .article")).toHaveCount(1);
+  await expect(page.locator("[data-list]")).toContainText(
+    "原稿あり・公開記事ID未連携",
+  );
+  await page.locator('[data-catalog-filter="needs-registration"]').click();
+  await expect(page.locator("[data-list]")).toContainText("公開記事ID未連携");
   await expect(page.locator("[data-list]")).not.toContainText("テスト記事");
   await expect(page.locator("[data-list]")).not.toContainText(
     "担当範囲外の記事",
