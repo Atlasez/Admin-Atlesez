@@ -152,7 +152,8 @@ it("preserves terminal applications unless personal-data retention is enabled", 
     CREATE TABLE atlasez_member_applications (
       id TEXT PRIMARY KEY,
       status TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      intake_reconciliation_required INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE atlasez_application_email_deliveries (
       id TEXT PRIMARY KEY,
@@ -205,6 +206,56 @@ it("preserves terminal applications unless personal-data retention is enabled", 
     ]);
   } finally {
     info.mockRestore();
+  }
+});
+
+it("fails closed when the intake reconciliation marker migration is unavailable", async () => {
+  const db = new DatabaseSync(":memory:");
+  databases.push(db);
+  db.exec(`
+    CREATE TABLE admin_auth_sessions (expires_at TEXT NOT NULL);
+    CREATE TABLE atlasez_application_rate_limits (bucket INTEGER NOT NULL);
+    CREATE TABLE atlasez_member_applications (
+      id TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE atlasez_application_email_deliveries (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL REFERENCES atlasez_member_applications(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK(status IN ('pending','sending','retry','sent','failed'))
+    );
+  `);
+  const database: D1Database = {
+    prepare: (query) => new Statement(query, db),
+    batch: async () => [],
+  };
+  const now = new Date("2026-10-12T00:00:00.000Z");
+  const expiredAt = new Date(now.getTime() - 181 * 86_400_000).toISOString();
+  db.prepare(
+    "INSERT INTO atlasez_member_applications (id,status,updated_at) VALUES (?,?,?)",
+  ).run("legacy-schema", "accepted", expiredAt);
+
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await expect(
+      runPersonalDataRetention(database, now, {
+        deleteTerminalApplications: true,
+      }),
+    ).resolves.toMatchObject({
+      resolvedApplicationsDeleted: 0,
+      terminalApplicationsRetentionSkipped: true,
+    });
+    expect(
+      db.prepare("SELECT id FROM atlasez_member_applications").all(),
+    ).toEqual([{ id: "legacy-schema" }]);
+    expect(error).toHaveBeenCalledWith(
+      "application_retention_skipped_marker_probe_failed",
+    );
+  } finally {
+    info.mockRestore();
+    error.mockRestore();
   }
 });
 
@@ -400,7 +451,8 @@ it("keeps applications with any undelivered email and verifies linked-record cas
     CREATE TABLE atlasez_member_applications (
       id TEXT PRIMARY KEY,
       status TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      intake_reconciliation_required INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE atlasez_application_email_deliveries (
       id TEXT PRIMARY KEY,
@@ -543,6 +595,56 @@ it("keeps applications with any undelivered email and verifies linked-record cas
         )
         .get(),
     ).toEqual({ count: 4 });
+  } finally {
+    info.mockRestore();
+  }
+});
+
+it("keeps terminal applications while intake reconciliation remains unresolved", async () => {
+  const db = new DatabaseSync(":memory:");
+  databases.push(db);
+  db.exec(`
+    CREATE TABLE admin_auth_sessions (expires_at TEXT NOT NULL);
+    CREATE TABLE atlasez_application_rate_limits (bucket INTEGER NOT NULL);
+    CREATE TABLE atlasez_member_applications (
+      id TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      intake_reconciliation_required INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE atlasez_application_email_deliveries (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL REFERENCES atlasez_member_applications(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK(status IN ('pending','sending','retry','sent','failed'))
+    );
+  `);
+  const database: D1Database = {
+    prepare: (query) => new Statement(query, db),
+    batch: async () => [],
+  };
+  const now = new Date("2026-10-12T00:00:00.000Z");
+  const expiredAt = new Date(now.getTime() - 181 * 86_400_000).toISOString();
+  db.prepare(
+    "INSERT INTO atlasez_member_applications (id,status,updated_at,intake_reconciliation_required) VALUES (?,?,?,?)",
+  ).run("unresolved", "accepted", expiredAt, 1);
+  db.prepare(
+    "INSERT INTO atlasez_member_applications (id,status,updated_at,intake_reconciliation_required) VALUES (?,?,?,?)",
+  ).run("reconciled", "rejected", expiredAt, 0);
+
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    await expect(
+      runPersonalDataRetention(database, now, {
+        deleteTerminalApplications: true,
+      }),
+    ).resolves.toMatchObject({ resolvedApplicationsDeleted: 1 });
+    expect(
+      db
+        .prepare(
+          "SELECT id,intake_reconciliation_required FROM atlasez_member_applications",
+        )
+        .all(),
+    ).toEqual([{ id: "unresolved", intake_reconciliation_required: 1 }]);
   } finally {
     info.mockRestore();
   }
