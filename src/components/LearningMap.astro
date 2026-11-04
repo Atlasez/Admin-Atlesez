@@ -2335,7 +2335,20 @@ const mapCategoryPath = fixedSubject && fixedCategory
       }
     });
 
-  // タブ内・画面下にある地図でも、検索や経路検索を押した直後から必ず使えるようにする。
-  // Cytoscape 自体は動的 import のままなので、初期 HTML の描画は妨げない。
-  start();
+  // Cytoscape は大きいため、初期選択がタイル／リストのときは取得しない。
+  // 地図タブを開いて表示領域に入った時点で初期化する。経路検索は上の
+  // `initRoute()` が独立して使えるため、地図本体の初期化を待たない。
+  if (container && "IntersectionObserver" in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        start();
+      },
+      { rootMargin: "240px 0px" },
+    );
+    observer.observe(container);
+  } else {
+    start();
+  }
 </script>
