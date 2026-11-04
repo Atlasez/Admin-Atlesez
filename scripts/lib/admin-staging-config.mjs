@@ -425,7 +425,7 @@ export function validateAdminStagingConfig(
           triggerKeys[0] === "crons" &&
           Array.isArray(crons) &&
           crons.length === 0),
-      "old-Worker compatibility config must contain no scheduled triggers",
+      "no-Cron staging config must contain no scheduled triggers",
     );
   } else {
     add(

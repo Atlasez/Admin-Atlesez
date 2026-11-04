@@ -7,6 +7,11 @@ import {
   validateAdminStagingConfig,
 } from "../../scripts/lib/admin-staging-config.mjs";
 import {
+  matchesAdminStagingDeploySha,
+  missingAdminStagingDeployConfirmations,
+  parseAdminStagingDeployArgs,
+} from "../../scripts/lib/admin-staging-deploy-policy.mjs";
+import {
   isApprovedStagingAddress,
   isApprovedStagingRecipient,
 } from "../../src/lib/admin-staging-email-policy.mjs";
@@ -194,9 +199,53 @@ describe("ADMIN staging isolation preflight", () => {
     const scheduled = safeStagingConfig();
     expect(
       validateAdminStagingConfig(scheduled, { compatibilityNoCron: true }),
-    ).toContain(
-      "old-Worker compatibility config must contain no scheduled triggers",
-    );
+    ).toContain("no-Cron staging config must contain no scheduled triggers");
+  });
+
+  it("selects the no-Cron staging config only with an explicit no-Cron mode", () => {
+    expect(parseAdminStagingDeployArgs(["--dry-run"])).toMatchObject({
+      mode: "--dry-run",
+      noCron: false,
+      configPath: "wrangler.admin.staging.jsonc",
+    });
+    expect(
+      parseAdminStagingDeployArgs(["--deploy", "--no-cron"]),
+    ).toMatchObject({
+      mode: "--deploy",
+      noCron: true,
+      configPath: "wrangler.admin.staging.compat.jsonc",
+    });
+    expect(
+      parseAdminStagingDeployArgs(["--deploy", "--no-cron", "--prod"]),
+    ).toBeNull();
+    expect(parseAdminStagingDeployArgs(["--deploy", "--dry-run"])).toBeNull();
+  });
+
+  it("requires explicit no-Cron confirmation and an exact 40-character deploy SHA", () => {
+    const confirmations = {
+      ATLASEZ_STAGING_DEPLOY_CONFIRMED: "1",
+      ATLASEZ_STAGING_PROVIDER_SETTINGS_VERIFIED: "1",
+      ATLASEZ_STAGING_0134_VERIFIED: "1",
+    };
+    expect(
+      missingAdminStagingDeployConfirmations(confirmations, { noCron: false }),
+    ).toEqual([]);
+    expect(
+      missingAdminStagingDeployConfirmations(confirmations, { noCron: true }),
+    ).toEqual(["ATLASEZ_STAGING_NO_CRON_CONFIRMED"]);
+    expect(
+      missingAdminStagingDeployConfirmations(
+        { ...confirmations, ATLASEZ_STAGING_NO_CRON_CONFIRMED: "1" },
+        { noCron: true },
+      ),
+    ).toEqual([]);
+
+    const sha = "689a687d6f348e510fd84c923c8124153a7bcd7f";
+    expect(matchesAdminStagingDeploySha(sha, sha)).toBe(true);
+    expect(matchesAdminStagingDeploySha(sha.toUpperCase(), sha)).toBe(true);
+    expect(matchesAdminStagingDeploySha(`${sha}0`, sha)).toBe(false);
+    expect(matchesAdminStagingDeploySha("main", sha)).toBe(false);
+    expect(matchesAdminStagingDeploySha("", sha)).toBe(false);
   });
 
   it("rejects the production Worker, D1, route, or Discord guild/client", () => {

@@ -51,20 +51,26 @@ npm run test:admin-staging:isolated
 現在は既存Worker/D1を再利用します。read-onlyのbinding・route・secret名・migration確認を行い、専用の実行承認なしに設定変更やdeployをしません。DiscordとResendは無効のまま、STG-01〜06に不要なsecretを登録しません。secret値をGit、Issue、shell historyへ記録しません。Workerには別用途のGitHub、公開サイト、本番Discord、本番メールsecretを設定しません。現在のD1に0134を含む未適用migrationはread-back上ありませんが、これは旧Worker互換性や復元試験の証拠ではありません。対象Worker buildの由来とstaging deploy承認が確認できるまで配信しません。
 
 ```bash
-cp wrangler.admin.staging.example.jsonc wrangler.admin.staging.jsonc
-# ローカルのignored configへstagingのresource/client IDとstaging originだけ記入
-npm run verify:admin-staging-config
-npm run deploy:admin:staging -- --dry-run
+cp wrangler.admin.staging.example.jsonc wrangler.admin.staging.compat.jsonc
+# ignored configからtriggersを削除し、read-back済みstaging resource/client IDとoriginを設定
+npm run verify:admin-staging-config:compat
+npm run deploy:admin:staging -- --dry-run --no-cron
 ```
 
-dry-runはAdmin向けartifactを作ってWrangler dry-runを行います。staging Worker/D1への書込みはありません。実際のstaging配信を担当者が承認して行う場合は、cleanなcommit済みworktreeで以下を使います。3つの確認値は、配信担当がstaging設定・provider secret名・0134 ledgerのread-backを終えた後にだけ設定します。
+現在のstaging WorkerにはCron triggerがなく、Cloudflareのquotaも満杯です。既存Cronを変更せず応募・認可APIを実証する配信は `--no-cron` モードに限定します。このモードではscheduled処理を実行しないため、Cron・queue処理の実証はPASSにできません。Cronありの通常configは、承認済み容量の使い捨て環境でのみ使用します。
+
+dry-runはAdmin向けartifactを作って対象configでWrangler dry-runを行います。Worker配信・D1 migration/writeはありません。実際のstaging配信は、Cloudflare担当の個別承認後、対象Worker/D1、provider設定、0134 ledgerを再read-backし、cleanなcommit済みworktreeから行います。`ATLASEZ_STAGING_DEPLOY_SHA`はレビュー・承認された40文字のcommit SHAをリテラルで指定し、実行時のHEADと一致しなければscriptが停止します。
 
 ```bash
+ATLASEZ_STAGING_DEPLOY_SHA=<reviewed-40-character-commit-sha> \
 ATLASEZ_STAGING_DEPLOY_CONFIRMED=1 \
 ATLASEZ_STAGING_PROVIDER_SETTINGS_VERIFIED=1 \
 ATLASEZ_STAGING_0134_VERIFIED=1 \
-npm run deploy:admin:staging -- --deploy
+ATLASEZ_STAGING_NO_CRON_CONFIRMED=1 \
+npm run deploy:admin:staging -- --deploy --no-cron
 ```
+
+`--no-cron`は `wrangler.admin.staging.compat.jsonc` だけを読み、Cronなしを明示確認し、Cronを配信対象へ追加しません。
 
 Resendのtest sinkを明示的に使う時だけ `ATLASEZ_STAGING_RESEND_SINK_CONFIRMED=1` も設定します。test-sink以外の宛先、または確認されていないAPI keyは配信しません。このdeploy scriptは固定のignored staging configしか読み込まず、本番の `wrangler.admin.jsonc` へfallbackせず、migrationは一切実行しません。Cloudflare D1 operatorが後続の専用手順で対象名を二名照合してmigrationを適用します。
 

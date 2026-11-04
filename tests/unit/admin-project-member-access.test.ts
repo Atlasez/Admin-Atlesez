@@ -837,6 +837,33 @@ it("Atlasだけの責任者にも対象自己紹介の承認導線とAPIを許�
   ).toBe(403);
 });
 
+it("一般メンバーのauth-statusは管理者向けmanagerProjectsを公開しない", async () => {
+  const { member, request } = fixture();
+  const email = "ordinary-member@atlasez.test";
+  member(email, "thinking-cafe", "member");
+
+  const response = await request("/api/admin/auth-status", email);
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(await response.json()).toMatchObject({
+    isManager: false,
+    canAccessAdmin: false,
+    managerProjects: [],
+  });
+
+  const globalAdminResponse = await request(
+    "/api/admin/auth-status",
+    "global@atlasez.test",
+  );
+  expect(
+    globalAdminResponse.status,
+    await globalAdminResponse.clone().text(),
+  ).toBe(200);
+  expect(await globalAdminResponse.json()).toMatchObject({
+    isManager: true,
+    managerProjects: expect.arrayContaining(["thinking-cafe"]),
+  });
+});
+
 it("auth-status hides paused manager projects while preserving another active membership", async () => {
   const { db, member, request, now } = fixture();
   const manager = "multi-project-manager@atlasez.test";
@@ -881,6 +908,13 @@ it("same interview-notification retry is idempotent but a changed schedule is qu
   const first = await request(path, manager, "POST", {});
   expect(first.status, await first.clone().text()).toBe(200);
   expect(await first.json()).toMatchObject({ notificationQueued: true });
+  const firstDeliveryId = (
+    db
+      .prepare(
+        "SELECT id FROM atlasez_application_email_deliveries WHERE application_id=? AND kind='applicant_interview_invitation'",
+      )
+      .get(id) as { id: string }
+  ).id;
   db.prepare(
     `UPDATE atlasez_application_email_deliveries
         SET status='sent',sent_at=?,updated_at=?
@@ -954,13 +988,19 @@ it("same interview-notification retry is idempotent but a changed schedule is qu
   expect(await rescheduled.json()).toMatchObject({ notificationQueued: true });
   const delivery = db
     .prepare(
-      `SELECT status,sent_at,text_body FROM atlasez_application_email_deliveries
+      `SELECT id,status,sent_at,text_body FROM atlasez_application_email_deliveries
       WHERE application_id=? AND kind='applicant_interview_invitation'`,
     )
-    .get(id) as { status: string; sent_at: string | null; text_body: string };
+    .get(id) as {
+    id: string;
+    status: string;
+    sent_at: string | null;
+    text_body: string;
+  };
   expect(delivery.status).toBe("pending");
   expect(delivery.sent_at).toBeNull();
   expect(delivery.text_body).toContain("会議室B");
+  expect(delivery.id).not.toBe(firstDeliveryId);
   expect(
     db
       .prepare(
@@ -968,6 +1008,47 @@ it("same interview-notification retry is idempotent but a changed schedule is qu
       )
       .get(id),
   ).toEqual({ notification_count: 2 });
+
+  db.prepare(
+    `UPDATE atlasez_application_email_deliveries
+        SET status='sent',sent_at=?,updated_at=?
+      WHERE application_id=? AND kind='applicant_interview_invitation'`,
+  ).run(now, now, id);
+  db.prepare(
+    `UPDATE atlasez_application_interviews
+        SET scheduled_at='2026-11-10T10:00:00.000Z',location='会議室A',updated_at=?
+      WHERE application_id=?`,
+  ).run(new Date(Date.parse(now) + 2_000).toISOString(), id);
+  const restoredSchedule = await request(path, manager, "POST", {});
+  expect(restoredSchedule.status, await restoredSchedule.clone().text()).toBe(
+    200,
+  );
+  expect(await restoredSchedule.json()).toMatchObject({
+    notificationQueued: true,
+  });
+  const restoredDelivery = db
+    .prepare(
+      `SELECT id,status,sent_at,text_body FROM atlasez_application_email_deliveries
+      WHERE application_id=? AND kind='applicant_interview_invitation'`,
+    )
+    .get(id) as {
+    id: string;
+    status: string;
+    sent_at: string | null;
+    text_body: string;
+  };
+  expect(restoredDelivery.id).not.toBe(firstDeliveryId);
+  expect(restoredDelivery.id).not.toBe(delivery.id);
+  expect(restoredDelivery.status).toBe("pending");
+  expect(restoredDelivery.sent_at).toBeNull();
+  expect(restoredDelivery.text_body).toContain("会議室A");
+  expect(
+    db
+      .prepare(
+        "SELECT notification_count FROM atlasez_application_interviews WHERE application_id=?",
+      )
+      .get(id),
+  ).toEqual({ notification_count: 3 });
 });
 
 it("does not replace an in-flight interview email when the schedule changes", async () => {

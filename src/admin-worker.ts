@@ -8339,6 +8339,7 @@ async function queueApplicationAcceptanceEmail(
 
 async function interviewNotificationDeliveryId(
   applicationId: string,
+  notificationRevision: number,
   subject: string,
   textBody: string,
   htmlBody: string,
@@ -8346,7 +8347,13 @@ async function interviewNotificationDeliveryId(
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(
-      JSON.stringify([applicationId, subject, textBody, htmlBody]),
+      JSON.stringify([
+        applicationId,
+        notificationRevision,
+        subject,
+        textBody,
+        htmlBody,
+      ]),
     ),
   );
   return `interview-${[...new Uint8Array(digest)]
@@ -8369,6 +8376,7 @@ async function queueApplicationInterviewEmail(
     mode: "in_person" | "online";
     zoomUrl: string;
     location: string;
+    notificationRevision: number;
   },
   sentAt: string,
 ) {
@@ -8414,6 +8422,7 @@ async function queueApplicationInterviewEmail(
     : `<h2>面談日時のお知らせ</h2><p>${emailSafe(projectLabel)}の面談日時が設定されました。</p><p><b>日時：</b>${emailSafe(date)}（${emailSafe(interview.timezone)}）<br><b>形式：</b>${emailSafe(mode)}${access ? `<br><b>${interview.mode === "online" ? "Zoomリンク" : "場所"}：</b>${interview.mode === "online" ? `<a href="${emailSafe(access)}">${emailSafe(access)}</a>` : emailSafe(access)}` : ""}</p>`;
   const deliveryId = await interviewNotificationDeliveryId(
     application.id,
+    interview.notificationRevision,
     subject,
     textBody,
     htmlBody,
@@ -13785,7 +13794,7 @@ async function notifyApplicationInterview(
   const access = await interviewApplicationAccess(request, env, id);
   if (isResponse(access)) return access;
   const interview = await env.REPORTS.prepare(
-    "SELECT id,application_id,scheduled_at,timezone,mode,zoom_url,location,status FROM atlasez_application_interviews WHERE application_id=?",
+    "SELECT id,application_id,scheduled_at,timezone,mode,zoom_url,location,status,notification_count FROM atlasez_application_interviews WHERE application_id=?",
   ).bind(id).first<ApplicationInterviewRow>();
   if (!interview || interview.status !== "scheduled")
     return json({ error: "通知できる面談予定がありません。" }, 409);
@@ -13806,6 +13815,7 @@ async function notifyApplicationInterview(
         mode: interview.mode,
         zoomUrl: interview.zoom_url,
         location: interview.location,
+        notificationRevision: interview.notification_count + 1,
       },
       now,
     );
@@ -24001,7 +24011,9 @@ async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
   // Keep navigation hints aligned with the same live lifecycle checks used by
   // project APIs. A stale manager row must not make a paused/withdrawn project
   // appear active in the portal after the same session loses that scope.
-  const managerProjects = await accessibleOperationProjects(env, scope);
+  const managerProjects = (await accessibleOperationProjects(env, scope)).filter(
+    (project) => project.role === "manager",
+  );
   const token = cookieValue(request, ADMIN_SESSION_COOKIE);
   const googleSession = token
     ? await env.REPORTS.prepare(

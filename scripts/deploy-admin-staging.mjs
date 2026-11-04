@@ -2,18 +2,25 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
-  ADMIN_STAGING_LOCAL_CONFIG_PATH,
   parseAdminStagingConfig,
   validateAdminStagingConfig,
 } from "./lib/admin-staging-config.mjs";
+import {
+  matchesAdminStagingDeploySha,
+  missingAdminStagingDeployConfirmations,
+  parseAdminStagingDeployArgs,
+} from "./lib/admin-staging-deploy-policy.mjs";
 
-const mode = process.argv[2];
-if (process.argv.length !== 3 || !["--dry-run", "--deploy"].includes(mode)) {
-  console.error("Usage: npm run deploy:admin:staging -- --dry-run | --deploy");
+const deployment = parseAdminStagingDeployArgs(process.argv.slice(2));
+if (!deployment) {
+  console.error(
+    "Usage: npm run deploy:admin:staging -- --dry-run | --deploy [--no-cron]",
+  );
   process.exit(2);
 }
+const { mode, noCron, configPath: configRelativePath } = deployment;
 
-const configPath = resolve(process.cwd(), ADMIN_STAGING_LOCAL_CONFIG_PATH);
+const configPath = resolve(process.cwd(), configRelativePath);
 let config;
 try {
   config = parseAdminStagingConfig(await readFile(configPath, "utf8"));
@@ -46,6 +53,7 @@ const allowDiscordTestGuild = discordTestGuildRequested;
 const failures = validateAdminStagingConfig(config, {
   allowResendTestSink,
   allowDiscordTestGuild,
+  compatibilityNoCron: noCron,
 });
 if (failures.length) {
   console.error("ADMIN staging isolation preflight failed:");
@@ -54,14 +62,9 @@ if (failures.length) {
 }
 
 if (mode === "--deploy") {
-  const requiredConfirmations = [
-    "ATLASEZ_STAGING_DEPLOY_CONFIRMED",
-    "ATLASEZ_STAGING_PROVIDER_SETTINGS_VERIFIED",
-    "ATLASEZ_STAGING_0134_VERIFIED",
-  ];
-  const missing = requiredConfirmations.filter(
-    (name) => process.env[name] !== "1",
-  );
+  const missing = missingAdminStagingDeployConfirmations(process.env, {
+    noCron,
+  });
   if (config.vars?.ATLASEZ_STAGING_DISCORD_MODE === "test-guild")
     missing.push(
       ...[
@@ -73,6 +76,20 @@ if (mode === "--deploy") {
   if (missing.length) {
     console.error(
       `Staging deploy stopped. Complete the operator read-back first: ${missing.join(", ")}`,
+    );
+    process.exit(2);
+  }
+  const actualSha = execFileSync("git", ["rev-parse", "HEAD"], {
+    encoding: "utf8",
+  }).trim();
+  if (
+    !matchesAdminStagingDeploySha(
+      process.env.ATLASEZ_STAGING_DEPLOY_SHA,
+      actualSha,
+    )
+  ) {
+    console.error(
+      "Staging deploy stopped because ATLASEZ_STAGING_DEPLOY_SHA does not match the exact checked-out commit.",
     );
     process.exit(2);
   }
@@ -111,7 +128,7 @@ try {
     "wrangler",
     "deploy",
     "--config",
-    ADMIN_STAGING_LOCAL_CONFIG_PATH,
+    configRelativePath,
   ];
   if (mode === "--dry-run") wranglerArgs.push("--dry-run");
   run("npm", wranglerArgs, buildEnvironment);
@@ -124,6 +141,6 @@ try {
 
 console.log(
   mode === "--dry-run"
-    ? "Staging dry-run completed. No Worker deployment or D1 migration was performed."
-    : "Dedicated ADMIN staging Worker deployment completed. No D1 migration was performed.",
+    ? `Staging ${noCron ? "no-Cron " : ""}dry-run completed. No Worker deployment or D1 migration was performed.`
+    : `Dedicated ADMIN staging Worker deployment completed${noCron ? " without Cron triggers; scheduled features remain untested" : ""}. No D1 migration was performed.`,
 );

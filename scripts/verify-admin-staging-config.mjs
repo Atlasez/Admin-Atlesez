@@ -94,7 +94,7 @@ console.log(
   example
     ? "Staging template safety checks passed. The placeholders are intentionally non-deployable."
     : compatibilityNoCron
-      ? "Staging old-Worker compatibility config passed with no scheduled triggers. Provider credentials and Cloudflare resource ownership still require operator read-back."
+      ? "Staging no-Cron config passed. Scheduled features remain disabled; provider credentials and Cloudflare resource ownership still require operator read-back."
       : allowDiscordTestGuild
         ? "Staging config identity checks passed with the explicit Discord test-guild opt-in. Provider credentials and Cloudflare resource ownership still require operator read-back."
         : "Staging config identity checks passed. Discord remains disabled unless STG-08 is explicitly approved; provider credentials and Cloudflare resource ownership still require operator read-back.",
