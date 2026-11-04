@@ -1245,6 +1245,84 @@ it("全migrationを適用した隔離D1で認証・全体管理・別プロジ�
   expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
+it("同じ既存セッションでもreviewer降格後はAPI拒否し、期限切れsessionは401にする", async () => {
+  const { db, env } = environment();
+  const email = "stale-reviewer@atlasez.test";
+  const token = "stale-reviewer-session";
+  const now = new Date().toISOString();
+  db.prepare(
+    "INSERT INTO report_admin_permissions(email,subject) VALUES (?,'mathematics')",
+  ).run(email);
+  db.prepare(
+    "INSERT INTO atlasez_project_memberships(project_id,email,role,joined_at) VALUES ('thinking-cafe',?,'manager',?)",
+  ).run(email, now);
+  const sessionHash = createHash("sha256").update(token).digest("hex");
+  db.prepare(
+    "INSERT INTO admin_auth_sessions(session_hash,email,expires_at,created_at) VALUES (?,?,?,?)",
+  ).run(sessionHash, email, "2099-01-01T00:00:00.000Z", now);
+
+  const requestApplications = () =>
+    worker.fetch(
+      new Request(
+        "https://admin.atlasez.test/api/admin/applications?project=thinking-cafe",
+        { headers: { cookie: `atlasez_admin_session=${token}` } },
+      ),
+      env as never,
+    );
+
+  expect((await requestApplications()).status).toBe(200);
+  db.prepare(
+    "UPDATE atlasez_project_memberships SET role='member' WHERE project_id='thinking-cafe' AND lower(email)=lower(?)",
+  ).run(email);
+  expect((await requestApplications()).status).toBe(403);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM admin_auth_sessions WHERE session_hash=? AND expires_at>? ",
+      )
+      .get(sessionHash, new Date().toISOString()),
+  ).toEqual({ count: 1 });
+
+  db.prepare(
+    "UPDATE admin_auth_sessions SET expires_at=? WHERE session_hash=?",
+  ).run("2000-01-01T00:00:00.000Z", sessionHash);
+  expect((await requestApplications()).status).toBe(401);
+});
+
+it("既存member sessionは所属休止後のmember-task APIから拒否される", async () => {
+  const { db, env } = environment();
+  const email = "stale-member@atlasez.test";
+  const token = "stale-member-session";
+  calendarAuditMember(db, email);
+  const now = new Date().toISOString();
+  const sessionHash = createHash("sha256").update(token).digest("hex");
+  db.prepare(
+    "INSERT INTO admin_auth_sessions(session_hash,email,expires_at,created_at) VALUES (?,?,?,?)",
+  ).run(sessionHash, email, "2099-01-01T00:00:00.000Z", now);
+  const requestMemberTasks = () =>
+    worker.fetch(
+      new Request("https://admin.atlasez.test/api/admin/member-tasks", {
+        headers: { cookie: `atlasez_admin_session=${token}` },
+      }),
+      env as never,
+    );
+
+  expect((await requestMemberTasks()).status).toBe(200);
+  db.prepare(
+    `INSERT INTO atlasez_project_member_lifecycle
+       (project_id,email,state,role_snapshot,last_request_id,updated_at)
+     VALUES ('thinking-cafe',?,'paused','member','pause-review',?)`,
+  ).run(email, now);
+  expect((await requestMemberTasks()).status).toBe(403);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM admin_auth_sessions WHERE session_hash=? AND expires_at>? ",
+      )
+      .get(sessionHash, new Date().toISOString()),
+  ).toEqual({ count: 1 });
+});
+
 it("仮の新規利用者の基本情報保存・応募・二重応募防止・本人以外の非公開を実APIで確認する", async () => {
   const { db, request, env } = environment();
   const email = "applicant@atlasez.test";

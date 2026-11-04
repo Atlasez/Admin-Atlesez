@@ -127,6 +127,26 @@ function insertDelivery(
   );
 }
 
+it("does not apply staging recipient-domain restrictions to production delivery", async () => {
+  const { db, env } = environment();
+  const now = new Date("2026-11-03T00:00:00.000Z");
+  env.EMAIL_FROM = "Atlasez <noreply@atlasez.org>";
+  insertDelivery(db, {
+    id: "production-path-delivery",
+    status: "pending",
+    attemptCount: 0,
+    claimedAt: null,
+    claimToken: null,
+    now: now.toISOString(),
+  });
+  const fetcher = vi.fn(async () => new Response("{}", { status: 200 }));
+
+  await expect(
+    dispatchApplicationEmails(env, { now, fetcher, logger: console }),
+  ).resolves.toMatchObject({ sent: 1, failed: 0, skipped: false });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
 it("retries only expired sending claims and keeps the provider idempotency key", async () => {
   const { db, env } = environment();
   const now = new Date("2026-10-12T00:00:00.000Z");
