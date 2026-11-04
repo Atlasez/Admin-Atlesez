@@ -1535,6 +1535,55 @@ test("公開予約済みの日時を編集画面へ表示する", async ({ page 
   ).toBeVisible();
 });
 
+test("自動保存中に公開予約ダイアログを開いても入力中の日時を保持する", async ({
+  page,
+}) => {
+  const approvedDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    published_at: null,
+    scheduled_publish_at: null,
+    publication_pr_url: null,
+  };
+  await mockAdminApi(page, undefined, approvedDocument);
+  let firstPatchStarted!: () => void;
+  const firstPatchStartedPromise = new Promise<void>((resolve) => {
+    firstPatchStarted = resolve;
+  });
+  let releaseFirstPatch!: () => void;
+  const firstPatchGate = new Promise<void>((resolve) => {
+    releaseFirstPatch = resolve;
+  });
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    firstPatchStarted();
+    await firstPatchGate;
+    await route.fulfill({
+      json: { ok: true, updatedAt: "2026-11-04T00:00:00.000Z" },
+    });
+  });
+
+  await page.goto("./admin/editor/?document=doc-1");
+  const scheduleButton = page.getByRole("button", { name: "公開予約" });
+  await expect(scheduleButton).toBeVisible();
+  const body = page.locator(
+    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
+  );
+  await body.fill("$$x$$");
+  await firstPatchStartedPromise;
+  await scheduleButton.click();
+  const scheduleDialog = page.locator("[data-schedule-dialog]");
+  await expect(scheduleDialog).toBeVisible();
+  const scheduleAt = scheduleDialog.locator("[data-schedule-at]");
+  await scheduleAt.fill("2026-11-11T12:34");
+
+  releaseFirstPatch();
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力内容を自動保存しました",
+  );
+  await expect(scheduleAt).toHaveValue("2026-11-11T12:34");
+});
+
 test("公開済み記事の未反映変更は運営サイトから再公開できる", async ({
   page,
 }) => {

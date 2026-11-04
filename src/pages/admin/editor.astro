@@ -2452,7 +2452,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       publicationReviewButton.hidden = !Boolean(stateData.canDecide);
       scheduleButton.hidden = !(isManager && Boolean(currentItem?.id) && currentItem?.status === "approved" && !currentItem?.published_at && !currentItem?.publication_pr_url);
       scheduleButton.textContent = currentItem?.scheduled_publish_at ? "公開予約を変更" : "公開予約";
-      scheduleAt.value = currentItem?.scheduled_publish_at ? scheduleInputValue(currentItem.scheduled_publish_at) : "";
+      if (!scheduleDialog.open) scheduleAt.value = currentItem?.scheduled_publish_at ? scheduleInputValue(currentItem.scheduled_publish_at) : "";
       publicationReviewButton.textContent = stage === "subject-coordinator" ? "分野統括として審査する" : stateData.managerOverride ? "プロジェクトリーダー承認を代行する" : "プロジェクトリーダーとして審査する";
       publicationReviewDescription.textContent = stage === "subject-coordinator" ? "承認するとプロジェクトリーダーへ通知されます。差し戻すとフィードバック中へ戻ります。" : stateData.managerOverride ? "運営管理者としてプロジェクトリーダー承認を代行します。実行内容は監査記録に残ります。" : "承認すると公開可能になり、公開または公開予約へ進めます。差し戻すとフィードバック中へ戻ります。";
     };
