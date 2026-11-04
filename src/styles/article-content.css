@@ -169,14 +169,12 @@
 }
 
 .article-body[data-article-subject="mathematics"] .proof-details > summary {
-  align-items: center;
   background: var(--background-secondary);
   border: 1px solid var(--border-default);
   border-radius: 0.4rem;
   cursor: pointer;
-  display: inline-flex;
+  display: inline-block;
   font-weight: 800;
-  gap: 0.45rem;
   list-style: none;
   padding: 0.35rem 0.8rem 0.35rem 2rem;
   position: relative;
@@ -204,7 +202,7 @@
   left: 0.8rem;
   position: absolute;
   top: 0.65rem;
-  transform: rotate(45deg);
+  transform: rotate(-45deg);
   transition: transform 0.15s ease;
   width: 0.45rem;
 }
@@ -212,7 +210,7 @@
 .article-body[data-article-subject="mathematics"]
   .proof-details[open]
   > summary::before {
-  transform: rotate(225deg);
+  transform: rotate(45deg);
 }
 
 .article-body[data-article-subject="mathematics"]
