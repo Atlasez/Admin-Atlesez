@@ -22,8 +22,7 @@ interface Props {
   noindex?: boolean;
   /**
    * Article-only client enhancements (statement numbering and citations).
-   * Keep enabled for the public Atlas pages, but opt out on admin pages that
-   * do not render article content so they do not download those bundles.
+   * Opt in only on pages that render an article body.
    */
   enableArticleEnhancements?: boolean;
 }
@@ -35,7 +34,7 @@ const {
   alternates = [],
   structuredData,
   noindex = false,
-  enableArticleEnhancements = true,
+  enableArticleEnhancements = false,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site);

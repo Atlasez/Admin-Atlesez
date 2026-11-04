@@ -15,6 +15,30 @@ test.describe("公式サイト", () => {
     ).toBeVisible();
   });
 
+  test("記事本文専用スクリプトは記事本文のないホームでは取得しない", async ({
+    page,
+  }) => {
+    const enhancementRequests: string[] = [];
+    page.on("request", (request) => {
+      if (/article-math-structure|article-references/.test(request.url())) {
+        enhancementRequests.push(request.url());
+      }
+    });
+
+    await page.goto("./");
+    await page.waitForLoadState("networkidle");
+    expect(enhancementRequests).toEqual([]);
+
+    await page.goto("atlas/ja/mathematics/group-theory/group-definition/");
+    await expect
+      .poll(() =>
+        enhancementRequests.some((url) =>
+          url.includes("article-math-structure"),
+        ),
+      )
+      .toBe(true);
+  });
+
   test("理念と組織構成を掲載する", async ({ page }) => {
     await page.goto("about/philosophy/");
     await expect(page.locator(".goal-list li")).toHaveCount(12);
@@ -74,6 +98,27 @@ test.describe("学習サイト", () => {
       /\/atlas\/ja\/mathematics\//,
     );
     await expect(page.getByText("準備中").first()).toBeVisible();
+  });
+
+  test("学習地図エンジンは地図タブを開くまで取得しない", async ({ page }) => {
+    let cytoscapeRequested = false;
+    page.on("request", (request) => {
+      if (request.url().toLowerCase().includes("cytoscape")) {
+        cytoscapeRequested = true;
+      }
+    });
+
+    await page.goto("atlas/ja/");
+    await page.waitForLoadState("networkidle");
+    await expect(page.locator("[data-home-layout]")).toHaveAttribute(
+      "data-active-view",
+      "tiles",
+    );
+    expect(cytoscapeRequested).toBe(false);
+
+    await page.getByRole("tab", { name: "学習地図" }).click();
+    await page.locator("#learning-map").scrollIntoViewIfNeeded();
+    await expect.poll(() => cytoscapeRequested).toBe(true);
   });
 
   test("はじめての方へは専用ガイドに移動する", async ({ page }) => {
