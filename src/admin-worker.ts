@@ -8371,7 +8371,6 @@ async function queueApplicationInterviewEmail(
     location: string;
   },
   sentAt: string,
-  idempotency: { key: string; allowExplicitResend: boolean },
 ) {
   const projectLabel =
     APPLICATION_FORM_LABELS[application.projectSlug] ?? application.projectSlug;
@@ -8413,14 +8412,12 @@ async function queueApplicationInterviewEmail(
   const htmlBody = english
     ? `<h2>Interview details</h2><p>Your interview for ${emailSafe(projectLabel)} is scheduled for ${emailSafe(date)} (${emailSafe(interview.timezone)}).</p><p><b>Format:</b> ${emailSafe(mode)}${access ? `<br><b>${interview.mode === "online" ? "Zoom link" : "Location"}:</b> ${interview.mode === "online" ? `<a href="${emailSafe(access)}">${emailSafe(access)}</a>` : emailSafe(access)}` : ""}</p>`
     : `<h2>面談日時のお知らせ</h2><p>${emailSafe(projectLabel)}の面談日時が設定されました。</p><p><b>日時：</b>${emailSafe(date)}（${emailSafe(interview.timezone)}）<br><b>形式：</b>${emailSafe(mode)}${access ? `<br><b>${interview.mode === "online" ? "Zoomリンク" : "場所"}：</b>${interview.mode === "online" ? `<a href="${emailSafe(access)}">${emailSafe(access)}</a>` : emailSafe(access)}` : ""}</p>`;
-  const deliveryId =
-    idempotency.key ||
-    (await interviewNotificationDeliveryId(
-      application.id,
-      subject,
-      textBody,
-      htmlBody,
-    ));
+  const deliveryId = await interviewNotificationDeliveryId(
+    application.id,
+    subject,
+    textBody,
+    htmlBody,
+  );
   const statement = env.REPORTS.prepare(
     `INSERT INTO atlasez_application_email_deliveries
      (id,application_id,recipient_email,kind,subject,text_body,html_body,status,attempt_count,next_attempt_at,created_at,updated_at)
@@ -8440,7 +8437,6 @@ async function queueApplicationInterviewEmail(
          atlasez_application_email_deliveries.subject IS NOT excluded.subject
          OR atlasez_application_email_deliveries.text_body IS NOT excluded.text_body
          OR atlasez_application_email_deliveries.html_body IS NOT excluded.html_body
-         OR ?=1
        )`,
   )
     .bind(
@@ -8461,7 +8457,6 @@ async function queueApplicationInterviewEmail(
       interview.mode,
       interview.zoomUrl,
       interview.location,
-      idempotency.allowExplicitResend ? 1 : 0,
     );
   return { statement, id: deliveryId, subject, textBody, htmlBody };
 }
@@ -13680,21 +13675,6 @@ async function notifyApplicationInterview(
   ).bind(id).first<ApplicationInterviewRow>();
   if (!interview || interview.status !== "scheduled")
     return json({ error: "通知できる面談予定がありません。" }, 409);
-  let payload: Record<string, unknown> = {};
-  if (request.headers.get("content-type")?.includes("application/json")) {
-    const parsed = (await request.json().catch(() => null)) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-      return json({ error: "通知内容を確認してください。" }, 400);
-    payload = parsed as Record<string, unknown>;
-  }
-  const requestedKey = text(payload.idempotencyKey, 80).trim();
-  if (
-    requestedKey &&
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      requestedKey,
-    )
-  )
-    return json({ error: "通知操作キーを確認してください。" }, 400);
   const now = new Date().toISOString();
   try {
     const delivery = await queueApplicationInterviewEmail(
@@ -13714,7 +13694,6 @@ async function notifyApplicationInterview(
         location: interview.location,
       },
       now,
-      { key: requestedKey, allowExplicitResend: Boolean(requestedKey) },
     );
     const [queueResult, interviewResult, historyResult] =
       await env.REPORTS.batch([
@@ -13760,6 +13739,51 @@ async function notifyApplicationInterview(
           0,
       );
     if (changes(queueResult) !== 1) {
+      let currentInterview:
+        | {
+          id: string;
+          status: string;
+          scheduled_at: string;
+          timezone: string;
+          mode: string;
+          zoom_url: string;
+          location: string;
+        }
+        | null;
+      try {
+        currentInterview = await env.REPORTS.prepare(
+          `SELECT id,status,scheduled_at,timezone,mode,zoom_url,location
+             FROM atlasez_application_interviews
+            WHERE id=? AND application_id=?`,
+        )
+          .bind(interview.id, id)
+          .first<NonNullable<typeof currentInterview>>();
+      } catch {
+        console.error("application interview notification read-back failed");
+        return json(
+          {
+            error: "面談情報の状態を確認できません。再読み込みしてから通知してください。",
+            code: "INTERVIEW_STATE_UNKNOWN",
+          },
+          503,
+        );
+      }
+      if (
+        !currentInterview ||
+        currentInterview.status !== "scheduled" ||
+        currentInterview.scheduled_at !== interview.scheduled_at ||
+        currentInterview.timezone !== interview.timezone ||
+        currentInterview.mode !== interview.mode ||
+        currentInterview.zoom_url !== interview.zoom_url ||
+        currentInterview.location !== interview.location
+      )
+        return json(
+          {
+            error: "面談情報が更新されました。再読み込みしてから通知してください。",
+            code: "STALE_INTERVIEW",
+          },
+          409,
+        );
       const existing = await env.REPORTS.prepare(
         `SELECT id,status,subject,text_body,html_body,sent_at
            FROM atlasez_application_email_deliveries
@@ -13786,14 +13810,6 @@ async function notifyApplicationInterview(
         existing.subject === delivery.subject &&
         existing.text_body === delivery.textBody &&
         existing.html_body === delivery.htmlBody;
-      if (existing.id === delivery.id && !sameContent)
-        return json(
-          {
-            error: "同じ操作キーが別の面談内容に使われています。再読み込みして通知してください。",
-            code: "IDEMPOTENCY_KEY_REUSED",
-          },
-          409,
-        );
       if (!sameContent && existing.status === "sending")
         return json(
           {

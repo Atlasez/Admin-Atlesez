@@ -541,9 +541,11 @@ test("面談保存中は再描画や応募者切替後も入力をロックす�
   ).toContainText("保存済み");
 });
 
-test("既送信の同一面談通知は重複送信せず操作キーを送る", async ({ page }) => {
+test("既送信の同一面談通知は再送キーに頼らず重複登録しない", async ({
+  page,
+}) => {
   const id = "11111111-1111-4111-8111-111111111111";
-  let notificationKey = "";
+  let notificationBody: string | null = null;
   await page.route("**/api/admin/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/admin/applications") {
@@ -570,9 +572,7 @@ test("既送信の同一面談通知は重複送信せず操作キーを送る",
       return;
     }
     if (url.pathname.endsWith("/interview/notify")) {
-      notificationKey = String(
-        route.request().postDataJSON().idempotencyKey ?? "",
-      );
+      notificationBody = route.request().postData();
       await route.fulfill({
         json: {
           ok: true,
@@ -592,7 +592,51 @@ test("既送信の同一面談通知は重複送信せず操作キーを送る",
   await expect(page.locator("[data-notice]")).toContainText(
     "重複送信しませんでした",
   );
-  expect(notificationKey).toMatch(
-    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  expect(notificationBody).toBeNull();
+});
+
+test("面談通知の成功表示は配送完了ではなくキュー登録を示す", async ({
+  page,
+}) => {
+  const id = "22222222-2222-4222-8222-222222222222";
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/admin/applications") {
+      await route.fulfill({
+        json: {
+          project: { slug: "thinking-cafe", name: "Thinking Cafe" },
+          applications: [
+            {
+              id,
+              family_name: "検証",
+              given_name: "応募者",
+              email: "applicant@example.invalid",
+              status: "new",
+              project_slug: "thinking-cafe",
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/interview/notify")) {
+      await route.fulfill({ json: { ok: true, notificationQueued: true } });
+      return;
+    }
+    await route.fulfill({ json: { ok: true } });
+  });
+
+  await page.goto("./admin/applications/?project=thinking-cafe");
+  await page.locator(`[data-interview-date="${id}"]`).fill("2026-11-15T10:00");
+  await page
+    .locator(`[data-interview-format="${id}"]`)
+    .selectOption("in_person");
+  await page.locator(`[data-interview-location="${id}"]`).fill("検証会場");
+  await page.locator(`[data-interview-notify="${id}"]`).click();
+  await expect(page.locator("[data-notice]")).toContainText(
+    "通知キューに登録しました",
+  );
+  await expect(page.locator("[data-notice]")).not.toContainText(
+    "応募者へ通知しました",
   );
 });
