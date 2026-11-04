@@ -3810,9 +3810,12 @@ for (const returnVia of ["popup", "close", "toggle", "tab"] as const) {
   }, testInfo) => {
     await page.setViewportSize({ width: 1600, height: 1100 });
     await mockAdminApi(page);
-    await page.goto("./admin/editor/?document=doc-1");
+    await page.goto("./admin/editor/?document=doc-1", {
+      waitUntil: "domcontentloaded",
+    });
     const panel = page.locator('[data-editor-pane="writing"]');
     const button = panel.locator('[data-pane-popout="writing"]');
+    await expect(button).toBeVisible();
     const popupPromise = page.waitForEvent("popup");
     await button.click();
     const popup = await popupPromise;
