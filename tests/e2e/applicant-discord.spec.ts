@@ -105,3 +105,56 @@ test("見送り後は応募結果を明示し、連絡待ちやDiscord連携を�
   );
   await expect(page.locator("[data-discord-link]")).toBeHidden();
 });
+
+test("応募者へ保存済み状態とメール送信失敗を区別して案内する", async ({
+  page,
+}) => {
+  let needsOperatorAttention = false;
+  await page.route("**/api/applicant/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        email: "applicant@example.com",
+        stage: "APPLICANT",
+        basicProfileComplete: true,
+        applications: [
+          {
+            project: "考えるカフェ",
+            submittedAt: "2026-11-04T10:00:00.000Z",
+            status: "new",
+            applicantNotificationFailed: true,
+            intakeNeedsOperatorAttention: needsOperatorAttention,
+          },
+        ],
+        discord: { connected: false, oauthConnected: false },
+      }),
+    });
+  });
+
+  await page.goto("./applicant/?submission=check");
+  await expect(page.locator("[data-submission-confirmation]")).toContainText(
+    "保存済みの応募が見つかりました",
+  );
+  await expect(page.locator("[data-submission-confirmation]")).toContainText(
+    "メールの送信処理に失敗",
+  );
+  await expect(page.locator("[data-application-status]")).toHaveText(
+    "応募済み",
+  );
+  await expect(page.locator("[data-application-list]")).toContainText(
+    "メール送信失敗",
+  );
+  await expect(page.locator("[data-application-message]")).toContainText(
+    "重複送信は不要です",
+  );
+
+  needsOperatorAttention = true;
+  await page.goto("./applicant/?submission=check");
+  await expect(page.locator("[data-submission-confirmation]")).toContainText(
+    "運営の確認が必要",
+  );
+  await expect(page.locator("[data-submission-confirmation]")).toContainText(
+    "メールの送信処理に失敗",
+  );
+});

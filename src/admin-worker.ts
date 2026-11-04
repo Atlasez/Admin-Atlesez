@@ -15941,6 +15941,12 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
                      AND t.id!='application-recovery:' || a.id)) AS response_task_count,
             (SELECT COUNT(*) FROM atlasez_application_email_deliveries e
               WHERE e.application_id=a.id AND e.kind='applicant_confirmation') AS confirmation_email_count,
+            EXISTS(SELECT 1 FROM atlasez_application_email_deliveries e
+                    WHERE e.application_id=a.id
+                      AND e.kind IN ('applicant_confirmation','applicant_acceptance',
+                        'applicant_discord_success','applicant_discord_failure',
+                        'applicant_interview_invitation')
+                      AND e.status='failed') AS applicant_notification_failed,
             (SELECT COUNT(*) FROM atlasez_application_email_deliveries e
               WHERE e.application_id=a.id AND e.kind='operator_notification') AS operator_email_count,
             (SELECT json_group_array(lower(trim(e.recipient_email)))
@@ -15967,6 +15973,7 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
       oauth_connected_at: string;
       response_task_count: number;
       confirmation_email_count: number;
+      applicant_notification_failed: number;
       operator_email_count: number;
       actual_operator_recipients_json: string;
       recovery_task_open: number;
@@ -15980,6 +15987,8 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
     provisioningStatus: application.provisioning_status ?? "not_started",
     provisioningError: application.provisioning_error ?? "",
     provisionedAt: application.provisioned_at,
+    applicantNotificationFailed:
+      Number(application.applicant_notification_failed ?? 0) === 1,
     discordConnected: Boolean(application.oauth_connected_at || application.discord_user_id),
     intakeVerificationStatus: (() => {
       const expectedRecipients = parseApplicationOperatorRecipients(

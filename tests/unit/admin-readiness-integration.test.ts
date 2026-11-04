@@ -1925,6 +1925,34 @@ it("運営通知先の設定変更では過去応募を誤検知せず、保存q
   });
 });
 
+it("applicant status reports a permanently failed applicant notification", async () => {
+  const { db, request } = environment();
+  const email = "failed-notification-status@atlasez.test";
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO atlasez_member_applications
+      (id,name,email,interests,message,status,created_at,updated_at)
+     VALUES ('failed-notification-app','Synthetic applicant',?,'test','test','new',?,?)`,
+  ).run(email, now, now);
+  db.prepare(
+    `INSERT INTO atlasez_application_email_deliveries
+      (id,application_id,recipient_email,kind,subject,text_body,html_body,status,
+       attempt_count,next_attempt_at,created_at,updated_at)
+     VALUES ('failed-confirmation','failed-notification-app',?,'applicant_confirmation',
+       'synthetic subject','synthetic body','<p>synthetic</p>','failed',3,?,?,?)`,
+  ).run(email, now, now, now);
+
+  const response = await request("/api/applicant/me", email);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    applications: [
+      expect.objectContaining({
+        applicantNotificationFailed: true,
+      }),
+    ],
+  });
+});
+
 it("実SQLのRAISE(IGNORE)で応募だけcommitしたbatchを検知して冪等修復し運営へ記録する", async () => {
   const { db, request, env } = environment();
   const email = "write-count-mismatch@atlasez.test";
