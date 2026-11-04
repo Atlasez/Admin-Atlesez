@@ -145,6 +145,37 @@ function calendarAuditMember(db: DatabaseSync, email: string) {
   ).run(email, now);
 }
 
+function expectApplicationAuditToMinimizeIdentity(
+  db: DatabaseSync,
+  applicationId: string,
+  applicantEmail: string,
+  applicantName: string,
+) {
+  const rows = db
+    .prepare(
+      `SELECT target_id,target_label,summary,details_json
+       FROM admin_audit_log
+       WHERE action='workflow_transition' AND target_type='workflow' AND target_id=?`,
+    )
+    .all(applicationId) as Array<{
+    target_id: string;
+    target_label: string;
+    summary: string;
+    details_json: string;
+  }>;
+
+  expect(rows).toHaveLength(2);
+  expect(rows.every((row) => row.target_id === applicationId)).toBe(true);
+  expect(
+    rows.every(
+      (row) =>
+        row.target_label === "応募" && row.summary === "応募の状態を変更",
+    ),
+  ).toBe(true);
+  expect(JSON.stringify(rows)).not.toContain(applicantEmail);
+  expect(JSON.stringify(rows)).not.toContain(applicantName);
+}
+
 const creatorAuditArticle = {
   locale: "ja",
   subject: "mathematics",
@@ -2924,6 +2955,12 @@ it("仮応募者の応募から審査受入・初回オンボーディング・�
       )
       .get(applicationId.id),
   ).toEqual({ count: 2 });
+  expectApplicationAuditToMinimizeIdentity(
+    db,
+    applicationId.id,
+    email,
+    "実運用 検証",
+  );
   expect(
     db
       .prepare(
@@ -3154,6 +3191,12 @@ it("仮応募者の見送り後は応募状況を確認でき、オンボーデ�
       )
       .get(applicationId.id),
   ).toEqual({ count: 2 });
+  expectApplicationAuditToMinimizeIdentity(
+    db,
+    applicationId.id,
+    email,
+    "見送り 検証",
+  );
   expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 

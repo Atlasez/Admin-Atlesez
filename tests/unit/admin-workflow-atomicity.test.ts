@@ -428,6 +428,20 @@ it("commits profile approval, task completion, and workflow event together", asy
     from_state: "pending",
     to_state: "approved",
   });
+  expect(
+    JSON.stringify(
+      db
+        .prepare(
+          "SELECT target_label,summary,details_json FROM admin_audit_log",
+        )
+        .get(),
+    ),
+  ).not.toMatch(/member@example\.com|Member Example/);
+  expect(
+    db.prepare("SELECT metadata_json FROM workflow_transition_events").get(),
+  ).not.toMatchObject({
+    metadata_json: expect.stringContaining("member@example.com"),
+  });
   const replay = await approveRequest(environment, true);
   expect(replay.status).toBe(200);
   expect(await replay.json()).toMatchObject({ ok: true, replayed: true });
@@ -630,6 +644,20 @@ it("commits project-profile approval with its event and replays it once", async 
       .prepare("SELECT internal_bio FROM editorial_project_member_profiles")
       .get(),
   ).toEqual({ internal_bio: "Project profile bio" });
+  expect(
+    JSON.stringify(
+      db
+        .prepare(
+          "SELECT target_label,summary,details_json FROM admin_audit_log",
+        )
+        .get(),
+    ),
+  ).not.toContain("member@example.com");
+  expect(
+    db.prepare("SELECT metadata_json FROM workflow_transition_events").get(),
+  ).not.toMatchObject({
+    metadata_json: expect.stringContaining("member@example.com"),
+  });
 
   const replay = await approveProjectProfile(environment);
   expect(replay.status).toBe(200);

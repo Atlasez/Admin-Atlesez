@@ -11948,7 +11948,6 @@ async function reviewProfileChangeRequest(
         idempotencyKey,
         metadata: {
           requestType: "member-profile",
-          applicantEmail: String(row.email ?? ""),
         },
         createdAt: now,
       },
@@ -11988,7 +11987,7 @@ async function reviewProfileChangeRequest(
     return json({ error: "この変更申請は先に処理されています。" }, 409);
   if (Number(workflowEvent?.meta?.changes ?? 0) !== 1)
     throw new Error("Profile approval event was not recorded with its state update.");
-  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", requestId, String(row.proposed_display_name ?? row.email ?? requestId), `メンバー情報申請を${status === "approved" ? "承認" : "却下"}`, { entityType: "approval", fromState: "pending", toState: status });
+  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", requestId, "プロフィール申請", `メンバー情報申請を${status === "approved" ? "承認" : "却下"}`, { entityType: "approval", fromState: "pending", toState: status });
   return json({ ok: true, status });
 }
 
@@ -12401,7 +12400,6 @@ async function reviewProjectProfileChangeRequest(
         metadata: {
           requestType: "project-profile",
           projectId: project.id,
-          applicantEmail: String(row.email ?? ""),
         },
         createdAt: now,
       },
@@ -12429,7 +12427,7 @@ async function reviewProjectProfileChangeRequest(
     return json({ error: "この変更申請は先に処理されています。" }, 409);
   if (Number(workflowEvent?.meta?.changes ?? 0) !== 1)
     throw new Error("Project profile approval event was not recorded with its state update.");
-  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", requestId, String(row.email ?? requestId), `運営内自己紹介申請を${status === "approved" ? "承認" : "却下"}`, { entityType: "approval", fromState: "pending", toState: status, projectId: project.id });
+  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", requestId, "プロジェクト自己紹介申請", `運営内自己紹介申請を${status === "approved" ? "承認" : "却下"}`, { entityType: "approval", fromState: "pending", toState: status, projectId: project.id });
   return json({ ok: true, status });
 }
 
@@ -13040,7 +13038,7 @@ async function updateApplication(
       return json({ error: "応募の状態が先に更新されています。再読み込みしてください。", code: "STALE_STATE" }, 409);
     if (Number(workflowEvent?.meta?.changes ?? 0) !== 1)
       throw new Error("Application transition event was not recorded with its state update.");
-    await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, application.name || application.email, `応募の状態を変更：${application.name || application.email}`, { entityType: "application", fromState: application.status, toState: status, projectSlug: application.project_slug });
+    await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, "応募", "応募の状態を変更", { entityType: "application", fromState: application.status, toState: status, projectSlug: application.project_slug });
     return json({ ok: true, status });
   }
 
@@ -13172,7 +13170,7 @@ async function updateApplication(
     );
   }
 
-  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, application.name || application.email, `応募の状態を変更：${application.name || application.email}`, { entityType: "application", fromState: application.status, toState: "accepted", projectSlug: application.project_slug });
+  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, "応募", "応募の状態を変更", { entityType: "application", fromState: application.status, toState: "accepted", projectSlug: application.project_slug });
 
   const discord = await provisionAcceptedApplication(env, id);
   let acceptanceEmailQueued = false;
