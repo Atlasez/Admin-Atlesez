@@ -11523,7 +11523,6 @@ async function reviewProfileChangeRequest(
         idempotencyKey,
         metadata: {
           requestType: "member-profile",
-          applicantEmail: String(row.email ?? ""),
         },
         createdAt: now,
       },
@@ -11563,7 +11562,7 @@ async function reviewProfileChangeRequest(
     return json({ error: "この変更申請は先に処理されています。" }, 409);
   if (Number(workflowEvent?.meta?.changes ?? 0) !== 1)
     throw new Error("Profile approval event was not recorded with its state update.");
-  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", requestId, String(row.proposed_display_name ?? row.email ?? requestId), `メンバー情報申請を${status === "approved" ? "承認" : "却下"}`, { entityType: "approval", fromState: "pending", toState: status });
+  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", requestId, "プロフィール申請", `メンバー情報申請を${status === "approved" ? "承認" : "却下"}`, { entityType: "approval", fromState: "pending", toState: status });
   return json({ ok: true, status });
 }
 
@@ -11976,7 +11975,6 @@ async function reviewProjectProfileChangeRequest(
         metadata: {
           requestType: "project-profile",
           projectId: project.id,
-          applicantEmail: String(row.email ?? ""),
         },
         createdAt: now,
       },
@@ -12004,7 +12002,7 @@ async function reviewProjectProfileChangeRequest(
     return json({ error: "この変更申請は先に処理されています。" }, 409);
   if (Number(workflowEvent?.meta?.changes ?? 0) !== 1)
     throw new Error("Project profile approval event was not recorded with its state update.");
-  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", requestId, String(row.email ?? requestId), `運営内自己紹介申請を${status === "approved" ? "承認" : "却下"}`, { entityType: "approval", fromState: "pending", toState: status, projectId: project.id });
+  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", requestId, "プロジェクト自己紹介申請", `運営内自己紹介申請を${status === "approved" ? "承認" : "却下"}`, { entityType: "approval", fromState: "pending", toState: status, projectId: project.id });
   return json({ ok: true, status });
 }
 
