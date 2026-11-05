@@ -140,6 +140,13 @@ it("keeps application deletion paused until policy approval while routine cleanu
         query.includes("article_reports"),
       ),
     ).toBe(false);
+    expect(info).toHaveBeenCalledWith(
+      "personal_data_retention_completed",
+      expect.objectContaining({
+        applicationDeletionPaused: true,
+        resolvedApplicationsDeleted: 0,
+      }),
+    );
   } finally {
     info.mockRestore();
   }
@@ -183,6 +190,7 @@ it("preserves terminal applications unless personal-data retention is enabled", 
     await expect(
       runPersonalDataRetention(database, now),
     ).resolves.toMatchObject({
+      applicationDeletionPaused: true,
       resolvedApplicationsDeleted: 0,
     });
     expect(
@@ -195,7 +203,10 @@ it("preserves terminal applications unless personal-data retention is enabled", 
       runPersonalDataRetention(database, now, {
         deleteTerminalApplications: true,
       }),
-    ).resolves.toMatchObject({ resolvedApplicationsDeleted: 2 });
+    ).resolves.toMatchObject({
+      applicationDeletionPaused: false,
+      resolvedApplicationsDeleted: 2,
+    });
     expect(
       db
         .prepare(
@@ -246,6 +257,7 @@ it("fails closed when the intake reconciliation marker migration is unavailable"
         deleteTerminalApplications: true,
       }),
     ).resolves.toMatchObject({
+      applicationDeletionPaused: true,
       resolvedApplicationsDeleted: 0,
       terminalApplicationsRetentionSkipped: true,
     });
