@@ -151,10 +151,21 @@ test("一括登録は編集権限内の非テスト未登録記事だけを送�
 
   await page.goto("admin/articles/?verify=registration-candidates");
 
+  const catalogOverview = page.locator("[data-catalog-overview]");
+  await expect(catalogOverview).toHaveJSProperty("open", false);
+  await expect(page.locator("[data-catalog-compact-summary]")).toContainText(
+    "公開8件 ・ 連携済み1件 ・ 要対応7件",
+  );
+  await page.screenshot({
+    path: "test-results/admin-articles-linkage-summary-collapsed.png",
+    fullPage: true,
+  });
+  await catalogOverview.locator(":scope > summary").click();
+
   const bulkButton = page.locator("[data-register-unregistered]");
   await expect(bulkButton).toHaveText("未登録の運営原稿を一括作成（1件）");
   await expect(
-    page.getByRole("heading", { name: "学習サイト公開記事との連携" }),
+    page.getByRole("heading", { name: "連携状況の詳細" }),
   ).toBeVisible();
   await expect(page.locator('[data-catalog-filter="managed"]')).toContainText(
     "1件",

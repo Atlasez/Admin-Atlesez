@@ -55,19 +55,26 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       <button type="button" data-workflow-action="revise"><strong>加筆・修正</strong></button>
       <button type="button" data-workflow-action="review"><strong>フィードバック</strong></button>
     </nav>
-    <section class="catalog-overview" aria-labelledby="catalog-overview-heading">
-      <div class="catalog-overview__heading">
-        <div>
-          <h2 id="catalog-overview-heading">学習サイト公開記事との連携</h2>
-          <p data-catalog-summary data-state="loading" aria-live="polite">公開記事カタログを確認しています…</p>
+    <details class="catalog-overview" data-catalog-overview aria-label="学習サイト公開記事との連携">
+      <summary class="catalog-overview__summary">
+        <span class="catalog-overview__title">学習サイト公開記事との連携</span>
+        <span class="catalog-overview__compact" data-catalog-compact-summary data-state="loading" aria-live="polite">公開記事を照合しています…</span>
+        <span class="catalog-overview__chevron" aria-hidden="true"></span>
+      </summary>
+      <div class="catalog-overview__content">
+        <div class="catalog-overview__heading">
+          <div>
+            <h2 id="catalog-overview-heading">連携状況の詳細</h2>
+            <p data-catalog-summary data-state="loading" aria-live="polite">公開記事カタログを確認しています…</p>
+          </div>
+          <div class="catalog-overview__tools">
+            <button type="button" class="article-action" data-run-catalog-diagnostics>連携状態を診断</button>
+            <button type="button" class="article-action" data-register-unregistered hidden>運営原稿を一括作成</button>
+          </div>
         </div>
-        <div class="catalog-overview__tools">
-          <button type="button" class="article-action" data-run-catalog-diagnostics>連携状態を診断</button>
-          <button type="button" class="article-action" data-register-unregistered hidden>運営原稿を一括作成</button>
-        </div>
+        <div class="catalog-statuses" data-catalog-counts aria-label="公開記事の運営原稿との連携状況"></div>
       </div>
-      <div class="catalog-statuses" data-catalog-counts aria-label="公開記事の運営原稿との連携状況"></div>
-    </section>
+    </details>
     <details class="catalog-diagnostics" data-catalog-diagnostics hidden>
       <summary>公開記事カタログの診断結果</summary>
       <p data-catalog-diagnostics-summary>診断を実行してください。</p>
@@ -776,7 +783,54 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     border-radius: 0.9rem;
     margin: 0 auto 1.1rem;
     max-width: 60rem;
-    padding: 0.9rem 1rem;
+    overflow: hidden;
+  }
+  .catalog-overview__summary {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    gap: 0.75rem;
+    min-height: 2.7rem;
+    padding: 0.55rem 0.8rem;
+    list-style: none;
+  }
+  .catalog-overview__summary::-webkit-details-marker { display: none; }
+  .catalog-overview__summary:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -3px;
+  }
+  .catalog-overview__title {
+    color: var(--text-primary);
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    font-weight: 850;
+  }
+  .catalog-overview__compact {
+    color: var(--text-secondary);
+    flex: 1 1 auto;
+    font-size: 0.72rem;
+    min-width: 0;
+  }
+  .catalog-overview__compact[data-state="error"] { color: var(--danger); }
+  .catalog-overview__chevron {
+    border-bottom: 1.5px solid var(--text-secondary);
+    border-right: 1.5px solid var(--text-secondary);
+    flex: 0 0 auto;
+    height: 0.42rem;
+    margin: -0.2rem 0.15rem 0 auto;
+    transform: rotate(45deg);
+    transition: transform 120ms ease;
+    width: 0.42rem;
+  }
+  .catalog-overview[open] > .catalog-overview__summary {
+    border-bottom: 1px solid var(--border-default);
+  }
+  .catalog-overview[open] .catalog-overview__chevron {
+    margin-top: 0.2rem;
+    transform: rotate(225deg);
+  }
+  .catalog-overview__content {
+    padding: 0.8rem 0.9rem 0.9rem;
   }
   .catalog-overview__heading {
     align-items: center;
@@ -970,7 +1024,12 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     .catalog-statuses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 600px) {
-    .catalog-overview { padding: 0.75rem; }
+    .catalog-overview__summary { align-items: flex-start; flex-wrap: wrap; gap: 0.2rem 0.55rem; padding: 0.55rem 0.65rem; }
+    .catalog-overview__title { font-size: 0.72rem; }
+    .catalog-overview__compact { flex-basis: calc(100% - 1.2rem); font-size: 0.66rem; }
+    .catalog-overview__chevron { margin-top: 0.2rem; }
+    .catalog-overview[open] .catalog-overview__chevron { margin-top: 0.45rem; }
+    .catalog-overview__content { padding: 0.65rem; }
     .catalog-overview__heading { align-items: stretch; flex-direction: column; }
     .catalog-overview__tools { justify-content: stretch; }
     .catalog-overview__tools button { flex: 1 1 auto; }
@@ -1019,6 +1078,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const archive = root.querySelector<HTMLSelectElement>("[data-archive]")!;
     const count = root.querySelector<HTMLOutputElement>("[data-count]")!;
     const catalogSummary = root.querySelector<HTMLElement>("[data-catalog-summary]")!;
+    const catalogCompactSummary = root.querySelector<HTMLElement>("[data-catalog-compact-summary]")!;
     const catalogCounts = root.querySelector<HTMLElement>("[data-catalog-counts]")!;
     const filterSummary = root.querySelector<HTMLElement>("[data-filter-summary]")!;
     const scopeNote = root.querySelector<HTMLElement>("[data-scope-note]")!;
@@ -1252,6 +1312,12 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
           ? `学習サイトで公開中の記事 ${publicArticles.length}件を全分野から照合しています。`
           : "公開記事カタログを確認できませんでした。原稿一覧は表示しています。"
         : "公開記事カタログを確認しています…";
+      catalogCompactSummary.dataset.state = catalogSummary.dataset.state;
+      catalogCompactSummary.textContent = !catalogReady
+        ? "公開記事を照合しています…"
+        : catalogSource !== "api"
+          ? "公開記事カタログを確認できません"
+          : "";
       if (!catalogReady || catalogSource !== "api") {
         catalogCounts.replaceChildren();
       } else {
@@ -1264,6 +1330,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
           else if (state === "duplicate" || state === "identity-conflict") totals.conflict += 1;
           else totals.unknown += 1;
         }
+        const needsAttention = totals["needs-registration"] + totals.unmanaged + totals.conflict + totals.unknown;
+        catalogCompactSummary.textContent = `公開${publicArticles.length}件 ・ 連携済み${totals.managed}件 ・ ${needsAttention ? `要対応${needsAttention}件` : "要対応なし"}`;
         const metrics = [
           { value: "managed", label: "公開記事と連携済み", note: "運営原稿あり", count: totals.managed, tone: "linked" },
           { value: "needs-registration", label: "原稿あり・未連携", note: "公開記事IDの確認が必要", count: totals["needs-registration"], tone: "needs-registration" },
