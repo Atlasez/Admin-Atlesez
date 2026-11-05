@@ -29,12 +29,6 @@ export async function purgeExpiredPersonalData(
       .prepare("DELETE FROM atlasez_application_rate_limits WHERE bucket < ?")
       .bind(expiredRateLimits)
       .run(),
-    db
-      .prepare(
-        "DELETE FROM atlasez_member_applications WHERE status IN ('rejected','accepted') AND updated_at < ?",
-      )
-      .bind(expiredApplications)
-      .run(),
   ];
   if (options.clearArticleReportData) {
     statements.push(
@@ -63,9 +57,12 @@ export async function purgeExpiredPersonalData(
   return {
     sessionsDeleted: Number(results[0]?.meta?.changes ?? 0),
     rateLimitsDeleted: Number(results[1]?.meta?.changes ?? 0),
-    resolvedApplicationsDeleted: Number(results[2]?.meta?.changes ?? 0),
-    reporterHashesCleared: Number(results[3]?.meta?.changes ?? 0),
-    reportContentHashesCleared: Number(results[4]?.meta?.changes ?? 0),
-    resolvedReportContactsCleared: Number(results[5]?.meta?.changes ?? 0),
+    // Terminal-application deletion is paused until OPSD-03 is approved and
+    // the migration-backed retention guard is released. Keep this field for
+    // the existing diagnostics shape without implying rows were removed.
+    resolvedApplicationsDeleted: 0,
+    reporterHashesCleared: Number(results[2]?.meta?.changes ?? 0),
+    reportContentHashesCleared: Number(results[3]?.meta?.changes ?? 0),
+    resolvedReportContactsCleared: Number(results[4]?.meta?.changes ?? 0),
   };
 }
