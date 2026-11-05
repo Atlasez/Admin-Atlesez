@@ -136,8 +136,6 @@ interface Env {
   /** Cloudflare Turnstile。応募フォーム公開時は必須にする。 */
   TURNSTILE_SECRET_KEY?: string;
   ADMIN_PERSONAL_DATA_RETENTION_ENABLED?: string;
-  /** Accepted/rejected application deletion remains off until OPSD-03 approves its scope and retention period. */
-  ADMIN_APPLICATION_RETENTION_ENABLED?: string;
   PUBLIC_TURNSTILE_SITE_KEY?: string;
   /** Atlasez.com の公開Workerから応募を受け取るための共有Secret。 */
   PUBLIC_APPLICATION_INGEST_TOKEN?: string;
@@ -25998,8 +25996,10 @@ export default {
     const personalDataRetentionEnabled =
       env.ADMIN_PERSONAL_DATA_RETENTION_ENABLED?.trim().toLowerCase() ===
       "true";
-    const applicationRetentionEnabled =
-      env.ADMIN_APPLICATION_RETENTION_ENABLED?.trim().toLowerCase() === "true";
+    // Terminal-application deletion requires an approved retention policy and
+    // a reviewed code release. Ignore preserved dashboard variables here so
+    // a later merge cannot resume deletion implicitly.
+    const applicationRetentionEnabled = false;
     ctx.waitUntil(
       Promise.all([
         progressEditorialPublicationRuns(env),

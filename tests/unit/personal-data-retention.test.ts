@@ -45,7 +45,7 @@ afterEach(() => {
   for (const db of databases.splice(0)) db.close();
 });
 
-it("gates proposed personal-data cleanup while routine expiry continues", async () => {
+it("keeps application deletion paused until policy approval while routine cleanup continues", async () => {
   const createDatabase = () => {
     const executed: string[] = [];
     const database = {
@@ -127,12 +127,14 @@ it("gates proposed personal-data cleanup while routine expiry continues", async 
     ).toBe(true);
 
     const applicationRetentionEnabledDb = createDatabase();
+    // A previously persisted Worker variable must not resume application
+    // deletion after the migration-free pause is released ahead of this PR.
     await scheduled(applicationRetentionEnabledDb.database, undefined, "true");
     expect(
       applicationRetentionEnabledDb.executed.some((query) =>
         query.includes("DELETE FROM atlasez_member_applications"),
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       applicationRetentionEnabledDb.executed.some((query) =>
         query.includes("article_reports"),
