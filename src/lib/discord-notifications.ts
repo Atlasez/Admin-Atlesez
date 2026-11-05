@@ -1,3 +1,5 @@
+import { isStagingDiscordDisabled } from "./admin-staging-discord-policy";
+
 type D1Statement = {
   bind(...values: unknown[]): D1Statement;
   run(): Promise<{ meta?: { changes?: number } }>;
@@ -15,6 +17,16 @@ export type DiscordNotificationEnv = {
   DISCORD_PROGRESS_WEBHOOK_URL?: string;
   DISCORD_PROGRESS_CHANNEL_ID?: string;
   DISCORD_BOT_TOKEN?: string;
+  ATLASEZ_STAGING_MODE?: string;
+  ATLASEZ_STAGING_DISCORD_MODE?: string;
+  ATLASEZ_STAGING_DISCORD_POLICY_APPROVED?: string;
+  ADMIN_PUBLIC_ORIGIN?: string;
+  DISCORD_GUILD_ID?: string;
+  DISCORD_GUILD_NAME?: string;
+  DISCORD_OAUTH_CLIENT_ID?: string;
+  DISCORD_OAUTH_CLIENT_SECRET?: string;
+  DISCORD_OAUTH_REDIRECT_URI?: string;
+  DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY?: string;
 };
 
 export type DiscordNotificationDraft = {
@@ -426,7 +438,7 @@ export async function deliverDiscordNotifications(
   drafts: DiscordNotificationDraft[],
   options: DiscordNotificationOptions = {},
 ): Promise<DiscordDeliverySummary> {
-  if (!drafts.length)
+  if (isStagingDiscordDisabled(env) || !drafts.length)
     return { notified: false, sent: 0, failed: 0, skipped: 0 };
   const nowDate = options.now ?? new Date();
   const now = nowDate.toISOString();
@@ -460,6 +472,8 @@ export async function dispatchDueDiscordNotifications(
   env: DiscordNotificationEnv,
   options: DiscordNotificationOptions = {},
 ): Promise<DiscordDeliverySummary> {
+  if (isStagingDiscordDisabled(env))
+    return { notified: false, sent: 0, failed: 0, skipped: 0 };
   const logger = options.logger ?? console;
   const nowDate = options.now ?? new Date();
   const now = nowDate.toISOString();

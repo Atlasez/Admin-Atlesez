@@ -1,0 +1,97 @@
+---
+import BaseHead from "../../../components/BaseHead.astro";
+import "../../../styles/admin.css";
+---
+
+<!doctype html>
+<html lang="ja" data-site="atlas">
+  <head>
+    <BaseHead
+      title="Googleログインを確認できませんでした | Atlasez運営"
+      description="Googleログインを最初からやり直してください。"
+      noindex={true}
+      enableArticleEnhancements={false}
+    />
+    <meta name="referrer" content="no-referrer" />
+  </head>
+  <body data-admin-shell>
+    <a class="skip-link" href="#main">本文へ移動</a>
+    <main id="main" class="login-error" aria-labelledby="login-error-title">
+      <p class="login-error__eyebrow">ATLASEZ 運営サイト</p>
+      <h1 id="login-error-title">Googleログインを確認できませんでした</h1>
+      <p>
+        認証画面を閉じた場合や、ログインの有効期限が切れた場合に起きることがあります。Atlasezに戻り、ログインを最初からやり直してください。
+      </p>
+      <a class="login-error__retry" href="/auth/google/login">
+        Googleアカウントでログインし直す
+      </a>
+      <p class="login-error__help">
+        何度やり直しても続く場合は、利用した画面とおおよその時刻を運営へ伝えてください。パスワードや確認コードは送らないでください。
+        <a href="https://atlasez.org/contact/">お問い合わせ</a>
+      </p>
+    </main>
+  </body>
+</html>
+
+<style>
+  .login-error {
+    box-sizing: border-box;
+    color: var(--admin-text);
+    margin: 0 auto;
+    max-width: 42rem;
+    min-height: 100svh;
+    padding: clamp(2rem, 8vw, 5rem) 1rem;
+  }
+
+  .login-error__eyebrow {
+    color: var(--admin-accent);
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    margin: 0 0 0.5rem;
+  }
+
+  .login-error h1 {
+    font-size: clamp(1.55rem, 5vw, 2.2rem);
+    line-height: 1.35;
+    margin: 0 0 1rem;
+    overflow-wrap: anywhere;
+  }
+
+  .login-error p {
+    color: var(--admin-text-muted);
+    line-height: 1.75;
+    margin: 0;
+  }
+
+  .login-error__retry {
+    align-items: center;
+    background: var(--admin-accent);
+    color: var(--admin-on-accent);
+    display: inline-flex;
+    font-weight: 800;
+    justify-content: center;
+    margin: 1.35rem 0 1.5rem;
+    min-height: 48px;
+    padding: 0.75rem 1rem;
+    text-decoration: none;
+  }
+
+  .login-error__retry:hover {
+    background: var(--admin-accent-hover);
+  }
+
+  .login-error a:focus-visible {
+    outline: 3px solid var(--admin-focus);
+    outline-offset: 3px;
+  }
+
+  .login-error__help {
+    font-size: 0.9rem;
+  }
+
+  .login-error__help a {
+    color: var(--admin-accent);
+    text-underline-offset: 0.18em;
+  }
+</style>

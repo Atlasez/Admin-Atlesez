@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-for (const width of [1280, 390]) {
+for (const width of [1280, 390, 375, 360]) {
   test(`参加後の案内は${width}pxで初回作業と相談先に進める`, async ({
     page,
   }) => {
