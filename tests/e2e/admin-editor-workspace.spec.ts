@@ -146,6 +146,16 @@ async function mockAdminApi(
   });
 }
 
+async function useReviewPane(page: Page) {
+  await page.addInitScript(() => {
+    const visible = ["writing", "preview", "review"];
+    localStorage.setItem(
+      "atlasez-editor-pane-layout",
+      JSON.stringify({ visible, rows: [visible] }),
+    );
+  });
+}
+
 test("E-5: 記事設定には担当分野だけを表示する", async ({ page }) => {
   await mockAdminApi(page, {
     email: "alice@example.com",
@@ -1843,6 +1853,7 @@ test("E-12: 1段目の枠を上へ移動すると単独行を全面表示する"
   page,
 }) => {
   await mockAdminApi(page);
+  await useReviewPane(page);
   await page.goto("./admin/editor/?document=doc-1");
 
   const writing = page.locator('[data-editor-pane="writing"]');
@@ -2897,6 +2908,7 @@ test("通知から開いたワークスペースで担当フィードバック�
 
 test("V-4: 確認済み操作後も展開した返信を保持する", async ({ page }) => {
   await mockAdminApi(page);
+  await useReviewPane(page);
   await page.goto("./admin/editor/?document=doc-1");
 
   const thread = page.locator(".comment-thread").first();
@@ -3023,6 +3035,7 @@ test("CM-1: コメントと返信に本文とは独立したタグを付与・�
   page,
 }) => {
   await mockAdminApi(page);
+  await useReviewPane(page);
   let commentPayload: Record<string, unknown> | null = null;
   await page.route(
     "**/api/admin/editor/documents/doc-1/comments",
@@ -3069,6 +3082,7 @@ test("CM-1: コメントと返信に本文とは独立したタグを付与・�
 
 test("CM-2: 本文の選択解除時に直前の選択内容を破棄する", async ({ page }) => {
   await mockAdminApi(page);
+  await useReviewPane(page);
   await page.goto("./admin/editor/?document=doc-1");
 
   const body = page.locator("[data-body]");
@@ -3105,6 +3119,7 @@ test("CM-3: 本文から消えた元文章もコメントの引用として保�
   page,
 }) => {
   await mockAdminApi(page);
+  await useReviewPane(page);
   await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
     const quotedComments = [
       {
@@ -3141,6 +3156,7 @@ test("CM-7: 親コメントの記事引用を返信へ添付して送信でき�
   page,
 }) => {
   await mockAdminApi(page);
+  await useReviewPane(page);
   const quotedComments = [
     {
       ...comments[0],
@@ -3196,6 +3212,7 @@ test("CM-7: 親コメントの記事引用を返信へ添付して送信でき�
 
 test("CK-1: 自分の確認済み反応を再クリックして取り消せる", async ({ page }) => {
   await mockAdminApi(page);
+  await useReviewPane(page);
   let toggled = false;
   await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
     const updatedComments = [
@@ -3245,6 +3262,7 @@ test("CK-4: 自動保存した本文をコメント状態変更後も保持す�
   page,
 }) => {
   await mockAdminApi(page);
+  await useReviewPane(page);
   let documentPatchCount = 0;
   page.on("request", (request) => {
     const url = new URL(request.url());
@@ -3278,6 +3296,7 @@ test("CK-3: 新規コメントは確認済み0件の対応待ちで表示する"
   page,
 }) => {
   await mockAdminApi(page);
+  await useReviewPane(page);
   await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
     await route.fulfill({
       json: {
@@ -3662,14 +3681,33 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
   page,
 }) => {
   await mockAdminApi(page);
+  await page.addInitScript(() => {
+    localStorage.removeItem("atlasez-editor-pane-layout");
+    localStorage.removeItem("atlasez-editor-pane-keys");
+  });
   await page.goto("./admin/editor/?new=1");
 
   await expect(page.locator(".document-sidebar")).toBeHidden();
   await expect(page.getByRole("button", { name: /[123]画面/ })).toHaveCount(0);
-  await expect(page.locator('[data-pane-tab="writing"]')).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(page.locator(".editor-split > section:visible")).toHaveCount(2);
+  for (const pane of ["writing", "preview"]) {
+    await expect(page.locator(`[data-pane-tab="${pane}"]`)).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.locator(`[data-editor-pane="${pane}"]`)).toBeVisible();
+  }
+  for (const pane of ["review", "media", "memo"]) {
+    await expect(page.locator(`[data-pane-tab="${pane}"]`)).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    await expect(page.locator(`[data-editor-pane="${pane}"]`)).toBeHidden();
+  }
+
+  await page.locator('[data-pane-tab="review"]').click();
+  await expect(page.locator(".editor-split > section:visible")).toHaveCount(3);
+  await expect(page.locator('[data-editor-pane="review"]')).toBeVisible();
 
   await page.locator('[data-pane-tab="media"]').click();
   await expect(page.locator(".editor-split > section:visible")).toHaveCount(4);
@@ -3680,6 +3718,10 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
   }
   await expect(page.locator('[data-pane-tab="memo"]')).toHaveCount(1);
   await expect(page.locator(".memo-area")).toHaveCount(1);
+  await expect(page.locator(".memo-area")).toBeHidden();
+  await page.locator('[data-pane-tab="memo"]').click();
+  await expect(page.locator(".memo-area")).toBeVisible();
+  await page.locator('[data-pane-tab="memo"]').click();
   await expect(page.locator(".memo-area")).toBeHidden();
 
   const writing = page.locator('[data-editor-pane="writing"]');
@@ -3781,6 +3823,7 @@ test("コメント枠をスクロールしても見出しと別窓ボタンは�
 }, testInfo) => {
   await page.setViewportSize({ width: 1600, height: 1100 });
   await mockAdminApi(page);
+  await useReviewPane(page);
   await page.goto("./admin/editor/?document=doc-1");
   const panel = page.locator(".review-panel");
   await expect(
@@ -3855,6 +3898,7 @@ test("E-6〜E-11: コメント操作、返信表示、メンション候補を�
   page,
 }) => {
   await mockAdminApi(page);
+  await useReviewPane(page);
   await page.goto("./admin/editor/?document=doc-1");
 
   const thread = page.locator('[data-comment-context="comment-1"]');
@@ -3927,6 +3971,7 @@ test("コメント別窓から新規コメントを追加し、閉じた後も�
   page,
 }) => {
   await mockAdminApi(page);
+  await useReviewPane(page);
   let submittedComment: {
     body: string;
     selections: unknown[];
@@ -4245,6 +4290,7 @@ test("CM-RT: コメント変更通知を受けると一覧をリアルタイム�
     }
     await route.fulfill({ status: 404, json: { error: "not found" } });
   });
+  await useReviewPane(page);
   await page.goto("./admin/editor/?document=doc-1");
   await expect(
     page.locator('[data-comment-context="comment-1"]'),
