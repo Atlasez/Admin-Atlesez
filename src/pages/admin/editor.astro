@@ -299,7 +299,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             <textarea data-personal-note maxlength="20000" placeholder="確認したいこと、次回やること、調査メモなどを自由に書けます。"></textarea>
             <div class="personal-notebook-actions"><button type="button" class="quiet-action" data-save-personal-note>メモを保存</button><output data-personal-note-message aria-live="polite"></output><small data-personal-note-updated>読み込み中…</small></div>
           </details>
-          <div class="pane-layout-controls" role="group" aria-label="表示する枠"><span>表示枠</span>{([['writing', '本文'], ['preview', 'プレビュー'], ['review', 'コメント'], ['media', '図・画像'], ['memo', '執筆メモ']] as const).map(([key, label]) => <span class="pane-layout-control" data-pane-control={key}><button type="button" data-pane-tab={key} aria-pressed={key === 'writing' || key === 'preview' || key === 'review' ? 'true' : 'false'}>{label}</button><button type="button" class="pane-popout-toggle" data-pane-popout={key} aria-pressed="false" aria-label={`${label}を別窓で表示`} title={`${label}を別窓で表示`}>↗</button></span>)}</div>
+          <div class="pane-layout-controls" role="group" aria-label="表示する枠"><span>表示枠</span>{([['writing', '本文'], ['preview', 'プレビュー'], ['review', 'コメント'], ['media', '図・画像'], ['memo', '執筆メモ']] as const).map(([key, label]) => <span class="pane-layout-control" data-pane-control={key}><button type="button" data-pane-tab={key} aria-pressed={key === 'writing' || key === 'preview' ? 'true' : 'false'}>{label}</button><button type="button" class="pane-popout-toggle" data-pane-popout={key} aria-pressed="false" aria-label={`${label}を別窓で表示`} title={`${label}を別窓で表示`}>↗</button></span>)}</div>
           <details class="heading-outline"><summary>見出し一覧</summary><nav data-heading-outline>本文の見出しがここに表示されます。</nav></details>
           <div class="editor-split" aria-label="原稿とプレビュー">
             <section class="writing-area">
@@ -1775,8 +1775,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (expanded) paneElements.preview.scrollIntoView({ block: "start", behavior: "smooth" });
     });
     paneKeys.forEach((key) => { paneElements[key].dataset.editorPane = key; });
-    let requestedPaneKeys: PaneKey[] = ["writing", "preview", "review"];
-    let paneRows: PaneKey[][] = [["writing", "preview", "review"]];
+    let requestedPaneKeys: PaneKey[] = ["writing", "preview"];
+    let paneRows: PaneKey[][] = [["writing", "preview"]];
     const normalizePaneRows = (rows: PaneKey[][]) => {
       const used = new Set<PaneKey>();
       const normalized = rows.slice(0, 3).map((row) => row.filter((key) => requestedPaneKeys.includes(key) && !used.has(key) && (used.add(key), true)).slice(0, 3)).filter((row) => row.length);
@@ -2160,7 +2160,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         const savedRows = Array.isArray(saved?.rows) ? saved.rows.filter(Array.isArray).map((row) => row.filter((key): key is PaneKey => typeof key === "string" && paneKeys.includes(key as PaneKey))) : null;
         const legacyOrder = Array.isArray(saved?.order) ? saved.order.filter((key): key is PaneKey => typeof key === "string" && paneKeys.includes(key as PaneKey)) : requestedPaneKeys;
         paneRows = normalizePaneRows(savedRows?.length ? savedRows : [legacyOrder]);
-      } catch { /* 既定の3枠を使う */ }
+      } catch { /* 既定の2枠を使う */ }
       root.querySelectorAll<HTMLButtonElement>("[data-pane-tab]").forEach((button) => button.addEventListener("click", () => {
         const key = button.dataset.paneTab as PaneKey;
         const restore = restorePopouts.get(key);
