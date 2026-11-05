@@ -441,14 +441,34 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       "すべてのカテゴリ",
       "環論",
     ]);
+    await expect(
+      page.locator("[data-subject-browser] [data-subject-quick]"),
+    ).toHaveCount(24);
     await expect(page.locator("[data-subject-browser]")).toContainText("数学");
     await expect(page.locator("[data-subject-browser]")).toContainText("物理");
-    await expect(page.locator("[data-subject-browser]")).toContainText("2件");
     await expect(
       page.locator('[data-subject-quick="mathematics"]'),
     ).toContainText("2件");
+    await expect(page.locator('[data-subject-quick="physics"]')).toContainText(
+      "1件",
+    );
+    await expect(page.locator('[data-subject-quick="kanbun"]')).toContainText(
+      "0件",
+    );
     await expect(page.locator(".subject-browser__item em")).toHaveCount(0);
-    await expect(page.locator(".subject-browser__empty")).toBeVisible();
+    await expect(page.locator(".subject-browser__empty")).toHaveCount(0);
+    await page.screenshot({
+      path: "test-results/admin-articles-horizontal-subjects.png",
+      fullPage: true,
+    });
+    await page.locator('[data-subject-quick="kanbun"]').click();
+    await expect(page.locator("[data-subject]")).toHaveValue("kanbun");
+    await expect(page.locator("[data-list]")).toContainText(
+      "条件に一致する原稿はありません。",
+    );
+    await expect(page.locator('[data-subject-quick="physics"]')).toContainText(
+      "1件",
+    );
     await page.locator('[data-subject-quick="mathematics"]').click();
     await expect(page.locator("[data-subject]")).toHaveValue("mathematics");
     await expect(page.locator("[data-list] .article")).toHaveCount(2);
@@ -463,8 +483,6 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-list]")).not.toContainText(
       "mathematics / ring-theory",
     );
-    await expect(page.locator(".subject-browser__empty")).toHaveCount(0);
-
     await page.locator("[data-category]").selectOption("ring-theory");
     await expect(page.locator("[data-list] .article")).toHaveCount(1);
     await expect(page.locator("[data-list]")).toContainText("環論の記事");
