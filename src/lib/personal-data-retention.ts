@@ -2,7 +2,7 @@ import type { D1Database } from "./admin-database";
 
 const dayMs = 24 * 60 * 60 * 1_000;
 
-/** Applies the retention periods documented for ADMIN-managed personal data. */
+/** Applies enabled retention cleanup; application deletion is paused pending OPSD-03. */
 export async function purgeExpiredPersonalData(
   db: D1Database,
   now = new Date(),

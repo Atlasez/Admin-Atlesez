@@ -162,6 +162,26 @@ it("retains accepted/rejected applications and cascading notification/review his
   };
   const now = new Date("2026-11-06T00:00:00.000Z");
   const expired = new Date(now.getTime() - 181 * 86_400_000).toISOString();
+  const expiredSession = new Date(now.getTime() - 2 * 86_400_000).toISOString();
+  const activeSession = new Date(now.getTime() + 2 * 86_400_000).toISOString();
+  db.prepare("INSERT INTO admin_auth_sessions(expires_at) VALUES (?)").run(
+    expiredSession,
+  );
+  db.prepare("INSERT INTO admin_auth_sessions(expires_at) VALUES (?)").run(
+    activeSession,
+  );
+  const expiredRateLimitBucket = Math.floor(
+    (now.getTime() - 2 * 86_400_000) / 600_000,
+  );
+  const activeRateLimitBucket = Math.floor(
+    (now.getTime() - 12 * 60 * 60 * 1_000) / 600_000,
+  );
+  db.prepare(
+    "INSERT INTO atlasez_application_rate_limits(bucket) VALUES (?)",
+  ).run(expiredRateLimitBucket);
+  db.prepare(
+    "INSERT INTO atlasez_application_rate_limits(bucket) VALUES (?)",
+  ).run(activeRateLimitBucket);
   db.prepare(
     "INSERT INTO atlasez_member_applications(id,status,updated_at) VALUES (?,?,?)",
   ).run("accepted-old", "accepted", expired);
@@ -184,9 +204,36 @@ it("retains accepted/rejected applications and cascading notification/review his
     "INSERT INTO atlasez_application_interview_history(id,application_id) VALUES (?,?)",
   ).run("history", "accepted-old");
 
-  await expect(runPersonalDataRetention(database, now)).resolves.toMatchObject({
-    resolvedApplicationsDeleted: 0,
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    await expect(
+      runPersonalDataRetention(database, now),
+    ).resolves.toMatchObject({
+      sessionsDeleted: 1,
+      rateLimitsDeleted: 1,
+      resolvedApplicationsDeleted: 0,
+    });
+    expect(info).toHaveBeenCalledWith(
+      "personal_data_retention_completed",
+      expect.objectContaining({
+        sessionsDeleted: 1,
+        rateLimitsDeleted: 1,
+        resolvedApplicationsDeleted: 0,
+      }),
+    );
+  } finally {
+    info.mockRestore();
+  }
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM admin_auth_sessions").get(),
+  ).toEqual({
+    count: 1,
   });
+  expect(
+    db
+      .prepare("SELECT COUNT(*) AS count FROM atlasez_application_rate_limits")
+      .get(),
+  ).toEqual({ count: 1 });
   for (const table of [
     "atlasez_member_applications",
     "atlasez_application_email_deliveries",
