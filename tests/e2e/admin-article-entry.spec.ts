@@ -290,10 +290,8 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       workflowCardStyle.borderColor,
     );
     expect(workflowCardStyle.borderColor).not.toBe("rgb(255, 255, 255)");
-    expect(workflowCardStyle.outlineStyle).toBe("solid");
-    expect(workflowCardStyle.outlineWidth).toBe("3px");
-    expect(workflowCardStyle.outlineColor).toBe("rgb(255, 255, 255)");
-    expect(workflowCardStyle.outlineOffset).toBe("2px");
+    expect(workflowCardStyle.outlineStyle).toBe("none");
+    expect(workflowCardStyle.outlineWidth).toBe("0px");
     await expect(
       page.getByRole("link", { name: /編集・フィードバックを開く/ }),
     ).toHaveCount(0);
@@ -443,7 +441,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     ]);
     await expect(
       page.locator("[data-subject-browser] [data-subject-quick]"),
-    ).toHaveCount(24);
+    ).toHaveCount(23);
     await expect(page.locator("[data-subject-browser]")).toContainText("数学");
     await expect(page.locator("[data-subject-browser]")).toContainText("物理");
     await expect(
@@ -472,7 +470,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await page.locator('[data-subject-quick="mathematics"]').click();
     await expect(page.locator("[data-subject]")).toHaveValue("mathematics");
     await expect(page.locator("[data-list] .article")).toHaveCount(2);
-    await page.locator("[data-subject]").selectOption("mathematics");
+    await page.locator('[data-subject-quick="mathematics"]').click();
     await expect(page.locator("[data-list] .article")).toHaveCount(2);
     await expect(page.locator("[data-list]")).toContainText("環論の記事");
     await expect(page.locator("[data-list]")).toContainText("群論の記事");
@@ -489,7 +487,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-list]")).not.toContainText("群論の記事");
     await expect(page.locator("[data-count]")).toHaveText("1件");
 
-    await page.locator("[data-subject]").selectOption("all");
+    await page.getByRole("button", { name: "全分野に戻る" }).click();
     await expect(page.locator("[data-category]")).toHaveValue("ring-theory");
     await expect(page.locator("[data-list] .article")).toHaveCount(1);
   });
@@ -606,7 +604,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     ).toBeHidden();
 
     await page.locator("[data-query]").fill("数学");
-    await page.locator("[data-subject]").selectOption("mathematics");
+    await page.locator('[data-subject-quick="mathematics"]').click();
     await page.locator("[data-status]").selectOption("approved");
     await page.reload();
 
@@ -614,7 +612,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-subject]")).toHaveValue("mathematics");
     await expect(page.locator("[data-status]")).toHaveValue("approved");
 
-    await page.getByRole("button", { name: "条件をリセット" }).click();
+    await page.locator("[data-reset-filters]").click();
     await expect(page.locator("[data-query]")).toHaveValue("");
     await expect(page.locator("[data-subject]")).toHaveValue("all");
     await expect(page.locator("[data-status]")).toHaveValue("all");

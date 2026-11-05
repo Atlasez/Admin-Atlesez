@@ -343,7 +343,7 @@ test("分野一覧とカテゴリ別の記事表示をプロトタイプに合�
   await expect(page.locator("[data-list] .article")).toHaveCount(1);
   await page.locator('[data-subject-quick="kanbun"]').click();
   await expect(page.locator("[data-list]")).toContainText(
-    "現在の条件に一致する記事はありません",
+    "条件に一致する原稿はありません。",
   );
   await page.getByRole("button", { name: "全分野に戻る" }).click();
   await expect(page.locator("[data-list] .article")).toHaveCount(5);

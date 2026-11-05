@@ -1155,7 +1155,10 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     background: var(--background-secondary);
     border: 1px solid var(--border-default);
     border-radius: 0.45rem;
-    display: block;
+    display: grid;
+    gap: 0.2rem;
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
     margin: 0 auto;
     padding: 0.65rem 0.75rem;
   }
@@ -1238,9 +1241,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   @media (max-width: 950px) {
     .subject-browser__items { grid-template-columns: repeat(5, minmax(0, 1fr)); }
     .article-main { grid-template-columns: minmax(10rem, 1fr) minmax(14rem, 1.2fr); }
-  }
-  @media (max-width: 760px) {
-    .filters__primary { grid-template-columns: minmax(0, 1fr) minmax(8rem, 0.65fr) minmax(8rem, 0.65fr) auto; }
+    .filters__primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .filter-control-search { grid-column: 1 / -1; }
     .filters__reset { justify-self: start; }
   }
@@ -1716,7 +1717,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         }).join("");
         list.innerHTML = `<header class="article-list__heading"><h2>${esc(activeScope)}</h2><span>${shown.length}件</span><small>${orderedGroups.length}カテゴリ</small></header>${groupMarkup}`;
       } else {
-        list.innerHTML = `<header class="article-list__heading"><h2>${esc(activeScope)}</h2><span>0件</span><small>0カテゴリ</small></header><div class="article-empty"><strong>現在の条件に一致する記事はありません</strong><span>条件をリセットするか、別の分野を選んでください。</span></div>`;
+        list.innerHTML = `<header class="article-list__heading"><h2>${esc(activeScope)}</h2><span>0件</span><small>0カテゴリ</small></header><div class="article-empty"><strong>条件に一致する原稿はありません。</strong><span>条件をリセットするか、別の分野を選んでください。</span></div>`;
       }
       pagination.hidden = !hasMore;
       paginationStatus.textContent = loadedPageCount ? `${items.length}件を読み込み済み${hasMore ? "・続きがあります" : "・すべて読み込み済み"}` : "";
@@ -2017,7 +2018,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       if (![...subject.options].some((option) => option.value === value && !option.disabled && !option.hidden)) return;
       if (subject.value !== value) expandedArticleGroups.clear();
       subject.value = value;
-      category.value = "all";
+      if (value !== "all") category.value = "all";
       updateCategoryOptions();
       saveFilterState();
       render();
