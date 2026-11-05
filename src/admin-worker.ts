@@ -23802,10 +23802,7 @@ async function completeGoogleLogin(
     // 不正なCookieはログイン失敗として扱う。
   }
   if (!code || !state || state !== savedState.state)
-    return json(
-      { error: "Googleログインの確認に失敗しました。もう一度お試しください。" },
-      400,
-    );
+    return redirectGoogleLoginFailure();
 
   let token: { access_token?: string };
   try {
@@ -23823,10 +23820,10 @@ async function completeGoogleLogin(
     if (!tokenResponse.ok) throw new Error("token exchange failed");
     token = (await tokenResponse.json()) as { access_token?: string };
   } catch {
-    return json({ error: "Googleログインを完了できませんでした。" }, 502);
+    return redirectGoogleLoginFailure();
   }
   if (!token.access_token)
-    return json({ error: "Googleログインを完了できませんでした。" }, 502);
+    return redirectGoogleLoginFailure();
 
   let user: { email?: string; email_verified?: boolean; sub?: string };
   try {
@@ -23837,20 +23834,18 @@ async function completeGoogleLogin(
     if (!userResponse.ok) throw new Error("userinfo failed");
     user = (await userResponse.json()) as typeof user;
   } catch {
-    return json({ error: "Googleアカウントを確認できませんでした。" }, 502);
+    return redirectGoogleLoginFailure();
   }
   const email = user.email?.trim().toLowerCase() ?? "";
   const subject = user.sub?.trim() ?? "";
   if (!user.email_verified || !subject || !EMAIL_PATTERN.test(email))
-    return json({ error: "確認済みのGoogleメールアドレスが必要です。" }, 403);
+    return redirectGoogleLoginFailure();
 
   let account: { id: string; canonical_email: string };
   try {
     account = await resolveGoogleAccount(env, subject, email);
-  } catch (error) {
-    if (error instanceof GoogleIdentityConflictError)
-      return json({ error: error.message }, 409);
-    return json({ error: "Atlasezアカウントを作成できませんでした。" }, 500);
+  } catch {
+    return redirectGoogleLoginFailure();
   }
 
   const sessionToken = `${crypto.randomUUID()}${crypto.randomUUID()}`;
@@ -23901,6 +23896,19 @@ async function completeGoogleLogin(
     cookie(GOOGLE_STATE_COOKIE, "", 0, "/auth/google"),
   );
   return new Response(null, { status: 302, headers });
+}
+
+function redirectGoogleLoginFailure(): Response {
+  const headers = new Headers({
+    location: "/admin/login-error/",
+    "cache-control": "no-store",
+    "referrer-policy": "no-referrer",
+  });
+  headers.append(
+    "set-cookie",
+    cookie(GOOGLE_STATE_COOKIE, "", 0, "/auth/google"),
+  );
+  return new Response(null, { status: 303, headers });
 }
 
 async function logoutAdmin(request: Request, env: Env): Promise<Response> {

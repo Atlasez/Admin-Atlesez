@@ -184,3 +184,37 @@ test("375px幅の運営ヘッダーと開いたメニューに44px以上の操�
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(375);
 });
+
+test("Googleログイン失敗画面から再試行でき、360px幅でaxe違反がない", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto("admin/login-error/");
+
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Googleログインを確認できませんでした",
+    }),
+  ).toBeVisible();
+  const retry = page.getByRole("link", {
+    name: "Googleアカウントでログインし直す",
+  });
+  await expect(retry).toHaveAttribute("href", "/auth/google/login");
+  await retry.focus();
+  await expect(retry).toBeFocused();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(
+    results.violations.map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      targets: violation.nodes.map((node) => node.target),
+    })),
+  ).toEqual([]);
+});

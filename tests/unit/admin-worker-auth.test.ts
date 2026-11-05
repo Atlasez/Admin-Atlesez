@@ -986,11 +986,58 @@ describe("Google OAuth login callback", () => {
       expect(authorizationUrl.searchParams.get("state")).not.toBe(
         "wrong-state",
       );
-      expect(response.status).toBe(400);
-      await expect(response.json()).resolves.toMatchObject({
-        error: "Googleログインの確認に失敗しました。もう一度お試しください。",
-      });
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe("/admin/login-error/");
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(response.headers.get("location")).not.toContain(
+        "authorization-code",
+      );
+      expect(response.headers.getSetCookie()).toContainEqual(
+        expect.stringContaining("Max-Age=0; Path=/auth/google"),
+      );
       expect(googleFetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("redirects token exchange failures without leaving OAuth parameters in the URL", async () => {
+    const oauthEnv = env("google-oauth", {
+      GOOGLE_OAUTH_CLIENT_ID: "oauth-client-id",
+      GOOGLE_OAUTH_CLIENT_SECRET: "oauth-client-secret",
+    });
+    const prepare = vi.spyOn(oauthEnv.REPORTS, "prepare");
+    const googleFetch = vi.fn(
+      async () => new Response("provider unavailable", { status: 503 }),
+    );
+    vi.stubGlobal("fetch", googleFetch);
+    try {
+      const login = await worker.fetch(
+        new Request("https://admin.example/auth/google/login"),
+        oauthEnv as never,
+      );
+      const authorizationUrl = new URL(login.headers.get("location")!);
+      const stateCookie = login.headers.get("set-cookie")!.split(";", 1)[0];
+      const callback = await worker.fetch(
+        new Request(
+          `https://admin.example/auth/google/callback?code=unit-test-code&state=${encodeURIComponent(authorizationUrl.searchParams.get("state")!)}`,
+          { headers: { cookie: stateCookie } },
+        ),
+        oauthEnv as never,
+      );
+
+      expect(callback.status).toBe(303);
+      expect(callback.headers.get("location")).toBe("/admin/login-error/");
+      expect(callback.headers.get("location")).not.toContain("unit-test-code");
+      expect(callback.headers.get("location")).not.toContain("state=");
+      expect(callback.headers.get("cache-control")).toBe("no-store");
+      expect(callback.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(callback.headers.getSetCookie()).toContainEqual(
+        expect.stringContaining("Max-Age=0; Path=/auth/google"),
+      );
+      expect(googleFetch).toHaveBeenCalledTimes(1);
+      expect(prepare).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
     }
@@ -1048,11 +1095,11 @@ describe("Google OAuth login callback", () => {
         oauthEnv as never,
       );
 
-      expect(callback.status).toBe(403);
-      await expect(callback.json()).resolves.toMatchObject({
-        error: "確認済みのGoogleメールアドレスが必要です。",
-      });
-      expect(callback.headers.getSetCookie()).toEqual([]);
+      expect(callback.status).toBe(303);
+      expect(callback.headers.get("location")).toBe("/admin/login-error/");
+      expect(callback.headers.getSetCookie()).toContainEqual(
+        expect.stringContaining("Max-Age=0; Path=/auth/google"),
+      );
       expect(prepare).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
