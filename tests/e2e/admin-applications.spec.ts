@@ -540,3 +540,158 @@ test("面談保存中は再描画や応募者切替後も入力をロックす�
     page.locator('[data-interview-draft-state="pending-draft"]'),
   ).toContainText("保存済み");
 });
+
+test("既送信の同一面談通知は再送キーに頼らず重複登録しない", async ({
+  page,
+}) => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  let notificationBody: string | null = null;
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/admin/applications") {
+      await route.fulfill({
+        json: {
+          project: { slug: "thinking-cafe", name: "Thinking Cafe" },
+          applications: [
+            {
+              id,
+              family_name: "検証",
+              given_name: "応募者",
+              email: "applicant@example.invalid",
+              status: "new",
+              project_slug: "thinking-cafe",
+              interview_scheduled_at: "2026-11-10T10:00:00.000Z",
+              interview_timezone: "Asia/Tokyo",
+              interview_mode: "in_person",
+              interview_location: "会議室A",
+              interview_notified_at: "2026-11-04T10:00:00.000Z",
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/interview/notify")) {
+      notificationBody = route.request().postData();
+      await route.fulfill({
+        json: {
+          ok: true,
+          notificationQueued: false,
+          alreadyQueued: true,
+          deliveryStatus: "sent",
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: { ok: true } });
+  });
+
+  await page.goto("./admin/applications/?project=thinking-cafe");
+  await page.locator(`[data-interview-notify="${id}"]`).click();
+  await expect(page.locator("[data-notice]")).toContainText("送信済みです");
+  await expect(page.locator("[data-notice]")).toContainText(
+    "重複送信しませんでした",
+  );
+  expect(notificationBody).toBeNull();
+});
+
+test("面談通知の成功表示は配送完了ではなくキュー登録を示す", async ({
+  page,
+}) => {
+  const id = "22222222-2222-4222-8222-222222222222";
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/admin/applications") {
+      await route.fulfill({
+        json: {
+          project: { slug: "thinking-cafe", name: "Thinking Cafe" },
+          applications: [
+            {
+              id,
+              family_name: "検証",
+              given_name: "応募者",
+              email: "applicant@example.invalid",
+              status: "new",
+              project_slug: "thinking-cafe",
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/interview/notify")) {
+      await route.fulfill({ json: { ok: true, notificationQueued: true } });
+      return;
+    }
+    await route.fulfill({ json: { ok: true } });
+  });
+
+  await page.goto("./admin/applications/?project=thinking-cafe");
+  await page.locator(`[data-interview-date="${id}"]`).fill("2026-11-15T10:00");
+  await page
+    .locator(`[data-interview-format="${id}"]`)
+    .selectOption("in_person");
+  await page.locator(`[data-interview-location="${id}"]`).fill("検証会場");
+  await page.locator(`[data-interview-notify="${id}"]`).click();
+  await expect(page.locator("[data-notice]")).toContainText(
+    "通知キューに登録しました",
+  );
+  await expect(page.locator("[data-notice]")).not.toContainText(
+    "応募者へ通知しました",
+  );
+});
+
+test("面談保存済み・履歴未確定の応答は通知せず保存状態を案内する", async ({
+  page,
+}) => {
+  const id = "33333333-3333-4333-8333-333333333333";
+  let notificationCalls = 0;
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/admin/applications") {
+      await route.fulfill({
+        json: {
+          project: { slug: "thinking-cafe", name: "Thinking Cafe" },
+          applications: [
+            {
+              id,
+              family_name: "検証",
+              given_name: "応募者",
+              email: "applicant@example.invalid",
+              status: "new",
+              project_slug: "thinking-cafe",
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (
+      url.pathname.endsWith("/interview") &&
+      route.request().method() === "PUT"
+    ) {
+      await route.fulfill({
+        status: 503,
+        json: {
+          error: "履歴の確定を確認できません。状態を再読み込みしてください。",
+          interviewSaved: true,
+        },
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/interview/notify")) notificationCalls++;
+    await route.fulfill({ json: { ok: true } });
+  });
+
+  await page.goto("./admin/applications/?project=thinking-cafe");
+  await page.locator(`[data-interview-date="${id}"]`).fill("2026-11-15T10:00");
+  await page
+    .locator(`[data-interview-format="${id}"]`)
+    .selectOption("in_person");
+  await page.locator(`[data-interview-location="${id}"]`).fill("検証会場");
+  await page.locator(`[data-interview-notify="${id}"]`).click();
+  await expect(page.locator("[data-notice]")).toContainText(
+    "面談情報は保存済みです。履歴の確定を確認できません",
+  );
+  expect(notificationCalls).toBe(0);
+});

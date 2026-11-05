@@ -8,7 +8,6 @@ const { locale = "ja" } = Astro.props;
   class="theme-toggle"
   data-theme-toggle
   aria-pressed="false"
-  aria-label={locale === "ja" ? "ダークモードに切り替える" : "Switch to dark mode"}
 >
   <span data-theme-label>{locale === "ja" ? "ダーク表示" : "Dark mode"}</span>
 </button>
@@ -25,12 +24,6 @@ const { locale = "ja" } = Astro.props;
       const label = button.querySelector<HTMLElement>("[data-theme-label]");
       button.dataset.themeMode = mode;
       button.setAttribute("aria-pressed", String(mode !== "default"));
-      button.setAttribute(
-        "aria-label",
-        document.documentElement.lang === "ja"
-          ? mode === "default" ? "ダークモードに切り替える" : mode === "dark" ? "ブラックモードに切り替える" : "ライトモードに切り替える"
-          : mode === "default" ? "Switch to dark mode" : mode === "dark" ? "Switch to black mode" : "Switch to light mode",
-      );
       if (label) label.textContent = document.documentElement.lang === "ja"
         ? mode === "default" ? "ダーク表示" : mode === "dark" ? "ブラック表示" : "ライト表示"
         : mode === "default" ? "Dark mode" : mode === "dark" ? "Black mode" : "Light mode";

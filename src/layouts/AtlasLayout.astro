@@ -22,6 +22,7 @@ interface Props {
   localeSwitchHrefs?: Record<string, string>;
   /** 検索エンジンにインデックスさせない（内容が空のページなど） */
   noindex?: boolean;
+  enableArticleEnhancements?: boolean;
 }
 const {
   locale,
@@ -32,6 +33,7 @@ const {
   structuredData,
   localeSwitchHrefs = {},
   noindex = false,
+  enableArticleEnhancements = false,
 } = Astro.props;
 // 現在の公開記事は日本語のみ。表示言語はヘッダーの表示設定に集約する。
 void localeSwitchHrefs;
@@ -65,6 +67,7 @@ const currentPath = Astro.url.pathname;
       alternates={alternates}
       structuredData={structuredData}
       noindex={noindex}
+      enableArticleEnhancements={enableArticleEnhancements}
     />
   </head>
   <body>
