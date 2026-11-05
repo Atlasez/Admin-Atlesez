@@ -1062,6 +1062,49 @@ it("タスク操作の表示権限は閲覧範囲ではなく管理者・担当�
       payload.tasks.map((task) => [task.title, task.can_update]),
     ),
   ).toEqual({ 自分が担当: true, 自分が作成: true, 他人のタスク: false });
+  const otherTaskWorkspace = await request(
+    "/api/admin/task-workspaces/33333333-3333-4333-8333-333333333333",
+    email,
+  );
+  expect(otherTaskWorkspace.status).toBe(200);
+  expect(await otherTaskWorkspace.json()).toMatchObject({
+    canEdit: false,
+    canAssign: false,
+  });
+  const unauthorizedWrite = await request(
+    "/api/admin/task-workspaces/33333333-3333-4333-8333-333333333333",
+    email,
+    {
+      revision: 0,
+      expectedUpdatedAt: now,
+      summary: "権限外書込みの検証",
+      nextAction: "状態を変更しない",
+      waitingFor: "",
+      documentId: "",
+      checklist: [],
+      dependencyIds: [],
+    },
+    "https://admin.atlasez.test",
+    "PUT",
+  );
+  expect(unauthorizedWrite.status).toBe(403);
+  expect(await unauthorizedWrite.json()).toEqual({
+    error: "このタスクを編集できません。",
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT status,updated_at FROM editorial_tasks WHERE id='33333333-3333-4333-8333-333333333333'",
+      )
+      .get(),
+  ).toEqual({ status: "open", updated_at: now });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM editorial_task_workspaces WHERE task_id='33333333-3333-4333-8333-333333333333'",
+      )
+      .get(),
+  ).toEqual({ count: 0 });
   const managerResponse = await request(
     "/api/admin/member-tasks?view=all",
     "global@atlasez.test",
