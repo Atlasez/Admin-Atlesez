@@ -154,7 +154,7 @@ test("一括登録は編集権限内の非テスト未登録記事だけを送�
   const catalogOverview = page.locator("[data-catalog-overview]");
   await expect(catalogOverview).toHaveJSProperty("open", false);
   await expect(page.locator("[data-catalog-compact-summary]")).toContainText(
-    "公開8件 ・ 連携済み1件 ・ 要対応7件",
+    "公開記事 8件 ・ 運営原稿あり 1件 ・ 運営原稿未登録 4件 ・ 紐付け要確認 3件",
   );
   await page.screenshot({
     path: "test-results/admin-articles-linkage-summary-collapsed.png",
@@ -249,4 +249,102 @@ test("一括登録は編集権限内の非テスト未登録記事だけを送�
     ],
   });
   expect(otherPosts).toEqual([]);
+});
+
+test("分野一覧とカテゴリ別の記事表示をプロトタイプに合わせて操作できる", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1100 });
+  await page.addInitScript(() => {
+    localStorage.setItem("atlasez-prefs", JSON.stringify({ bg: "dark" }));
+  });
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/admin/editor/documents") {
+      await route.fulfill({
+        json: {
+          documents: [],
+          pagination: { hasMore: false, nextCursor: null },
+          scope: {
+            email: "manager@example.com",
+            subjects: [],
+            coordinatorSubjects: [],
+            allSubjects: true,
+            isManager: true,
+            isProjectLeader: false,
+          },
+        },
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/editor/catalog") {
+      await route.fulfill({
+        json: {
+          catalog: [
+            ...Array.from({ length: 5 }, (_, index) =>
+              catalogEntry(
+                `group-${index + 1}`,
+                "mathematics",
+                `definition-${index + 1}`,
+                `群論の記事${index + 1}`,
+                "unmanaged",
+              ),
+            ),
+            catalogEntry(
+              "physics-article",
+              "physics",
+              "mechanics",
+              "力学の記事",
+              "unmanaged",
+            ),
+          ],
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: {} });
+  });
+
+  await page.goto("admin/articles/");
+  const subjects = page.locator("[data-subject-quick]");
+  await expect(subjects).toHaveCount(23);
+  await expect(page.locator('[data-subject-quick="kanbun"]')).toContainText(
+    "0件",
+  );
+  await expect(
+    page.locator('[data-subject-quick="mathematics"]'),
+  ).toContainText("5件");
+  await expect(page.locator("[data-list] .article")).toHaveCount(5);
+  await expect(page.locator("[data-list]")).toContainText("2カテゴリ");
+  await page.screenshot({
+    path: "test-results/admin-articles-horizontal-all-subjects.png",
+    fullPage: true,
+  });
+
+  await page.locator('[data-subject-quick="mathematics"]').click();
+  await expect(page.locator("[data-list] .article")).toHaveCount(4);
+  await expect(
+    page.locator("[data-list] .article-group__heading"),
+  ).toContainText("群論");
+  await expect(
+    page.locator("[data-list] .article-group__heading"),
+  ).toContainText("5件");
+  await page.screenshot({
+    path: "test-results/admin-articles-horizontal-subjects.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "残り1件を表示" }).click();
+  await expect(page.locator("[data-list] .article")).toHaveCount(5);
+  await page.getByRole("button", { name: "先頭4件に戻す" }).click();
+  await expect(page.locator("[data-list] .article")).toHaveCount(4);
+
+  await page.locator('[data-subject-quick="physics"]').click();
+  await expect(page.locator("[data-list]")).toContainText("力学の記事");
+  await expect(page.locator("[data-list] .article")).toHaveCount(1);
+  await page.locator('[data-subject-quick="kanbun"]').click();
+  await expect(page.locator("[data-list]")).toContainText(
+    "現在の条件に一致する記事はありません",
+  );
+  await page.getByRole("button", { name: "全分野に戻る" }).click();
+  await expect(page.locator("[data-list] .article")).toHaveCount(5);
 });
