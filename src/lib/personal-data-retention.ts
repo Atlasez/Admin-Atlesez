@@ -57,6 +57,7 @@ export async function purgeExpiredPersonalData(
   return {
     sessionsDeleted: Number(results[0]?.meta?.changes ?? 0),
     rateLimitsDeleted: Number(results[1]?.meta?.changes ?? 0),
+    applicationDeletionPaused: true,
     // Terminal-application deletion is paused until OPSD-03 is approved and
     // the migration-backed retention guard is released. Keep this field for
     // the existing diagnostics shape without implying rows were removed.

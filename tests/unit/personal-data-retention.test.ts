@@ -211,6 +211,7 @@ it("retains accepted/rejected applications and cascading notification/review his
     ).resolves.toMatchObject({
       sessionsDeleted: 1,
       rateLimitsDeleted: 1,
+      applicationDeletionPaused: true,
       resolvedApplicationsDeleted: 0,
     });
     expect(info).toHaveBeenCalledWith(
@@ -218,6 +219,7 @@ it("retains accepted/rejected applications and cascading notification/review his
       expect.objectContaining({
         sessionsDeleted: 1,
         rateLimitsDeleted: 1,
+        applicationDeletionPaused: true,
         resolvedApplicationsDeleted: 0,
       }),
     );
