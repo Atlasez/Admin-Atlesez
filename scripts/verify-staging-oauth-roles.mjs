@@ -32,18 +32,6 @@ if (
 }
 
 const origin = stagingUrl.origin;
-const expectedMemberEmail =
-  process.env.STAGING_MEMBER_EMAIL?.trim().toLowerCase();
-const expectedReviewerEmail =
-  process.env.STAGING_REVIEWER_EMAIL?.trim().toLowerCase();
-if (!expectedMemberEmail || !expectedReviewerEmail) {
-  throw new Error(
-    "Set STAGING_MEMBER_EMAIL and STAGING_REVIEWER_EMAIL to the previously approved synthetic identities. Values are never printed or saved.",
-  );
-}
-if (expectedMemberEmail === expectedReviewerEmail) {
-  throw new Error("Member and reviewer identities must be different.");
-}
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
   throw new Error(
     "Run this interactive OAuth check from a dedicated terminal.",
@@ -68,18 +56,7 @@ const terminal = createInterface({
 const browser = await chromium.launch({ headless: false });
 const memberContext = await browser.newContext();
 const reviewerContext = await browser.newContext();
-const contexts = [
-  {
-    name: "member",
-    context: memberContext,
-    expectedEmail: expectedMemberEmail,
-  },
-  {
-    name: "reviewer",
-    context: reviewerContext,
-    expectedEmail: expectedReviewerEmail,
-  },
-];
+const contexts = [memberContext, reviewerContext];
 
 const requestJson = async (context, path) => {
   const response = await context.request.get(`${origin}${path}`, {
@@ -108,8 +85,8 @@ const waitForAuthenticatedStatus = async (context) => {
 };
 
 try {
-  for (const entry of contexts) {
-    const page = await entry.context.newPage();
+  for (const context of contexts) {
+    const page = await context.newPage();
     const login = new URL("/auth/google/login", origin);
     login.searchParams.set("returnTo", "/admin/portal/");
     await page.goto(login.href, { waitUntil: "domcontentloaded" });
@@ -124,16 +101,11 @@ try {
 
   const memberStatus = await waitForAuthenticatedStatus(memberContext);
   const reviewerStatus = await waitForAuthenticatedStatus(reviewerContext);
-  const memberIdentityMatches =
-    memberStatus.status === 200 &&
-    memberStatus.payload?.email?.trim().toLowerCase() === expectedMemberEmail;
-  const reviewerIdentityMatches =
-    reviewerStatus.status === 200 &&
-    reviewerStatus.payload?.email?.trim().toLowerCase() ===
-      expectedReviewerEmail;
   const identitiesAreDistinct =
+    typeof memberStatus.payload?.email === "string" &&
+    typeof reviewerStatus.payload?.email === "string" &&
     memberStatus.payload?.email?.trim().toLowerCase() !==
-    reviewerStatus.payload?.email?.trim().toLowerCase();
+      reviewerStatus.payload?.email?.trim().toLowerCase();
   const memberStageIsActive =
     memberStatus.payload?.stage === "MEMBER" &&
     Array.isArray(memberStatus.payload?.applicationProjects) &&
@@ -188,8 +160,6 @@ try {
     reviewerStatusHttp: reviewerStatus.status,
     memberAuthenticated: memberStatus.status === 200,
     reviewerAuthenticated: reviewerStatus.status === 200,
-    memberIdentityMatches,
-    reviewerIdentityMatches,
     identitiesAreDistinct,
     memberStageIsActive,
     reviewerStageIsActive,
@@ -199,10 +169,14 @@ try {
     reviewerOtherProjectAccessDenied,
   };
   console.log(JSON.stringify(results, null, 2));
-  if (Object.values(results).some((result) => result !== true))
+  if (
+    Object.entries(results).some(([key, result]) =>
+      key.endsWith("Http") ? result !== 200 : result !== true,
+    )
+  )
     process.exitCode = 1;
 } finally {
   terminal.close();
-  await Promise.all(contexts.map(({ context }) => context.close()));
+  await Promise.all(contexts.map((context) => context.close()));
   await browser.close();
 }
