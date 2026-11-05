@@ -27,6 +27,39 @@ describe("browser article Markdown renderer", () => {
     expect(html).toContain("data-authored-statement-title");
   });
 
+  it("renders Kanji entry sections in paired columns and groups repeated readings", async () => {
+    const html = await renderArticleMarkdown(
+      [
+        "## やせる",
+        "",
+        "### 【一字】",
+        "",
+        "| 漢字 | 読み |",
+        "| --- | --- |",
+        "| 痩 | や-せる |",
+        "| 毀 | や-せる |",
+        "",
+        "### 【熟語】",
+        "",
+        "熟語の例",
+        "",
+        "## 次の項目",
+        "",
+        "本文",
+      ].join("\n"),
+      { katex: false },
+    );
+
+    expect(html).toContain('<div class="kanji-entry-grid">');
+    expect(html).toContain('class="kanji-entry-column kanji-entry-single"');
+    expect(html).toContain('class="kanji-entry-column kanji-entry-compound"');
+    expect(html).toContain('class="kanji-character-table"');
+    expect(html).toContain('rowspan="2"');
+    expect(html).not.toContain("<td></td>");
+    expect(html).toContain("熟語の例");
+    expect(html).toContain("<h2>次の項目</h2>");
+  });
+
   it("uses a selected custom preset while keeping its source marker out of HTML", async () => {
     const html = await renderArticleMarkdown(
       "<!-- math-preset: custom-1 -->\n<!-- math-custom-preset: custom-1 -->\n\\newcommand{\\RR}{\\mathbb{R}}\n<!-- /math-custom-preset -->\n\n$\\RR$",
