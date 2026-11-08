@@ -1875,6 +1875,9 @@ async function listArticleReports(
   if (requested !== "all" && !status)
     return json({ error: "状態を確認してください。" }, 400);
   const searchParams = new URL(request.url).searchParams;
+  const articleId = searchParams.get("articleId")?.trim() ?? "";
+  if (articleId.length > 200)
+    return json({ error: "記事IDを確認してください。" }, 400);
   const requestedLimit = Number(searchParams.get("limit") ?? "100");
   const pageLimit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
@@ -1905,6 +1908,10 @@ async function listArticleReports(
   if (status) {
     filters.push("status = ?");
     values.push(status);
+  }
+  if (articleId) {
+    filters.push("article_id = ?");
+    values.push(articleId);
   }
   if (cursorRank !== null && cursorCreatedAt && cursorId) {
     filters.push(
