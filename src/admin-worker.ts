@@ -15094,30 +15094,37 @@ async function createAvailabilityRule(
   } catch {
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
-  const weekday = Number(payload.weekday);
+  const weekdayValues = Array.isArray(payload.weekdays)
+    ? payload.weekdays
+    : [payload.weekday];
+  const weekdays = weekdayValues.map(Number);
   const timezone = text(payload.timezone, 80) || "Asia/Tokyo";
   const kind = text(payload.kind, 20) || "unavailable";
   if (
-    !Number.isInteger(weekday) ||
-    weekday < 0 ||
-    weekday > 6 ||
+    weekdays.length < 1 ||
+    weekdays.length > 7 ||
+    new Set(weekdays).size !== weekdays.length ||
+    weekdays.some((weekday) => !Number.isInteger(weekday) || weekday < 0 || weekday > 6) ||
     !validTimeZone(timezone) ||
     !["available", "unavailable"].includes(kind)
   )
     return json({ error: "曜日、タイムゾーンまたは可否を確認してください。" }, 400);
-  await env.REPORTS.prepare(
-    "INSERT INTO editorial_member_availability_rules (id,email,weekday,timezone,label,kind,created_at) VALUES (?,?,?,?,?,?,?)",
-  )
-    .bind(
+  const createdAt = new Date().toISOString();
+  const statements = weekdays.map((weekday) =>
+    env.REPORTS.prepare(
+      "INSERT INTO editorial_member_availability_rules (id,email,weekday,timezone,label,kind,created_at) VALUES (?,?,?,?,?,?,?)",
+    ).bind(
       crypto.randomUUID(),
       scope.email,
       weekday,
       timezone,
       text(payload.label, 160),
       kind,
-      new Date().toISOString(),
-    )
-    .run();
+      createdAt,
+    ),
+  );
+  if (statements.length === 1) await statements[0].run();
+  else await env.REPORTS.batch(statements);
   return json({ ok: true });
 }
 

@@ -309,6 +309,16 @@ test("カレンダーの日付は矢印キーで移動しTab stopを一つに保
   await page.clock.runFor(20);
   await expect(firstDate).toBeFocused();
   await expect(selectionSummary).toContainText("2026-10-01");
+  await expect(page.locator('[data-calendar-date="2026-10-01"]')).toHaveClass(
+    /calendar-cell--selected/,
+  );
+  await firstDate.press("Enter");
+  await page.clock.runFor(20);
+  await expect(selectionSummary).toBeEmpty();
+  await expect(page.locator(".calendar-cell--selected")).toHaveCount(0);
+  await firstDate.press("Enter");
+  await page.clock.runFor(20);
+  await expect(selectionSummary).toContainText("2026-10-01");
   await expect(blockEditor).not.toHaveAttribute("open", "");
 
   await firstDate.press("ArrowRight");
@@ -317,6 +327,48 @@ test("カレンダーの日付は矢印キーで移動しTab stopを一つに保
   await expect(secondDate).toBeFocused();
   await expect(blockEditor).toHaveAttribute("open", "");
   await expect(selectionSummary).toContainText("2026-10-01〜2026-10-02");
+  await page
+    .locator("[data-event-calendar] .calendar-cell--blank")
+    .first()
+    .click();
+  await expect(selectionSummary).toBeEmpty();
+  await expect(page.locator(".calendar-cell--selected")).toHaveCount(0);
+
+  const october31 = page.locator(
+    '[data-calendar-date="2026-10-31"] [data-calendar-select]',
+  );
+  await october31.click();
+  await page.locator("[data-calendar-next]").click();
+  const november2 = page.locator(
+    '[data-calendar-date="2026-11-02"] [data-calendar-select]',
+  );
+  await november2.click();
+  await expect(selectionSummary).toContainText("2026-10-31〜2026-11-02");
+  await expect(page.locator(".calendar-cell--selected")).toHaveCount(2);
+  await november2.click();
+  await expect(selectionSummary).toBeEmpty();
+  await expect(page.locator(".calendar-cell--selected")).toHaveCount(0);
+  await november2.click();
+  const outsideCalendarPoint = await page.evaluate(() => {
+    for (let y = window.innerHeight - 5; y > 5; y -= 8) {
+      for (let x = window.innerWidth - 5; x > 5; x -= 8) {
+        const element = document.elementFromPoint(x, y);
+        if (
+          element &&
+          !element.closest(
+            "[data-event-calendar], [data-block-editor], button, a, input, select, textarea, summary, label, dialog",
+          )
+        ) {
+          return { x, y };
+        }
+      }
+    }
+    return null;
+  });
+  expect(outsideCalendarPoint).not.toBeNull();
+  await page.mouse.click(outsideCalendarPoint!.x, outsideCalendarPoint!.y);
+  await expect(selectionSummary).toBeEmpty();
+  await expect(page.locator(".calendar-cell--selected")).toHaveCount(0);
 
   const mondayBulkSelect = page.locator('[data-calendar-weekday="1"]');
   await mondayBulkSelect.focus();
@@ -431,6 +483,12 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   const emptyDate = `${year}-${month}-${String(emptyDay).padStart(2, "0")}`;
   let savedBlock: Record<string, unknown> | undefined;
   let savedRule: Record<string, unknown> | undefined;
+  const savedWeekdays = () => {
+    if (!savedRule) return [];
+    return Array.isArray(savedRule.weekdays)
+      ? savedRule.weekdays.map(Number)
+      : [Number(savedRule.weekday)];
+  };
 
   await page.route("**/api/admin/operations**", async (route) => {
     const request = route.request();
@@ -539,20 +597,16 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
             isSelf: false,
           },
         ],
-        availabilityRules: savedRule
-          ? [
-              {
-                id: "weekday-rule",
-                email: "alice@example.com",
-                display_name: "Alice",
-                weekday: savedRule.weekday,
-                timezone: savedRule.timezone,
-                label: savedRule.label ?? "",
-                kind: savedRule.kind,
-                isSelf: true,
-              },
-            ]
-          : [],
+        availabilityRules: savedWeekdays().map((weekday) => ({
+          id: `weekday-rule-${weekday}`,
+          email: "alice@example.com",
+          display_name: "Alice",
+          weekday,
+          timezone: savedRule?.timezone,
+          label: savedRule?.label ?? "",
+          kind: savedRule?.kind,
+          isSelf: true,
+        })),
       },
     });
   });
@@ -568,6 +622,7 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   const todayNumber = todayButton.locator(".calendar-day");
   await expect(todayButton).toBeVisible();
   await expect(todayNumber).toBeVisible();
+  await expect(todayNumber).not.toContainText("日");
   const todayButtonBox = await todayButton.boundingBox();
   const todayNumberBox = await todayNumber.boundingBox();
   expect(
@@ -700,11 +755,13 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   expect(String(savedBlock?.startsAt)).toMatch(/Z$/);
   expect(String(savedBlock?.endsAt)).toMatch(/Z$/);
 
-  const weekdayDates = Array.from(
+  const weekdayRangeDates = Array.from(
     { length: new Date(year, now.getMonth() + 1, 0).getDate() },
     (_, index) => index + 1,
   )
-    .filter((day) => new Date(year, now.getMonth(), day).getDay() === 2)
+    .filter((day) =>
+      [2, 3, 4].includes(new Date(year, now.getMonth(), day).getDay()),
+    )
     .map((day) => `${year}-${month}-${String(day).padStart(2, "0")}`);
   await page.locator('[data-calendar-weekday="2"]').click();
   await expect(page.locator('[data-calendar-weekday="2"]')).toHaveAttribute(
@@ -714,18 +771,37 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   await expect(page.locator("[data-calendar-selection-summary]")).toContainText(
     "毎週火曜日の可否を登録します",
   );
-  await expect(page.locator(".calendar-cell--selected")).toHaveCount(
-    weekdayDates.length,
+  await page.locator('[data-calendar-weekday="4"]').click();
+  await expect(page.locator('[data-calendar-weekday="3"]')).toHaveAttribute(
+    "aria-pressed",
+    "true",
   );
+  await expect(page.locator('[data-calendar-weekday="4"]')).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.locator("[data-calendar-selection-summary]")).toContainText(
+    "毎週火曜日〜木曜日の可否を登録します",
+  );
+  await expect(page.locator(".calendar-cell--selected")).toHaveCount(
+    weekdayRangeDates.length,
+  );
+  await page.locator('[data-calendar-weekday="2"]').click();
+  await expect(page.locator("[data-calendar-selection-summary]")).toBeEmpty();
+  await expect(page.locator(".calendar-cell--selected")).toHaveCount(0);
+  await page.locator('[data-calendar-weekday="2"]').click();
+  await page.locator('[data-calendar-weekday="4"]').click();
   await page.locator("[data-block-kind]").selectOption("available");
   await page.locator("[data-create-block]").click();
   await expect.poll(() => savedRule).toBeDefined();
   expect(savedRule).toMatchObject({
-    weekday: 2,
+    weekdays: [2, 3, 4],
     kind: "available",
     timezone: "Asia/Kathmandu",
   });
   await expect(page.locator("[data-block-list]")).toContainText("毎週火曜日");
+  await expect(page.locator("[data-block-list]")).toContainText("毎週水曜日");
+  await expect(page.locator("[data-block-list]")).toContainText("毎週木曜日");
 });
 
 for (const endpoint of ["operations", "member-calendar"]) {
