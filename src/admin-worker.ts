@@ -3808,6 +3808,368 @@ async function createReportAdminPermission(
   return json({ ok: true, provisioning }, 201);
 }
 
+type LegacyMemberMigrationInput = {
+  email: string;
+  subjects: string[];
+  projectManager: boolean;
+  sourceNote: string;
+  expected?: LegacyMemberMigrationSnapshot;
+};
+
+type LegacyMemberMigrationSnapshot = {
+  subjects: string[];
+  membershipRole: string | null;
+  managerSource: string | null;
+  managerRevision: number | null;
+  managerReviewRequired: boolean;
+  hasPublicIntro: boolean;
+  hasProjectIntro: boolean;
+};
+
+/**
+ * Import a roster of people already admitted through another Atlasez workflow.
+ * This path deliberately does not inspect or contact Discord and leaves self-intros
+ * for each member to complete later.
+ */
+async function migrateLegacyMembers(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (request.headers.get("content-type")?.includes("application/json") !== true)
+    return json({ error: "JSON形式で送信してください。" }, 415);
+
+  const payload = (await request.json().catch(() => null)) as {
+    mode?: unknown;
+    batchId?: unknown;
+    confirmedExistingMembers?: unknown;
+    members?: unknown;
+  } | null;
+  const mode = payload?.mode;
+  const batchId = text(payload?.batchId, 64).trim();
+  if (mode !== "preview" && mode !== "apply")
+    return json({ error: "プレビューまたは移行実行を指定してください。" }, 400);
+  if (!/^[0-9a-f-]{36}$/i.test(batchId))
+    return json({ error: "移行バッチIDを確認してください。" }, 400);
+  if (payload?.confirmedExistingMembers !== true)
+    return json(
+      { error: "対象者が既存の運営メンバーであることを確認してください。" },
+      400,
+    );
+  if (!Array.isArray(payload?.members) || payload.members.length === 0)
+    return json({ error: "移行するメンバーを入力してください。" }, 400);
+  if (payload.members.length > 50)
+    return json({ error: "一度に移行できるのは50人までです。" }, 400);
+
+  const inputs: LegacyMemberMigrationInput[] = [];
+  const seen = new Set<string>();
+  for (const raw of payload.members) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw))
+      return json({ error: "移行データの形式を確認してください。" }, 400);
+    const row = raw as Record<string, unknown>;
+    const email = text(row.email, 320).trim().toLowerCase();
+    const sourceNote =
+      typeof row.sourceNote === "string" ? row.sourceNote.trim() : "";
+    const subjects = Array.isArray(row.subjects)
+      ? Array.from(
+          new Set(
+            row.subjects
+              .map((subject) => text(subject, 80).trim().toLowerCase())
+              .filter(Boolean),
+          ),
+        )
+      : [];
+    const projectManager = row.projectManager;
+    if (
+      !EMAIL_PATTERN.test(email) ||
+      !sourceNote ||
+      sourceNote.length > 500 ||
+      typeof projectManager !== "boolean" ||
+      (!subjects.length && !projectManager) ||
+      subjects.some(
+        (subject) => subject !== "*" && !SUBJECT_SLUG.test(subject),
+      ) ||
+      (subjects.includes("*") && subjects.length > 1)
+    )
+      return json(
+        { error: "メールアドレス・担当範囲・既存参加の確認根拠を確認してください。" },
+        400,
+      );
+    if (seen.has(email))
+      return json({ error: `移行データにメールアドレスが重複しています: ${email}` }, 400);
+    seen.add(email);
+    if (mode === "apply") {
+      const expected = row.expected as Partial<LegacyMemberMigrationSnapshot> | undefined;
+      if (
+        !expected ||
+        !Array.isArray(expected.subjects) ||
+        !expected.subjects.every((subject) => typeof subject === "string") ||
+        !(expected.membershipRole === null || typeof expected.membershipRole === "string") ||
+        !(expected.managerSource === null || typeof expected.managerSource === "string") ||
+        !(expected.managerRevision === null || Number.isSafeInteger(expected.managerRevision)) ||
+        typeof expected.managerReviewRequired !== "boolean" ||
+        typeof expected.hasPublicIntro !== "boolean" ||
+        typeof expected.hasProjectIntro !== "boolean"
+      )
+        return json({ error: "プレビュー結果がありません。先に最新状態をプレビューしてください。" }, 400);
+    }
+    inputs.push({
+      email,
+      subjects,
+      projectManager,
+      sourceNote,
+      ...(mode === "apply" ? { expected: row.expected as LegacyMemberMigrationSnapshot } : {}),
+    });
+  }
+
+  const project = await env.REPORTS.prepare(
+    "SELECT id FROM atlasez_projects WHERE id='atlas'",
+  ).first<{ id: string }>();
+  if (!project)
+    return json({ error: "移行先のアトラスプロジェクトを確認できません。" }, 409);
+
+  const readSnapshot = async (email: string): Promise<LegacyMemberMigrationSnapshot> => {
+    const [permissionRows, membership, managerGrant, profile, projectProfile] =
+      await Promise.all([
+        env.REPORTS.prepare(
+          "SELECT subject FROM report_admin_permissions WHERE lower(email)=lower(?) ORDER BY subject",
+        ).bind(email).all<{ subject: string }>(),
+        env.REPORTS.prepare(
+          "SELECT role FROM atlasez_project_memberships WHERE project_id='atlas' AND lower(email)=lower(?)",
+        ).bind(email).first<{ role: string }>(),
+        env.REPORTS.prepare(
+          `SELECT source,revision,review_required FROM atlasez_project_manager_grants
+           WHERE project_id='atlas' AND lower(email)=lower(?)`,
+        ).bind(email).first<{ source: string; revision: number; review_required: number }>(),
+        env.REPORTS.prepare(
+          `SELECT length(trim(COALESCE(bio,''))) AS complete FROM editorial_member_profiles
+           WHERE lower(email)=lower(?)`,
+        ).bind(email).first<{ complete: number }>(),
+        env.REPORTS.prepare(
+          `SELECT 1 AS complete FROM editorial_project_member_profiles
+           WHERE project_id='atlas' AND lower(email)=lower(?)
+             AND length(trim(COALESCE(internal_bio,'')))>0 LIMIT 1`,
+        ).bind(email).first<{ complete: number }>(),
+      ]);
+    return {
+      subjects: (permissionRows.results ?? []).map((entry) => entry.subject).sort(),
+      membershipRole: membership?.role ?? null,
+      managerSource: managerGrant?.source ?? null,
+      managerRevision: managerGrant ? Number(managerGrant.revision) : null,
+      managerReviewRequired: Boolean(managerGrant?.review_required),
+      hasPublicIntro: Number(profile?.complete ?? 0) > 0,
+      hasProjectIntro: Boolean(projectProfile?.complete),
+    };
+  };
+  const snapshots: LegacyMemberMigrationSnapshot[] = [];
+  for (const input of inputs) {
+    if (!(await isAtlasMemberActive(env, input.email)))
+      return json(
+        { error: `${input.email} は活動停止中またはアーカイブ済みです。先に状態を確認してください。`, code: "MEMBER_INACTIVE" },
+        409,
+      );
+    snapshots.push(await readSnapshot(input.email));
+  }
+
+  if (mode === "preview")
+    return json({
+      ok: true,
+      batchId,
+      members: inputs.map((input, index) => {
+        const current = snapshots[index];
+        const subjectsAfter = Array.from(
+          new Set([...current.subjects, ...input.subjects]),
+        ).sort();
+        const effectiveManager = Boolean(
+          input.projectManager ||
+          subjectsAfter.includes("*") ||
+          current.membershipRole === "manager" ||
+          current.managerSource === "explicit" ||
+          current.managerSource === "legacy",
+        );
+        return {
+          ...input,
+          expected: current,
+          addedSubjects: input.subjects.filter(
+            (subject) => !current.subjects.includes(subject),
+          ),
+          existingSubjects: current.subjects,
+          resultingSubjects: subjectsAfter,
+          existingProjectRole: current.membershipRole,
+          resultingProjectRole: effectiveManager ? "manager" : "member",
+          hasPublicIntro: current.hasPublicIntro,
+          hasProjectIntro: current.hasProjectIntro,
+          discordSync: "skipped",
+        };
+      }),
+    });
+
+  const stale = inputs
+    .map((input, index) => ({ input, current: snapshots[index] }))
+    .filter(({ input, current }) => {
+      const expected = input.expected;
+      return !expected ||
+        JSON.stringify(expected.subjects ?? []) !== JSON.stringify(current.subjects) ||
+        (expected.membershipRole ?? null) !== current.membershipRole ||
+        (expected.managerSource ?? null) !== current.managerSource ||
+        (expected.managerRevision ?? null) !== current.managerRevision ||
+        Boolean(expected.managerReviewRequired) !== current.managerReviewRequired ||
+        Boolean(expected.hasPublicIntro) !== current.hasPublicIntro ||
+        Boolean(expected.hasProjectIntro) !== current.hasProjectIntro;
+    });
+  if (stale.length)
+    return json(
+      {
+        error: "プレビュー後に対象の状態が変わりました。最新状態を再読み込みして確認してください。",
+        code: "STALE_PREVIEW",
+        emails: stale.map(({ input }) => input.email),
+      },
+      409,
+    );
+
+  const results: Array<Record<string, unknown>> = [];
+  for (let index = 0; index < inputs.length; index += 1) {
+    const input = inputs[index];
+    const current = snapshots[index];
+    const subjectsAfter = Array.from(
+      new Set([...current.subjects, ...input.subjects]),
+    ).sort();
+    const addedSubjects = input.subjects.filter(
+      (subject) => !current.subjects.includes(subject),
+    );
+    const effectiveManager = Boolean(
+      input.projectManager ||
+      subjectsAfter.includes("*") ||
+      current.membershipRole === "manager" ||
+      current.managerSource === "explicit" ||
+      current.managerSource === "legacy",
+    );
+    const shouldAppointManager = input.projectManager && (
+      current.membershipRole !== "manager" ||
+      current.managerSource !== "explicit" ||
+      current.managerReviewRequired
+    );
+    const shouldDeriveManager = subjectsAfter.includes("*") && !current.managerSource;
+    const needsChange = Boolean(
+      addedSubjects.length ||
+      !current.membershipRole ||
+      (effectiveManager && current.membershipRole !== "manager") ||
+      shouldAppointManager ||
+      shouldDeriveManager
+    );
+    if (!needsChange) {
+      results.push({
+        email: input.email,
+        status: "unchanged",
+        addedSubjects: [],
+        projectManager: effectiveManager,
+        discordSync: "skipped",
+      });
+      continue;
+    }
+
+    const now = new Date().toISOString();
+    const statements: D1PreparedStatement[] = [
+      ...addedSubjects.map((subject) =>
+        env.REPORTS.prepare(
+          "INSERT OR IGNORE INTO report_admin_permissions(email,subject) VALUES (?,?)",
+        ).bind(input.email, subject),
+      ),
+      env.REPORTS.prepare(
+        `INSERT INTO atlasez_project_memberships(project_id,email,role,joined_at)
+         VALUES ('atlas',?,?,?)
+         ON CONFLICT(project_id,email) DO UPDATE SET role='manager'
+         WHERE excluded.role='manager' AND atlasez_project_memberships.role!='manager'`,
+      ).bind(input.email, effectiveManager ? "manager" : "member", now),
+    ];
+    if (shouldAppointManager)
+      statements.push(
+        env.REPORTS.prepare(
+          `INSERT INTO atlasez_project_manager_grants
+           (project_id,email,source,granted_by,granted_at,revision,review_required)
+           VALUES ('atlas',?,'explicit',?,?,1,0)
+           ON CONFLICT(project_id,email) DO UPDATE SET source='explicit',granted_by=excluded.granted_by,
+             granted_at=excluded.granted_at,revision=atlasez_project_manager_grants.revision+1,
+             review_required=0
+           WHERE atlasez_project_manager_grants.source!='explicit'
+             OR atlasez_project_manager_grants.review_required!=0`,
+        ).bind(input.email, scope.email, now),
+      );
+    if (shouldDeriveManager)
+      statements.push(
+        ...permissionDerivedAtlasManagerStatements(
+          env.REPORTS,
+          input.email,
+          true,
+          scope.email,
+        ),
+      );
+    statements.push(
+      env.REPORTS.prepare(
+        `INSERT INTO admin_audit_log
+         (id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at)
+         VALUES (?,?,'member_updated','member',?,?,? ,?,?)`,
+      ).bind(
+        crypto.randomUUID(),
+        scope.email,
+        input.email,
+        input.email,
+        "既存運営メンバーを移行",
+        JSON.stringify({
+          migrationType: "legacy_member_import",
+          batchId,
+          sourceNote: input.sourceNote,
+          beforeSubjects: current.subjects,
+          afterSubjects: subjectsAfter,
+          beforeProjectRole: current.membershipRole,
+          afterProjectRole: effectiveManager ? "manager" : "member",
+          managerAppointment: input.projectManager ? "explicit" : "preserved-or-not-requested",
+          profileIntroPending: !current.hasPublicIntro || !current.hasProjectIntro,
+          discordSync: "skipped",
+        }),
+        now,
+      ),
+    );
+
+    try {
+      await env.REPORTS.batch(statements);
+    } catch {
+      results.push({
+        email: input.email,
+        status: "failed",
+        error: "移行を保存できませんでした。状態を確認して再プレビューしてください。",
+      });
+      continue;
+    }
+    if (addedSubjects.length)
+      await recordPermissionAudit(
+        env,
+        scope.email,
+        input.email,
+        "grant",
+        current.subjects,
+        subjectsAfter,
+      );
+    results.push({
+      email: input.email,
+      status: "migrated",
+      addedSubjects,
+      projectManager: effectiveManager,
+      profileIntroPending: !current.hasPublicIntro || !current.hasProjectIntro,
+      discordSync: "skipped",
+    });
+  }
+  return json({
+    ok: results.every((result) => result.status !== "failed"),
+    batchId,
+    results,
+    discordSync: "skipped",
+  });
+}
+
 async function updateReportAdminPermissions(
   request: Request,
   env: Env,
@@ -23929,6 +24291,11 @@ async function handleAdminRequest(
     if (isResponse(scope)) return scope;
     return handleManagerGrants(request, env.REPORTS, scope.email);
   }
+  if (
+    url.pathname === "/api/admin/member-migrations" &&
+    request.method === "POST"
+  )
+    return migrateLegacyMembers(request, env);
   if (url.pathname === "/api/admin/report-admin-permissions") {
     if (request.method === "GET")
       return listReportAdminPermissions(request, env);
