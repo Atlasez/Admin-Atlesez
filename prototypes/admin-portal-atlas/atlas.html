@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#151515" />
+    <meta
+      name="description"
+      content="アトラス学習サイトの独立した静的プロトタイプ"
+    />
+    <title>アトラス学習サイト | ADMIN prototype</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="atlas-page">
+    <a class="skip-link" href="#main">本文へ移動</a>
+    <header class="topbar">
+      <button
+        class="menu-button"
+        type="button"
+        data-menu-toggle
+        aria-label="ナビゲーションを開く"
+        aria-expanded="false"
+        aria-controls="primary-nav"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          aria-hidden="true"
+        >
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+      </button>
+      <a class="brand" href="./atlas.html" aria-label="アトラス学習サイト"
+        ><img src="./assets/atlasez-logo.png" alt="" /><span
+          >学習サイト「アトラス」運営用サイト</span
+        ></a
+      >
+      <nav
+        class="primary-nav"
+        id="primary-nav"
+        aria-label="メインナビゲーション"
+      >
+        <a
+          href="https://admin.atlasez.org/admin/action-center/"
+          target="_blank"
+          rel="noreferrer"
+          >≡&nbsp; 要対応</a
+        >
+        <a
+          href="https://admin.atlasez.org/admin/articles/"
+          target="_blank"
+          rel="noreferrer"
+          aria-current="page"
+          >編集・フィードバック</a
+        >
+        <a
+          href="https://admin.atlasez.org/admin/operations/?project=atlas"
+          target="_blank"
+          rel="noreferrer"
+          >タスク管理</a
+        >
+        <a
+          href="https://admin.atlasez.org/admin/calendar/?project=atlas"
+          target="_blank"
+          rel="noreferrer"
+          >カレンダー</a
+        >
+        <a
+          href="https://admin.atlasez.org/admin/manage/?project=atlas"
+          target="_blank"
+          rel="noreferrer"
+          >管理</a
+        >
+      </nav>
+      <div class="topbar-tools">
+        <button
+          class="icon-button"
+          type="button"
+          data-search-toggle
+          aria-label="ADMIN内を検索"
+          aria-expanded="false"
+          aria-controls="search-panel"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            aria-hidden="true"
+          >
+            <circle cx="10.8" cy="10.8" r="6.4" />
+            <path d="m16 16 4.5 4.5" />
+          </svg>
+        </button>
+        <button
+          class="settings-button"
+          type="button"
+          data-settings-toggle
+          aria-expanded="false"
+          aria-controls="settings-panel"
+        >
+          <b>Aa</b><span>表示設定</span><span aria-hidden="true">⌄</span>
+        </button>
+        <button
+          class="icon-button notification-trigger"
+          type="button"
+          data-notification-toggle
+          aria-label="通知"
+          aria-expanded="false"
+          aria-controls="notification-panel"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            aria-hidden="true"
+          >
+            <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+          </svg>
+        </button>
+        <span class="account-chip"
+          ><span class="avatar" aria-hidden="true">M</span
+          ><span>サンプル利用者</span></span
+        >
+        <button
+          class="outline-button logout-button"
+          type="button"
+          data-demo-message="このページは静的プロトタイプです。ログアウト処理は行いません。"
+        >
+          ログアウト
+        </button>
+      </div>
+    </header>
+    <section
+      class="popover"
+      id="search-panel"
+      data-search-panel
+      hidden
+      aria-label="ADMIN内を検索"
+    >
+      <label for="prototype-search"><strong>ADMIN内を検索</strong></label>
+      <input
+        id="prototype-search"
+        type="search"
+        placeholder="ページ・機能を検索"
+        data-search-input
+      />
+      <div class="search-results" data-search-results aria-live="polite"></div>
+    </section>
+    <section
+      class="popover settings-popover"
+      id="settings-panel"
+      data-settings-panel
+      hidden
+      aria-labelledby="settings-heading"
+    >
+      <h2 id="settings-heading">表示設定</h2>
+      <label for="font-size"
+        >文字サイズ <span data-font-size-value>100%</span></label
+      >
+      <input
+        id="font-size"
+        type="range"
+        min="0.9"
+        max="1.2"
+        step="0.05"
+        value="1"
+        data-font-scale
+        aria-label="文字サイズ"
+      />
+      <p>設定はこのプレビュー内だけに適用されます。</p>
+    </section>
+    <section
+      class="popover"
+      id="notification-panel"
+      data-notification-panel
+      hidden
+      aria-labelledby="notification-heading"
+    >
+      <h2 id="notification-heading">通知</h2>
+      <p>未読の通知はありません。</p>
+    </section>
+    <nav class="breadcrumb" aria-label="パンくずリスト">
+      <a href="./portal.html">Atlasezメンバー用サイト</a
+      ><span class="breadcrumb-separator" aria-hidden="true">›</span
+      ><span aria-current="page">学習サイト「アトラス」運営用サイト</span>
+    </nav>
+    <main class="atlas-main" id="main">
+      <header class="atlas-heading">
+        <h1>アトラス学習サイト</h1>
+        <a
+          class="back-link"
+          href="./portal.html"
+          aria-label="Atlasezメンバー用サイトへ戻る"
+          >←</a
+        >
+      </header>
+      <div class="function-groups" aria-label="学習サイト運営メニュー">
+        <section class="function-group" aria-labelledby="group-editorial">
+          <span class="group-dot" aria-hidden="true">•</span>
+          <h2 id="group-editorial">編集・フィードバック</h2>
+          <div class="function-tiles">
+            <a
+              href="https://admin.atlasez.org/admin/articles/"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>編集・フィードバック</strong
+              ><span aria-hidden="true">→</span></a
+            >
+            <a
+              href="https://admin.atlasez.org/admin/guide/"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>作業の進め方</strong><span aria-hidden="true">→</span></a
+            >
+            <a
+              href="https://admin.atlasez.org/admin/reports/"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>問題報告</strong><span aria-hidden="true">→</span></a
+            >
+          </div>
+        </section>
+        <section class="function-group" aria-labelledby="group-operations">
+          <span class="group-dot" aria-hidden="true">•</span>
+          <h2 id="group-operations">タスク・進行管理</h2>
+          <div class="function-tiles">
+            <a
+              href="https://admin.atlasez.org/admin/operations/?project=atlas"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>タスク管理</strong><span aria-hidden="true">→</span></a
+            >
+            <a
+              href="https://admin.atlasez.org/admin/progress/?project=atlas"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>進捗報告</strong><span aria-hidden="true">→</span></a
+            >
+            <a
+              href="https://admin.atlasez.org/admin/calendar/?project=atlas"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>カレンダー</strong><span aria-hidden="true">→</span></a
+            >
+            <a
+              href="https://admin.atlasez.org/admin/co-working/?project=atlas"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>同時作業会</strong><span aria-hidden="true">→</span></a
+            >
+          </div>
+        </section>
+        <section class="function-group" aria-labelledby="group-community">
+          <span class="group-dot" aria-hidden="true">•</span>
+          <h2 id="group-community">運営情報</h2>
+          <div class="function-tiles">
+            <a
+              href="https://admin.atlasez.org/admin/introductions/?project=atlas"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>運営内自己紹介</strong
+              ><span aria-hidden="true">→</span></a
+            >
+            <a
+              href="https://admin.atlasez.org/admin/genres/"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>各ジャンル概要</strong
+              ><span aria-hidden="true">→</span></a
+            >
+            <a
+              href="https://admin.atlasez.org/admin/rules/"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>規則</strong><span aria-hidden="true">→</span></a
+            >
+            <a
+              href="https://admin.atlasez.org/admin/procedures/?project=atlas"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>諸手続き</strong><span aria-hidden="true">→</span></a
+            >
+          </div>
+        </section>
+        <section class="function-group" aria-labelledby="group-management">
+          <span class="group-dot" aria-hidden="true">•</span>
+          <h2 id="group-management">管理</h2>
+          <div class="function-tiles">
+            <a
+              href="https://admin.atlasez.org/admin/manage/?project=atlas"
+              target="_blank"
+              rel="noreferrer"
+              data-searchable
+              ><strong>管理トップ</strong><span aria-hidden="true">→</span></a
+            >
+          </div>
+        </section>
+      </div>
+    </main>
+    <div class="prototype-toast" data-toast role="status" hidden></div>
+    <script src="./prototype.js" defer></script>
+  </body>
+</html>

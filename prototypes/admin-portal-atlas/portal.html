@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#151515" />
+    <meta
+      name="description"
+      content="Atlasezメンバー用サイトの独立した静的プロトタイプ"
+    />
+    <title>Atlasezメンバー用サイト | ADMIN prototype</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="portal-page">
+    <a class="skip-link" href="#main">本文へ移動</a>
+    <header class="topbar">
+      <button
+        class="menu-button"
+        type="button"
+        data-menu-toggle
+        aria-label="ナビゲーションを開く"
+        aria-expanded="false"
+        aria-controls="primary-nav"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          aria-hidden="true"
+        >
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+      </button>
+      <a class="brand" href="./portal.html" aria-label="Atlasezメンバー用サイト"
+        ><img src="./assets/atlasez-logo.png" alt="" /><span
+          >Atlasezメンバー用サイト</span
+        ></a
+      >
+      <nav
+        class="primary-nav"
+        id="primary-nav"
+        aria-label="メインナビゲーション"
+      >
+        <a
+          href="https://admin.atlasez.org/admin/action-center/"
+          target="_blank"
+          rel="noreferrer"
+          aria-current="page"
+          >≡&nbsp; 要対応</a
+        >
+        <a
+          href="https://admin.atlasez.org/admin/member-tasks/"
+          target="_blank"
+          rel="noreferrer"
+          >タスク管理</a
+        >
+        <a
+          href="https://admin.atlasez.org/admin/member-calendar/"
+          target="_blank"
+          rel="noreferrer"
+          >カレンダー</a
+        >
+        <a
+          href="https://admin.atlasez.org/admin/member-profile/"
+          target="_blank"
+          rel="noreferrer"
+          >マイページ</a
+        >
+      </nav>
+      <div class="topbar-tools">
+        <button
+          class="icon-button"
+          type="button"
+          data-search-toggle
+          aria-label="ADMIN内を検索"
+          aria-expanded="false"
+          aria-controls="search-panel"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            aria-hidden="true"
+          >
+            <circle cx="10.8" cy="10.8" r="6.4" />
+            <path d="m16 16 4.5 4.5" />
+          </svg>
+        </button>
+        <button
+          class="settings-button"
+          type="button"
+          data-settings-toggle
+          aria-expanded="false"
+          aria-controls="settings-panel"
+        >
+          <b>Aa</b><span>表示設定</span><span aria-hidden="true">⌄</span>
+        </button>
+        <button
+          class="icon-button notification-trigger"
+          type="button"
+          data-notification-toggle
+          aria-label="通知"
+          aria-expanded="false"
+          aria-controls="notification-panel"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            aria-hidden="true"
+          >
+            <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+          </svg>
+        </button>
+        <span class="account-chip"
+          ><span class="avatar" aria-hidden="true">M</span
+          ><span>サンプル利用者</span></span
+        >
+        <button
+          class="outline-button logout-button"
+          type="button"
+          data-demo-message="このページは静的プロトタイプです。ログアウト処理は行いません。"
+        >
+          ログアウト
+        </button>
+      </div>
+    </header>
+    <section
+      class="popover"
+      id="search-panel"
+      data-search-panel
+      hidden
+      aria-label="ADMIN内を検索"
+    >
+      <label for="prototype-search"><strong>ADMIN内を検索</strong></label>
+      <input
+        id="prototype-search"
+        type="search"
+        placeholder="ページ・機能を検索"
+        data-search-input
+      />
+      <div class="search-results" data-search-results aria-live="polite"></div>
+    </section>
+    <section
+      class="popover settings-popover"
+      id="settings-panel"
+      data-settings-panel
+      hidden
+      aria-labelledby="settings-heading"
+    >
+      <h2 id="settings-heading">表示設定</h2>
+      <label for="font-size"
+        >文字サイズ <span data-font-size-value>100%</span></label
+      >
+      <input
+        id="font-size"
+        type="range"
+        min="0.9"
+        max="1.2"
+        step="0.05"
+        value="1"
+        data-font-scale
+        aria-label="文字サイズ"
+      />
+      <p>設定はこのプレビュー内だけに適用されます。</p>
+    </section>
+    <section
+      class="popover"
+      id="notification-panel"
+      data-notification-panel
+      hidden
+      aria-labelledby="notification-heading"
+    >
+      <h2 id="notification-heading">通知</h2>
+      <p>未読の通知はありません。</p>
+    </section>
+    <main class="portal-main" id="main">
+      <header class="portal-heading">
+        <h1>Atlasezメンバー用サイト</h1>
+        <a
+          class="primary-button"
+          href="https://admin.atlasez.org/apply/"
+          target="_blank"
+          rel="noreferrer"
+          >応募フォームへ →</a
+        >
+      </header>
+      <aside class="welcome-entry" aria-label="初参加の方へ">
+        <strong>初参加の方へ</strong>
+        <a
+          href="https://admin.atlasez.org/admin/getting-started/"
+          target="_blank"
+          rel="noreferrer"
+          >参加後の案内 →</a
+        >
+        <a
+          href="https://admin.atlasez.org/admin/procedures/"
+          target="_blank"
+          rel="noreferrer"
+          >休止・退会・再開の手続き →</a
+        >
+      </aside>
+      <section class="metrics" aria-label="ポータルの概要">
+        <a
+          class="metric"
+          href="https://admin.atlasez.org/admin/member-tasks/"
+          target="_blank"
+          rel="noreferrer"
+          ><span class="metric-label">今日の要対応</span
+          ><strong class="metric-value metric-value--green">0</strong
+          ><span class="metric-caption">期限のあるタスクはありません。</span></a
+        >
+        <a
+          class="metric"
+          href="https://admin.atlasez.org/admin/member-tasks/"
+          target="_blank"
+          rel="noreferrer"
+          ><span class="metric-label">期限が近いタスク</span
+          ><strong class="metric-value metric-value--green">0</strong
+          ><span class="metric-caption">7日以内の期限はありません。</span></a
+        >
+        <button
+          class="metric"
+          type="button"
+          data-notification-toggle
+          aria-label="未読通知 0件。通知を確認"
+        >
+          <span class="metric-label">未読通知</span
+          ><strong class="metric-value metric-value--green">0</strong
+          ><span class="metric-caption">未読はありません。</span>
+        </button>
+        <a
+          class="metric"
+          href="https://admin.atlasez.org/admin/notifications/"
+          target="_blank"
+          rel="noreferrer"
+          ><span class="metric-label">承認待ち</span
+          ><strong class="metric-value metric-value--green">0</strong
+          ><span class="metric-caption">承認待ちはありません。</span></a
+        >
+        <a
+          class="metric"
+          href="https://admin.atlasez.org/admin/member-calendar/"
+          target="_blank"
+          rel="noreferrer"
+          ><span class="metric-label">次回予定</span
+          ><strong class="metric-value metric-value--green">—</strong
+          ><span class="metric-caption">予定はありません。</span></a
+        >
+      </section>
+      <section class="project-entry" aria-labelledby="project-title">
+        <h2 id="project-title">参加中のプロジェクト</h2>
+        <div class="project-entry-groups">
+          <section class="project-group" aria-labelledby="operator-projects">
+            <header class="project-group-heading">
+              <h3 id="operator-projects">運営として参加中</h3>
+              <span>4件</span>
+            </header>
+            <div class="project-cards">
+              <a
+                class="project-card"
+                href="https://admin.atlasez.org/admin/secretariat/"
+                target="_blank"
+                rel="noreferrer"
+                ><strong>Atlasez運営事務局</strong
+                ><small>Atlasez全体の運営事務局プロジェクト</small
+                ><span aria-hidden="true">→</span></a
+              >
+              <a class="project-card" href="./atlas.html"
+                ><strong>アトラス</strong
+                ><small>学習サイト「アトラス」の運営プロジェクト</small
+                ><span aria-hidden="true">→</span></a
+              >
+              <a
+                class="project-card"
+                href="https://admin.atlasez.org/admin/student-council/"
+                target="_blank"
+                rel="noreferrer"
+                ><strong>日本生徒会協会</strong
+                ><small>日本生徒会協会の運営プロジェクト</small
+                ><span aria-hidden="true">→</span></a
+              >
+              <a
+                class="project-card"
+                href="https://admin.atlasez.org/admin/thinking-cafe/"
+                target="_blank"
+                rel="noreferrer"
+                ><strong>考えるカフェ</strong
+                ><small>考えるカフェの運営プロジェクト</small
+                ><span aria-hidden="true">→</span></a
+              >
+            </div>
+          </section>
+          <section class="project-group" aria-labelledby="member-projects">
+            <header class="project-group-heading">
+              <h3 id="member-projects">参加者として参加中</h3>
+              <span>0件</span>
+            </header>
+            <p class="project-empty">該当するプロジェクトはありません。</p>
+          </section>
+        </div>
+      </section>
+      <div class="home-grid">
+        <section
+          class="home-section calendar-section"
+          aria-labelledby="calendar-title"
+        >
+          <header class="section-heading">
+            <div>
+              <h2 id="calendar-title">同時作業会・交流会の日程</h2>
+              <small class="timezone-note">表示タイムゾーン: Asia/Tokyo</small>
+            </div>
+            <a
+              href="https://admin.atlasez.org/admin/member-calendar/"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="横断カレンダーを開く"
+              >→</a
+            >
+          </header>
+          <div class="calendar-summary">
+            <strong>2026年11月9日月曜日</strong><small>0件</small>
+          </div>
+          <fieldset class="calendar-filters">
+            <legend>表示する予定</legend>
+            <label class="filter-chip is-checked"
+              ><input type="checkbox" checked /><span
+                class="fake-check"
+                aria-hidden="true"
+                >✓</span
+              ><span
+                ><b>同時作業会・交流会</b><small>全体の予定</small></span
+              ></label
+            ><label class="filter-chip"
+              ><input type="checkbox" /><span
+                class="fake-check"
+                aria-hidden="true"
+              ></span
+              ><span
+                ><b>自分の期限</b><small>担当タスクの期限</small></span
+              ></label
+            >
+          </fieldset>
+          <div class="agenda">
+            <header>
+              <h3>今日の予定</h3>
+              <small>0件</small>
+            </header>
+            <p>今日の予定はありません。</p>
+          </div>
+        </section>
+        <section class="home-section task-section" aria-labelledby="todo-title">
+          <header class="section-heading">
+            <div>
+              <h2 id="todo-title">自分の未完了タスク</h2>
+              <small>1件を確認</small>
+            </div>
+            <a
+              href="https://admin.atlasez.org/admin/member-tasks/"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="横断タスク管理を開く"
+              >→</a
+            >
+          </header>
+          <a
+            class="todo-card"
+            href="https://admin.atlasez.org/admin/member-tasks/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span class="todo-icon" aria-hidden="true">↗</span>
+            <span class="todo-copy"
+              ><span class="todo-tags"
+                ><span>フィードバック依頼</span><b>未着手</b></span
+              ><strong>整域の定義</strong><small>アトラス / mathematics</small
+              ><small
+                >タイトル、識別子、定理番号の自動割り振り、参照のテストを行いました</small
+              ></span
+            >
+            <span class="todo-arrow" aria-hidden="true">→</span>
+          </a>
+        </section>
+      </div>
+      <footer class="portal-app-download">
+        <strong>Atlasez運営アプリ <span>テスト機能</span></strong
+        ><a
+          href="https://github.com/Atlasez/Admin-Atlesez/releases/latest/download/Atlasez-Admin.dmg"
+          target="_blank"
+          rel="noreferrer"
+          >macOS版をダウンロード <span aria-hidden="true">↓</span></a
+        >
+      </footer>
+    </main>
+    <div class="prototype-toast" data-toast role="status" hidden></div>
+    <script src="./prototype.js" defer></script>
+  </body>
+</html>
