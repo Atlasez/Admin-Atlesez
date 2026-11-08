@@ -142,7 +142,7 @@ async function mockAdminApi(
                   article_title: "群の定義",
                   article_id: articleId,
                   report_type: "error",
-                  details: "本文の不等式 x < 0 を確認してください。",
+                  details: `本文の不等式 x < 0 を確認してください。\nhttps://${"a".repeat(120)}.example/path`,
                   status: "new",
                   created_at: "2026-08-20T00:00:00.000Z",
                 },
@@ -220,6 +220,9 @@ test("記事編集画面で該当記事の問題報告を確認できる", async
   await expect(reports.locator(".article-report-card")).toContainText(
     "本文の不等式 x < 0 を確認してください。",
   );
+  const reportDetails = reports.locator(".article-report-card p");
+  await expect(reportDetails).toHaveCSS("white-space", "pre-wrap");
+  await expect(reportDetails).toHaveCSS("overflow-wrap", "anywhere");
   await expect(reports.locator("[data-article-report-manage]")).toHaveAttribute(
     "href",
     `/admin/reports/?articleId=${sourceArticleId}`,
