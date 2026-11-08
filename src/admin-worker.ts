@@ -4352,6 +4352,9 @@ async function listArchivedAtlasMembers(
         "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE lower(email)=lower(?)",
       ).bind(email).first<{ count: number }>(),
     ]);
+    const pendingProfileChange = await env.REPORTS.prepare(
+      "SELECT 1 AS found FROM editorial_member_profile_change_requests WHERE lower(email)=lower(?) AND status='pending' LIMIT 1",
+    ).bind(email).first<{ found: number }>();
     if (!profile && !memberships.results?.length && !permissions.results?.length && !workflowRoles.results?.length && !genreRoles.results?.length && !lifecycle)
       return json({ error: "運営メンバーが見つかりません。" }, 404);
     const history = [
@@ -4385,6 +4388,7 @@ async function listArchivedAtlasMembers(
           affiliationType: profile.affiliation_type, country: profile.country,
           timezone: profile.timezone, updatedAt: profile.updated_at,
         } : null,
+        profileChangePending: Boolean(pendingProfileChange),
         memberships: memberships.results ?? [],
         permissions: permissions.results ?? [],
         workflowRoles: workflowRoles.results ?? [],
@@ -4416,6 +4420,158 @@ async function listArchivedAtlasMembers(
     avatar_url: string;
   }>();
   return json({ members: result.results ?? [] });
+}
+
+async function updateAtlasMemberProfile(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (request.headers.get("content-type")?.includes("application/json") !== true)
+    return json({ error: "JSON形式で送信してください。" }, 415);
+
+  const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const email = text(payload?.email, 320).toLowerCase();
+  if (!payload || !EMAIL_PATTERN.test(email))
+    return json({ error: "メンバーを確認してください。" }, 400);
+  if (!Object.prototype.hasOwnProperty.call(payload, "expectedUpdatedAt") ||
+    (payload.expectedUpdatedAt !== null && (
+      typeof payload.expectedUpdatedAt !== "string" || payload.expectedUpdatedAt.length > 80
+    )))
+    return json({ error: "表示中の情報が古くなっています。再読み込みしてください。" }, 400);
+
+  const fields = [
+    ["displayName", 120],
+    ["university", 200],
+    ["year", 80],
+    ["interests", 800],
+    ["affiliationType", 80],
+    ["country", 120],
+    ["timezone", 80],
+    ["bio", 4_000],
+  ] as const;
+  if (fields.some(([key, maximum]) =>
+    typeof payload[key] !== "string" || (payload[key] as string).length > maximum))
+    return json({ error: "プロフィールの入力内容を確認してください。" }, 400);
+  if (typeof payload.avatarUrl !== "string" || payload.avatarUrl.length > 3_000_000)
+    return json({ error: "プロフィール画像を確認してください。" }, 400);
+
+  const profile = {
+    displayName: normalizedText(payload.displayName, 120),
+    university: normalizedText(payload.university, 200),
+    year: normalizedText(payload.year, 80),
+    interests: normalizedText(payload.interests, 800),
+    affiliationType: normalizedText(payload.affiliationType, 80),
+    country: normalizedText(payload.country, 120),
+    timezone: normalizedText(payload.timezone, 80) || "Asia/Tokyo",
+    bio: text(payload.bio, 4_000),
+    avatarUrl: text(payload.avatarUrl, 3_000_000),
+  };
+  if (!profile.displayName)
+    return json({ error: "表示名を入力してください。" }, 400);
+  if (!validTimeZone(profile.timezone))
+    return json({ error: "タイムゾーンを確認してください。" }, 400);
+  if (profile.avatarUrl &&
+    ((!/^https:\/\//i.test(profile.avatarUrl) &&
+      !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(profile.avatarUrl)) ||
+      /["'<>]/.test(profile.avatarUrl)))
+    return json({ error: "プロフィール画像はPNG・JPEG・WebP、またはhttps://画像URLを指定してください。" }, 400);
+
+  const archivedError = await archivedMemberError(env, email);
+  if (archivedError) return archivedError;
+  if (!await isAtlasMemberActive(env, email))
+    return json({ error: "このメンバーは運営を休止中です。再開後に編集してください。" }, 409);
+  const activeMember = await env.REPORTS.prepare(
+    `SELECT 1 AS found FROM report_admin_permissions WHERE lower(email)=lower(?)
+     UNION ALL SELECT 1 AS found FROM atlasez_project_memberships WHERE project_id='atlas' AND lower(email)=lower(?)
+     UNION ALL SELECT 1 AS found FROM editorial_workflow_roles WHERE lower(email)=lower(?)
+     UNION ALL SELECT 1 AS found FROM admin_genre_role_assignments WHERE lower(email)=lower(?)
+     UNION ALL SELECT 1 AS found FROM atlasez_project_manager_grants WHERE project_id='atlas' AND lower(email)=lower(?)
+     UNION ALL SELECT 1 AS found FROM admin_member_lifecycle WHERE lower(email)=lower(?) AND status='active'
+     LIMIT 1`,
+  ).bind(email, email, email, email, email, email).first<{ found: number }>();
+  if (!activeMember)
+    return json({ error: "運営メンバーが見つかりません。" }, 404);
+
+  const pendingProfileChange = await env.REPORTS.prepare(
+    "SELECT 1 AS found FROM editorial_member_profile_change_requests WHERE lower(email)=lower(?) AND status='pending' LIMIT 1",
+  ).bind(email).first<{ found: number }>();
+  if (pendingProfileChange)
+    return json({ error: "本人からのプロフィール変更申請が審査中です。先に申請を確認してください。", code: "PROFILE_CHANGE_PENDING" }, 409);
+
+  const current = await env.REPORTS.prepare(
+    `SELECT display_name,avatar_url,bio,university,year,interests,affiliation_type,country,timezone,updated_at
+     FROM editorial_member_profiles WHERE lower(email)=lower(?) LIMIT 1`,
+  ).bind(email).first<{
+    display_name: string; avatar_url: string; bio: string; university: string;
+    year: string; interests: string; affiliation_type: string; country: string;
+    timezone: string; updated_at: string;
+  }>();
+  const currentUpdatedAt = current?.updated_at ?? null;
+  if (payload.expectedUpdatedAt !== currentUpdatedAt)
+    return json({ error: "プロフィールが先に更新されています。再読み込みしてから編集してください。", code: "STALE_MEMBER_PROFILE" }, 409);
+
+  const updatedFields = [
+    ...(current?.display_name !== profile.displayName ? ["displayName"] : []),
+    ...(current?.avatar_url !== profile.avatarUrl ? ["avatarUrl"] : []),
+    ...(current?.university !== profile.university ? ["university"] : []),
+    ...(current?.year !== profile.year ? ["year"] : []),
+    ...(current?.interests !== profile.interests ? ["interests"] : []),
+    ...(current?.affiliation_type !== profile.affiliationType ? ["affiliationType"] : []),
+    ...(current?.country !== profile.country ? ["country"] : []),
+    ...(current?.timezone !== profile.timezone ? ["timezone"] : []),
+    ...(current?.bio !== profile.bio ? ["bio"] : []),
+  ];
+  if (updatedFields.length === 0)
+    return json({ ok: true, updatedAt: currentUpdatedAt, updatedFields });
+
+  const now = new Date(Math.max(
+    Date.now(),
+    (Date.parse(currentUpdatedAt ?? "") || 0) + 1,
+  )).toISOString();
+  const result = current
+    ? await env.REPORTS.prepare(
+      `UPDATE editorial_member_profiles SET display_name=?,avatar_url=?,bio=?,university=?,year=?,interests=?,
+         affiliation_type=?,country=?,timezone=?,updated_at=?
+       WHERE lower(email)=lower(?) AND updated_at=?
+         AND NOT EXISTS (
+           SELECT 1 FROM editorial_member_profile_change_requests
+           WHERE lower(email)=lower(?) AND status='pending'
+         )`,
+    ).bind(profile.displayName, profile.avatarUrl, profile.bio, profile.university, profile.year,
+      profile.interests, profile.affiliationType, profile.country, profile.timezone, now, email, currentUpdatedAt, email).run()
+    : await env.REPORTS.prepare(
+      `INSERT OR IGNORE INTO editorial_member_profiles
+       (email,display_name,avatar_url,bio,university,year,interests,affiliation_type,country,timezone,updated_at)
+       SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (
+         SELECT 1 FROM editorial_member_profile_change_requests
+         WHERE lower(email)=lower(?) AND status='pending'
+       )`,
+    ).bind(email, profile.displayName, profile.avatarUrl, profile.bio, profile.university, profile.year,
+      profile.interests, profile.affiliationType, profile.country, profile.timezone, now, email).run();
+  if (Number(result.meta?.changes ?? 0) !== 1) {
+    const pendingAfterRace = await env.REPORTS.prepare(
+      "SELECT 1 AS found FROM editorial_member_profile_change_requests WHERE lower(email)=lower(?) AND status='pending' LIMIT 1",
+    ).bind(email).first<{ found: number }>();
+    if (pendingAfterRace)
+      return json({ error: "本人からのプロフィール変更申請が審査中です。先に申請を確認してください。", code: "PROFILE_CHANGE_PENDING" }, 409);
+    return json({ error: "プロフィールが先に更新されています。再読み込みしてから編集してください。", code: "STALE_MEMBER_PROFILE" }, 409);
+  }
+
+  await recordAdminAudit(
+    env,
+    scope.email,
+    "member_updated",
+    "member",
+    email,
+    email,
+    "運営メンバーのプロフィールを更新",
+    { updatedFields },
+  );
+  return json({ ok: true, updatedAt: now, updatedFields });
 }
 
 type GenreRoleCatalogRow = {
@@ -23808,8 +23964,9 @@ async function handleAdminRequest(
   if (url.pathname === "/api/admin/member-management") {
     if (request.method === "GET") return listArchivedAtlasMembers(request, env);
     if (request.method === "POST") return changeAtlasMemberLifecycle(request, env);
+    if (request.method === "PATCH") return updateAtlasMemberProfile(request, env);
     if (request.method === "DELETE") return removeAtlasMember(request, env);
-    return json({ error: "GET、POST、DELETEのみ利用できます。" }, 405);
+    return json({ error: "GET、POST、PATCH、DELETEのみ利用できます。" }, 405);
   }
   if (url.pathname === "/api/admin/genre-role-catalog")
     return genreRoleCatalog(request, env);
