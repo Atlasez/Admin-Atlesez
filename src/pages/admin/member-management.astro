@@ -25,6 +25,22 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       <section class="member-detail-panel">
         <header><div><h2 id="member-detail-title">メンバー詳細</h2><p data-member-detail-email></p></div><button type="button" data-close-member-detail>閉じる</button></header>
         <div class="member-detail-content" data-member-detail-content aria-live="polite">読み込み中…</div>
+        <form class="member-profile-editor" data-member-profile-editor data-updated-at="" hidden>
+          <h3>プロフィールを編集</h3>
+          <div class="member-profile-editor-grid">
+            <label>表示名<input data-profile-field="displayName" maxlength="120" required /></label>
+            <label>学校・所属<input data-profile-field="university" maxlength="200" /></label>
+            <label>学年等<input data-profile-field="year" maxlength="80" /></label>
+            <label>分野<input data-profile-field="interests" maxlength="800" /><small>複数の場合はカンマで区切ります。</small></label>
+            <label>所属区分<input data-profile-field="affiliationType" maxlength="80" /></label>
+            <label>国・地域<input data-profile-field="country" maxlength="120" /></label>
+            <label>タイムゾーン<input data-profile-field="timezone" maxlength="80" /></label>
+          </div>
+          <label>運営外自己紹介<textarea data-profile-field="bio" maxlength="4000"></textarea></label>
+          <div class="member-profile-avatar-row"><span class="member-profile-avatar-preview" data-member-avatar-preview aria-label="プロフィール画像">画像なし</span><div class="member-profile-avatar-actions"><label>プロフィール画像<input type="file" data-member-avatar-file accept="image/png,image/jpeg,image/webp" /><small>PNG・JPEG・WebP、2MB以下。選ばない場合は現在の画像を保持します。</small></label><button type="button" data-remove-member-avatar>画像を削除</button></div></div>
+          <output data-profile-form-message aria-live="polite"></output>
+          <div class="member-profile-editor-actions"><button type="button" data-cancel-profile-edit>キャンセル</button><button type="submit" data-save-profile>保存</button></div>
+        </form>
       </section>
     </dialog>
   </main>
@@ -69,6 +85,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .member-detail-panel header p { color:var(--text-secondary); font-size:.78rem; margin:.25rem 0 0; }
   .member-detail-panel header button { background:transparent; border:1px solid var(--border-default); color:var(--text-primary); cursor:pointer; font:inherit; padding:.4rem .65rem; }
   .member-detail-content { display:grid; gap:1rem; max-height:70vh; overflow:auto; padding:1rem 1.1rem; }
+  .member-detail-content[hidden] { display:none; }
   .member-detail-section { border-bottom:1px solid var(--border-default); display:grid; gap:.45rem; padding-bottom:.8rem; }
   .member-detail-section h3 { color:var(--text-secondary); font-size:.78rem; margin:0; }
   .member-detail-section p,.member-detail-section ul { font-size:.8rem; line-height:1.6; margin:0; }
@@ -76,6 +93,23 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .member-detail-bio { border:1px solid var(--border-default); padding:.65rem; white-space:pre-wrap; }
   .member-detail-empty { color:var(--text-muted); }
   .member-detail-retry { background:var(--background-secondary); border:1px solid var(--border-default); color:var(--text-primary); cursor:pointer; font:inherit; justify-self:start; padding:.45rem .7rem; }
+  .member-profile-edit-button,.member-profile-editor button { background:var(--background-secondary); border:1px solid var(--border-default); color:var(--text-primary); cursor:pointer; font:inherit; font-size:.75rem; padding:.45rem .65rem; }
+  .member-profile-editor { border-bottom:1px solid var(--border-default); display:grid; gap:.75rem; max-height:70vh; overflow:auto; padding:1rem 1.1rem; }
+  .member-profile-editor[hidden] { display:none; }
+  .member-profile-editor h3 { color:var(--text-secondary); font-size:.9rem; margin:0; }
+  .member-profile-editor-grid { display:grid; gap:.65rem; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .member-profile-editor label { display:grid; font-size:.73rem; font-weight:700; gap:.3rem; }
+  .member-profile-editor input,.member-profile-editor textarea { background:var(--background-primary); border:1px solid var(--border-default); box-sizing:border-box; color:var(--text-primary); font:inherit; font-size:.78rem; padding:.5rem; width:100%; }
+  .member-profile-editor textarea { min-height:7rem; resize:vertical; }
+  .member-profile-avatar-row { align-items:center; display:flex; gap:.7rem; }
+  .member-profile-avatar-preview { align-items:center; background:var(--background-secondary); border:1px solid var(--border-default); border-radius:50%; color:var(--text-secondary); display:flex; flex:0 0 3rem; height:3rem; justify-content:center; overflow:hidden; width:3rem; }
+  .member-profile-avatar-preview img { height:100%; object-fit:cover; width:100%; }
+  .member-profile-avatar-actions { display:grid; gap:.3rem; }
+  .member-profile-avatar-actions small,.member-profile-editor output { color:var(--text-secondary); font-size:.7rem; }
+  .member-profile-editor-actions { align-items:center; display:flex; gap:.5rem; justify-content:flex-end; }
+  .member-profile-editor-actions button[type="submit"] { background:var(--accent-primary); border-color:var(--accent-primary); color:var(--on-accent); font-weight:800; }
+  .member-profile-editor-actions button:disabled { cursor:wait; opacity:.6; }
+  .member-profile-pending { color:var(--text-secondary); font-size:.74rem!important; }
   @media (max-width:600px) { .member-detail-dialog { max-width:calc(100vw - 1rem); } .member-detail-panel > header,.member-detail-content { padding-left:.8rem; padding-right:.8rem; } }
 </style>
 
@@ -140,9 +174,23 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   type VerificationResponse = { members?: Array<{ email?: string; display_name?: string; avatar_url?: string }>; error?: string };
   type ArchivedMember = { email: string; display_name: string; avatar_url: string; created_by: string; archived_by: string | null; archived_at: string | null };
   type ArchivedResponse = { members?: ArchivedMember[]; error?: string };
-  type MemberDetail = { email: string; status: string; createdBy: string | null; createdAt: string | null; archivedBy: string | null; archivedAt: string | null; profile: { displayName: string; avatarUrl: string; bio: string; university: string; year: string; interests: string; affiliationType: string; country: string; timezone: string; updatedAt: string } | null; memberships: Array<{ project_id: string; role: string; joined_at: string }>; permissions: Array<{ subject: string }>; workflowRoles: Array<{ role: string; subject: string; created_at: string; created_by: string }>; genreRoles: Array<{ kind: string; name: string; created_at: string; created_by: string }>; articleCount: number; applicationCount: number; history: Array<{ actorEmail: string; action: string; summary: string; createdAt: string; category: string }> };
+  type MemberDetail = { email: string; status: string; createdBy: string | null; createdAt: string | null; archivedBy: string | null; archivedAt: string | null; profileChangePending?: boolean; profile: { displayName: string; avatarUrl: string; bio: string; university: string; year: string; interests: string; affiliationType: string; country: string; timezone: string; updatedAt: string } | null; memberships: Array<{ project_id: string; role: string; joined_at: string }>; permissions: Array<{ subject: string }>; workflowRoles: Array<{ role: string; subject: string; created_at: string; created_by: string }>; genreRoles: Array<{ kind: string; name: string; created_at: string; created_by: string }>; articleCount: number; applicationCount: number; history: Array<{ actorEmail: string; action: string; summary: string; createdAt: string; category: string }> };
   type MemberDetailResponse = { member?: MemberDetail; error?: string };
   const initialize = () => { const root = document.querySelector<HTMLElement>("[data-member-management]"); if (!root || root.dataset.ready) return; root.dataset.ready = "true"; const table = root.querySelector<HTMLElement>("[data-table-body]")!; const tiles = root.querySelector<HTMLElement>("[data-tile-grid]")!; const search = root.querySelector<HTMLInputElement>("[data-search]")!; const count = root.querySelector<HTMLElement>("[data-count]")!; const loadMoreButton = root.querySelector<HTMLButtonElement>("[data-load-more]")!; const listView = root.querySelector<HTMLElement>("[data-list-view]")!; const tileView = root.querySelector<HTMLElement>("[data-tile-view]")!; const archive = root.querySelector<HTMLElement>("[data-verification-archive]")!; const archiveList = root.querySelector<HTMLElement>("[data-verification-list]")!; const archiveCount = root.querySelector<HTMLElement>("[data-verification-count]")!; const lifecycleArchive = root.querySelector<HTMLElement>("[data-member-archive]")!; const lifecycleArchiveList = root.querySelector<HTMLElement>("[data-member-archive-list]")!; const lifecycleArchiveCount = root.querySelector<HTMLElement>("[data-member-archive-count]")!; const detailDialog = root.querySelector<HTMLDialogElement>("[data-member-detail-dialog]")!; const detailEmail = root.querySelector<HTMLElement>("[data-member-detail-email]")!; const detailContent = root.querySelector<HTMLElement>("[data-member-detail-content]")!; const message = root.querySelector<HTMLOutputElement>("[data-message]")!; let members: Member[] = []; let participants: Participant[] = []; let verificationAccounts: VerificationResponse["members"] = []; let archivedMembers: ArchivedMember[] = []; let memberCursor: string | null = null; let participantCursor: string | null = null; let membersHaveMore = false; let participantsHaveMore = false; let loadingMore = false;
+    const profileEditor = root.querySelector<HTMLFormElement>("[data-member-profile-editor]")!;
+    const profileAvatarPreview = root.querySelector<HTMLElement>("[data-member-avatar-preview]")!;
+    let currentMemberAvatarUrl = "";
+    const renderProfileAvatar = () => {
+      profileAvatarPreview.replaceChildren();
+      if (!currentMemberAvatarUrl) {
+        profileAvatarPreview.textContent = "画像なし";
+        return;
+      }
+      const image = document.createElement("img");
+      image.alt = "";
+      image.src = currentMemberAvatarUrl;
+      profileAvatarPreview.append(image);
+    };
     const esc = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[character] ?? character);
     const memberName = (member: Member | Participant | ArchivedMember) => member.display_name?.trim() || "表示名未設定";
     const avatar = (member: Member | Participant | ArchivedMember) => member.avatar_url?.trim() ? `<span class="avatar"><img src="${esc(member.avatar_url)}" alt="" loading="lazy" /></span>` : `<span class="avatar" aria-hidden="true">${esc(memberName(member).slice(0,1))}</span>`;
@@ -162,6 +210,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     loadArchivedMembers = async () => { try { const response = await fetch("/api/admin/member-management", { credentials: "same-origin", cache: "no-store" }); const data = await response.json() as ArchivedResponse; if (!response.ok) throw new Error(data.error ?? "アーカイブ一覧を読み込めませんでした。"); archivedMembers = data.members ?? []; renderArchivedMembers(); } catch (error) { renderArchivedMembers(error instanceof Error ? error.message : "アーカイブ一覧を読み込めませんでした。"); } };
     const openMemberDetail = async (email: string) => {
       detailEmail.textContent = email;
+      detailContent.hidden = false;
+      profileEditor.hidden = true;
       detailContent.textContent = "メンバー情報を読み込んでいます…";
       detailDialog.showModal();
       try {
@@ -173,6 +223,29 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         const section = (title: string, content: string) => `<section class="member-detail-section"><h3>${esc(title)}</h3>${content}</section>`;
         const list = (values: string[], empty: string) => values.length ? `<ul>${values.map((value) => `<li>${esc(value)}</li>`).join("")}</ul>` : `<p class="member-detail-empty">${esc(empty)}</p>`;
         const profile = member.profile;
+        detailContent.hidden = false;
+        profileEditor.hidden = true;
+        profileEditor.dataset.updatedAt = profile?.updatedAt ?? "";
+        const profileAvatarInput = profileEditor.querySelector<HTMLInputElement>("[data-member-avatar-file]");
+        if (profileAvatarInput) profileAvatarInput.value = "";
+        const profileFormMessage = profileEditor.querySelector<HTMLOutputElement>("[data-profile-form-message]");
+        if (profileFormMessage) profileFormMessage.value = "";
+        currentMemberAvatarUrl = profile?.avatarUrl ?? "";
+        const profileValues: Record<string, string> = {
+          displayName: profile?.displayName ?? "",
+          university: profile?.university ?? "",
+          year: profile?.year ?? "",
+          interests: profile?.interests ?? "",
+          affiliationType: profile?.affiliationType ?? "",
+          country: profile?.country ?? "",
+          timezone: profile?.timezone || "Asia/Tokyo",
+          bio: profile?.bio ?? "",
+        };
+        for (const [name, value] of Object.entries(profileValues)) {
+          const field = profileEditor.querySelector<HTMLInputElement | HTMLTextAreaElement>('[data-profile-field="' + name + '"]');
+          if (field) field.value = value;
+        }
+        renderProfileAvatar();
         const history = member.history.map((entry) => `${date(entry.createdAt)} — ${entry.summary}（${entry.actorEmail}）`);
         detailContent.innerHTML = [
           section("登録", `<p>状態：${esc(member.status === "archived" ? "アーカイブ済み" : "有効")}</p><p>初回作成者：${esc(member.createdBy || "記録なし")}</p><p>登録日時：${esc(date(member.createdAt))}</p>${member.archivedAt ? `<p>アーカイブ：${esc(date(member.archivedAt))}（${esc(member.archivedBy || "操作者記録なし")}）</p>` : ""}`),
@@ -186,6 +259,26 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
           section("関連記録", `<p>作成記事：${member.articleCount}件</p><p>応募：${member.applicationCount}件</p>`),
           section("記録されている変更履歴（最大40件）", list(history, "表示できる変更履歴はありません。")),
         ].join("");
+        const profileSection = Array.from(detailContent.querySelectorAll<HTMLElement>(".member-detail-section"))
+          .find((entry) => entry.querySelector("h3")?.textContent === "プロフィール");
+        if (member.status === "active" && profileSection && !member.profileChangePending) {
+          const editButton = document.createElement("button");
+          editButton.className = "member-profile-edit-button";
+          editButton.type = "button";
+          editButton.dataset.editMemberProfile = "true";
+          editButton.textContent = "プロフィールを編集";
+          editButton.addEventListener("click", () => {
+            detailContent.hidden = true;
+            profileEditor.hidden = false;
+          });
+          profileSection.append(editButton);
+        }
+        if (member.profileChangePending && profileSection) {
+          const pendingNote = document.createElement("p");
+          pendingNote.className = "member-profile-pending";
+          pendingNote.textContent = "本人からのプロフィール変更申請が審査中です。申請を確認した後に編集できます。";
+          profileSection.append(pendingNote);
+        }
       } catch (error) {
         const errorMessage = document.createElement("p");
         errorMessage.textContent = error instanceof Error ? error.message : "メンバー詳細を読み込めませんでした。";
@@ -197,6 +290,74 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         detailContent.replaceChildren(errorMessage, retryButton);
       }
     };
+    profileEditor.querySelector<HTMLButtonElement>("[data-cancel-profile-edit]")?.addEventListener("click", () => {
+      profileEditor.hidden = true;
+      detailContent.hidden = false;
+    });
+    profileEditor.querySelector<HTMLButtonElement>("[data-remove-member-avatar]")?.addEventListener("click", () => {
+      currentMemberAvatarUrl = "";
+      const fileInput = profileEditor.querySelector<HTMLInputElement>("[data-member-avatar-file]");
+      if (fileInput) fileInput.value = "";
+      renderProfileAvatar();
+    });
+    profileEditor.querySelector<HTMLInputElement>("[data-member-avatar-file]")?.addEventListener("change", (event) => {
+      const input = event.currentTarget as HTMLInputElement;
+      const file = input.files?.[0];
+      const output = profileEditor.querySelector<HTMLOutputElement>("[data-profile-form-message]");
+      if (!file) return;
+      if (file.size > 2_000_000) {
+        if (output) output.value = "画像は2MB以下にしてください。";
+        input.value = "";
+        return;
+      }
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        currentMemberAvatarUrl = String(reader.result ?? "");
+        if (output) output.value = "画像を変更しました。";
+        renderProfileAvatar();
+      });
+      reader.addEventListener("error", () => {
+        if (output) output.value = "画像を読み込めませんでした。";
+      });
+      reader.readAsDataURL(file);
+    });
+    profileEditor.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const saveButton = profileEditor.querySelector<HTMLButtonElement>("[data-save-profile]");
+      const output = profileEditor.querySelector<HTMLOutputElement>("[data-profile-form-message]");
+      const field = (name: string) => profileEditor.querySelector<HTMLInputElement | HTMLTextAreaElement>('[data-profile-field="' + name + '"]')?.value ?? "";
+      const email = detailEmail.textContent?.trim() ?? "";
+      if (saveButton) saveButton.disabled = true;
+      if (output) output.value = "保存しています…";
+      try {
+        const response = await fetch("/api/admin/member-management", {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            email,
+            expectedUpdatedAt: profileEditor.dataset.updatedAt || null,
+            displayName: field("displayName"),
+            avatarUrl: currentMemberAvatarUrl,
+            bio: field("bio"),
+            university: field("university"),
+            year: field("year"),
+            interests: field("interests"),
+            affiliationType: field("affiliationType"),
+            country: field("country"),
+            timezone: field("timezone"),
+          }),
+        });
+        const result = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(result.error ?? "プロフィールを保存できませんでした。");
+        message.value = "プロフィールを更新しました。";
+        await load();
+        await openMemberDetail(email);
+      } catch (error) {
+        if (output) output.value = error instanceof Error ? error.message : "プロフィールを保存できませんでした。";
+        if (saveButton?.isConnected) saveButton.disabled = false;
+      }
+    });
     root.querySelector<HTMLButtonElement>("[data-close-member-detail]")?.addEventListener("click", () => detailDialog.close());
     root.addEventListener("click", (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-open-member]");
