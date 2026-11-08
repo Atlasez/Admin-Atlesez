@@ -80,6 +80,7 @@ const japanRegionPaths = japanMap.locations
     </section>
 
     <section class="reports-panel" id="reports-panel" data-admin-view-panel="reports" data-admin-load-surface aria-label="記事の問題報告" hidden={initialView !== "reports"}>
+    <p class="report-article-filter-note" data-report-article-filter-note hidden>この記事に対する問題報告だけを表示しています。<a href="/admin/reports/">すべての問題報告を見る</a></p>
     <div class="report-controls">
       <label>
         表示する状態
@@ -176,6 +177,8 @@ const japanRegionPaths = japanMap.locations
   .permission-remove { align-items: center; background: transparent; border: 1px solid var(--border); border-radius: .4rem; color: var(--muted); cursor: pointer; display: inline-flex; font: inherit; font-size: .78rem; justify-content: center; min-height: 2.2rem; min-width: 4.6rem; padding: .35rem .65rem; }
   .permission-remove:hover, .permission-remove:focus-visible { background: var(--surface-alt); border-color: #a12828; color: #a12828; }
   .report-controls { align-items: end; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 0; display: flex; flex-wrap: wrap; gap: .65rem; margin-bottom: .55rem; padding: .7rem .8rem; }
+  .report-article-filter-note { background:var(--surface-alt); border-left:3px solid var(--accent); color:var(--muted); font-size:.8rem; margin:0; padding:.55rem .7rem; }
+  .report-article-filter-note a { color:var(--accent); font-weight:800; margin-left:.35rem; }
   .report-controls label { display: grid; font-size: .82rem; font-weight: 800; gap: .35rem; letter-spacing: .02em; }
   select, textarea { border: 1px solid var(--border); border-radius: .45rem; background: var(--surface); color: var(--text); font: inherit; }
   select { min-height: 2.35rem; min-width: 9rem; padding: .3rem .55rem; }
@@ -257,6 +260,9 @@ const japanRegionPaths = japanMap.locations
     if (!root || root.dataset.reportsInitialized === "true") return;
     root.dataset.reportsInitialized = "true";
     const filter = root.querySelector<HTMLSelectElement>("[data-report-filter]")!;
+    const articleIdFilter = new URLSearchParams(window.location.search).get("articleId")?.trim() ?? "";
+    const articleFilterNote = root.querySelector<HTMLElement>("[data-report-article-filter-note]")!;
+    articleFilterNote.hidden = !articleIdFilter;
     const list = root.querySelector<HTMLElement>("[data-report-list]")!;
     const feedback = root.querySelector<HTMLElement>("[data-report-feedback]")!;
     const count = root.querySelector<HTMLOutputElement>("[data-report-count]")!;
@@ -526,6 +532,7 @@ const japanRegionPaths = japanMap.locations
       reportLoadMore.disabled = true;
       try {
         const query = new URLSearchParams({ status: filter.value });
+        if (articleIdFilter) query.set("articleId", articleIdFilter);
         if (append && reportNextCursor) query.set("cursor", reportNextCursor);
         const response = await fetch(`/api/admin/article-reports?${query.toString()}`, { credentials: "same-origin" });
         const data = await readApiResponse<{ reports?: Report[]; reportsTruncated?: boolean; pagination?: { nextCursor?: string | null; hasMore?: boolean }; error?: string }>(response);
