@@ -519,6 +519,9 @@ test("運営メンバー一覧からプロフィールと変更履歴を確認�
     university: "京都大学",
     year: "B3",
   });
+  await dialog.locator("[data-edit-member-profile]").click();
+  await expect(dialog.locator("[data-save-profile]")).toBeEnabled();
+  await dialog.locator("[data-cancel-profile-edit]").click();
   await dialog.locator("[data-close-member-detail]").click();
   await expect(dialog).toBeHidden();
 });

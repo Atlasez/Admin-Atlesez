@@ -230,6 +230,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         if (profileAvatarInput) profileAvatarInput.value = "";
         const profileFormMessage = profileEditor.querySelector<HTMLOutputElement>("[data-profile-form-message]");
         if (profileFormMessage) profileFormMessage.value = "";
+        const profileSaveButton = profileEditor.querySelector<HTMLButtonElement>("[data-save-profile]");
+        if (profileSaveButton) profileSaveButton.disabled = false;
         currentMemberAvatarUrl = profile?.avatarUrl ?? "";
         const profileValues: Record<string, string> = {
           displayName: profile?.displayName ?? "",
