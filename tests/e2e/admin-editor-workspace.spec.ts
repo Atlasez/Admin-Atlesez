@@ -131,6 +131,25 @@ async function mockAdminApi(
       payload = { catalog: [] };
     } else if (url.pathname === "/api/admin/editor/documents/doc-1") {
       payload = { document, comments };
+    } else if (url.pathname === "/api/admin/article-reports") {
+      const articleId = url.searchParams.get("articleId");
+      payload = {
+        reports:
+          articleId === document.source_article_id
+            ? [
+                {
+                  id: "report-1",
+                  article_title: "群の定義",
+                  article_id: articleId,
+                  report_type: "error",
+                  details: `本文の不等式 x < 0 を確認してください。\nhttps://${"a".repeat(120)}.example/path`,
+                  status: "new",
+                  created_at: "2026-08-20T00:00:00.000Z",
+                },
+              ]
+            : [],
+        pagination: { limit: 200, hasMore: false, nextCursor: null },
+      };
     } else if (url.pathname.endsWith("/assets")) {
       payload = { assets: [] };
     } else if (url.pathname === "/api/admin/personal-workspace") {
@@ -177,6 +196,37 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
   await expect(settings).not.toHaveAttribute("open", "");
   await personalNotebook.locator("summary").click();
   await expect(personalNotebook).toHaveAttribute("open", "");
+});
+
+test("記事編集画面で該当記事の問題報告を確認できる", async ({ page }) => {
+  const sourceArticleId = "ja-mathematics-group-definition";
+  await mockAdminApi(
+    page,
+    {
+      email: "alice@example.com",
+      subjects: ["mathematics"],
+      isManager: true,
+    },
+    { ...documentItem, source_article_id: sourceArticleId },
+  );
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const reports = page.locator("[data-article-reports]");
+  await reports.locator(":scope > summary").click();
+  await expect(reports.locator("[data-article-report-count]")).toHaveText(
+    "1件",
+  );
+  await expect(reports.locator(".article-report-card")).toContainText("未確認");
+  await expect(reports.locator(".article-report-card")).toContainText(
+    "本文の不等式 x < 0 を確認してください。",
+  );
+  const reportDetails = reports.locator(".article-report-card p");
+  await expect(reportDetails).toHaveCSS("white-space", "pre-wrap");
+  await expect(reportDetails).toHaveCSS("overflow-wrap", "anywhere");
+  await expect(reports.locator("[data-article-report-manage]")).toHaveAttribute(
+    "href",
+    `/admin/reports/?articleId=${sourceArticleId}`,
+  );
 });
 
 test("新規記事作成では記事作成方法を選択できる", async ({ page }) => {

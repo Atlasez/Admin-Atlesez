@@ -111,6 +111,20 @@ const request = (
     body: JSON.stringify({ action, email }),
   });
 
+const profileUpdateRequest = (
+  payload: Record<string, unknown>,
+  actor = "ukyoukay0@gmail.com",
+) =>
+  new Request("https://admin.example/api/admin/member-management", {
+    method: "PATCH",
+    headers: {
+      "Cf-Access-Authenticated-User-Email": actor,
+      origin: "https://admin.example",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
 const removalRequest = (email: string) =>
   new Request(
     `https://admin.example/api/admin/member-management?email=${encodeURIComponent(email)}`,
@@ -438,6 +452,150 @@ it("returns a global-admin member detail with recorded history and honest creato
     "member_archived",
     "grant",
   ]);
+});
+
+it("updates a member profile directly without changing permissions or Discord assignments", async () => {
+  const { db, environment } = createEnvironment();
+  const response = await worker.fetch(
+    profileUpdateRequest({
+      email: "member@example.org",
+      expectedUpdatedAt: "2026-09-01T00:00:00.000Z",
+      displayName: "更新後のプロフィール",
+      avatarUrl: "https://images.example.org/new-avatar.png",
+      bio: "新しい自己紹介",
+      university: "京都大学",
+      year: "B3",
+      interests: "化学,数学",
+      affiliationType: "大学",
+      country: "日本",
+      timezone: "Asia/Tokyo",
+    }),
+    environment as never,
+  );
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    ok: true,
+    updatedFields: expect.arrayContaining(["displayName", "bio", "university"]),
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT display_name,bio,university,year,interests FROM editorial_member_profiles WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({
+    display_name: "更新後のプロフィール",
+    bio: "新しい自己紹介",
+    university: "京都大学",
+    year: "B3",
+    interests: "化学,数学",
+  });
+  expect(
+    db
+      .prepare("SELECT subject FROM report_admin_permissions WHERE email=?")
+      .all("member@example.org"),
+  ).toEqual([{ subject: "mathematics" }]);
+  expect(
+    db
+      .prepare("SELECT role FROM atlasez_project_memberships WHERE email=?")
+      .all("member@example.org"),
+  ).toEqual([{ role: "member" }]);
+  expect(
+    db
+      .prepare(
+        "SELECT discord_role_id,is_active FROM atlasez_member_discord_role_assignments WHERE email=?",
+      )
+      .all("member@example.org"),
+  ).toEqual([{ discord_role_id: "123456789012345678", is_active: 1 }]);
+  const audit = db
+    .prepare(
+      "SELECT action,summary,details_json FROM admin_audit_log WHERE target_id=?",
+    )
+    .get("member@example.org") as {
+    action: string;
+    summary: string;
+    details_json: string;
+  };
+  expect(audit).toMatchObject({
+    action: "member_updated",
+    summary: "運営メンバーのプロフィールを更新",
+  });
+  expect(JSON.parse(audit.details_json)).toHaveProperty("updatedFields");
+  expect(audit.details_json).not.toContain("新しい自己紹介");
+});
+
+it("rejects stale member profile edits without overwriting the newer profile", async () => {
+  const { db, environment } = createEnvironment();
+  const response = await worker.fetch(
+    profileUpdateRequest({
+      email: "member@example.org",
+      expectedUpdatedAt: "2026-08-31T00:00:00.000Z",
+      displayName: "古い表示名",
+      avatarUrl: "https://images.example.org/avatar.png",
+      bio: "古い自己紹介",
+      university: "大学",
+      year: "1年",
+      interests: "数学",
+      affiliationType: "student",
+      country: "日本",
+      timezone: "Asia/Tokyo",
+    }),
+    environment as never,
+  );
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ code: "STALE_MEMBER_PROFILE" });
+  expect(
+    db
+      .prepare(
+        "SELECT display_name,bio FROM editorial_member_profiles WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ display_name: "保存されるプロフィール", bio: "本文" });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM admin_audit_log").get(),
+  ).toMatchObject({ count: 0 });
+});
+
+it("blocks direct profile edits while the member has a pending change request", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    "INSERT INTO editorial_member_profile_change_requests(id,email,status,submitted_at) VALUES (?,?,?,?)",
+  ).run(
+    "request-1",
+    "member@example.org",
+    "pending",
+    "2026-09-01T00:00:00.000Z",
+  );
+  const response = await worker.fetch(
+    profileUpdateRequest({
+      email: "member@example.org",
+      expectedUpdatedAt: "2026-09-01T00:00:00.000Z",
+      displayName: "更新後のプロフィール",
+      avatarUrl: "https://images.example.org/avatar.png",
+      bio: "新しい自己紹介",
+      university: "京都大学",
+      year: "B3",
+      interests: "化学",
+      affiliationType: "大学",
+      country: "日本",
+      timezone: "Asia/Tokyo",
+    }),
+    environment as never,
+  );
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({
+    code: "PROFILE_CHANGE_PENDING",
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT display_name FROM editorial_member_profiles WHERE email=?",
+      )
+      .get("member@example.org"),
+  ).toMatchObject({ display_name: "保存されるプロフィール" });
 });
 
 it("does not expose member details to a non-global operator", async () => {
