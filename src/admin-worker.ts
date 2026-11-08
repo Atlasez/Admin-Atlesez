@@ -4438,7 +4438,9 @@ async function updateAtlasMemberProfile(
   if (!payload || !EMAIL_PATTERN.test(email))
     return json({ error: "メンバーを確認してください。" }, 400);
   if (!Object.prototype.hasOwnProperty.call(payload, "expectedUpdatedAt") ||
-    (payload.expectedUpdatedAt !== null && typeof payload.expectedUpdatedAt !== "string"))
+    (payload.expectedUpdatedAt !== null && (
+      typeof payload.expectedUpdatedAt !== "string" || payload.expectedUpdatedAt.length > 80
+    )))
     return json({ error: "表示中の情報が古くなっています。再読み込みしてください。" }, 400);
 
   const fields = [
@@ -4526,22 +4528,38 @@ async function updateAtlasMemberProfile(
   if (updatedFields.length === 0)
     return json({ ok: true, updatedAt: currentUpdatedAt, updatedFields });
 
-  const now = new Date().toISOString();
+  const now = new Date(Math.max(
+    Date.now(),
+    (Date.parse(currentUpdatedAt ?? "") || 0) + 1,
+  )).toISOString();
   const result = current
     ? await env.REPORTS.prepare(
       `UPDATE editorial_member_profiles SET display_name=?,avatar_url=?,bio=?,university=?,year=?,interests=?,
          affiliation_type=?,country=?,timezone=?,updated_at=?
-       WHERE lower(email)=lower(?) AND updated_at=?`,
+       WHERE lower(email)=lower(?) AND updated_at=?
+         AND NOT EXISTS (
+           SELECT 1 FROM editorial_member_profile_change_requests
+           WHERE lower(email)=lower(?) AND status='pending'
+         )`,
     ).bind(profile.displayName, profile.avatarUrl, profile.bio, profile.university, profile.year,
-      profile.interests, profile.affiliationType, profile.country, profile.timezone, now, email, currentUpdatedAt).run()
+      profile.interests, profile.affiliationType, profile.country, profile.timezone, now, email, currentUpdatedAt, email).run()
     : await env.REPORTS.prepare(
       `INSERT OR IGNORE INTO editorial_member_profiles
        (email,display_name,avatar_url,bio,university,year,interests,affiliation_type,country,timezone,updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+       SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (
+         SELECT 1 FROM editorial_member_profile_change_requests
+         WHERE lower(email)=lower(?) AND status='pending'
+       )`,
     ).bind(email, profile.displayName, profile.avatarUrl, profile.bio, profile.university, profile.year,
-      profile.interests, profile.affiliationType, profile.country, profile.timezone, now).run();
-  if (Number(result.meta?.changes ?? 0) !== 1)
+      profile.interests, profile.affiliationType, profile.country, profile.timezone, now, email).run();
+  if (Number(result.meta?.changes ?? 0) !== 1) {
+    const pendingAfterRace = await env.REPORTS.prepare(
+      "SELECT 1 AS found FROM editorial_member_profile_change_requests WHERE lower(email)=lower(?) AND status='pending' LIMIT 1",
+    ).bind(email).first<{ found: number }>();
+    if (pendingAfterRace)
+      return json({ error: "本人からのプロフィール変更申請が審査中です。先に申請を確認してください。", code: "PROFILE_CHANGE_PENDING" }, 409);
     return json({ error: "プロフィールが先に更新されています。再読み込みしてから編集してください。", code: "STALE_MEMBER_PROFILE" }, 409);
+  }
 
   await recordAdminAudit(
     env,
