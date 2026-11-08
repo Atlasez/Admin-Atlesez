@@ -2188,6 +2188,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     });
     document.addEventListener('click', (event) => {
       if (!calendarSelectionDates.length) return;
+      if (event.composedPath().includes(calendar)) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest('[data-event-calendar], [data-block-editor], [data-calendar-prev], [data-calendar-next], [data-open-calendar-settings], [data-calendar-settings-dialog], [data-availability-popover]')) return;

@@ -342,7 +342,14 @@ test("カレンダーの日付は矢印キーで移動しTab stopを一つに保
   const november2 = page.locator(
     '[data-calendar-date="2026-11-02"] [data-calendar-select]',
   );
-  await november2.click();
+  const november2Cell = page.locator('[data-calendar-date="2026-11-02"]');
+  await november2Cell.scrollIntoViewIfNeeded();
+  const november2CellBox = await november2Cell.boundingBox();
+  expect(november2CellBox).not.toBeNull();
+  await page.mouse.click(
+    november2CellBox!.x + november2CellBox!.width - 5,
+    november2CellBox!.y + november2CellBox!.height - 5,
+  );
   await expect(selectionSummary).toContainText("2026-10-31〜2026-11-02");
   await expect(page.locator(".calendar-cell--selected")).toHaveCount(2);
   await november2.click();
