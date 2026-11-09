@@ -191,7 +191,7 @@ const groups = [
           <div class="a11y-glass-control">
             <div class="a11y-glass-hints">
               <span>{L.glassWeak}</span>
-              <output for="a11y-glass-bare" data-glass-value>40%</output>
+              <output for="a11y-glass-bare" data-glass-value>0%</output>
               <span>{L.glassStrong}</span>
             </div>
             <input
@@ -203,9 +203,9 @@ const groups = [
               min="0"
               max="100"
               step="1"
-              value="40"
+              value="0"
               aria-label={L.glass}
-              aria-valuetext="40%"
+              aria-valuetext="0%"
             />
           </div>
         </fieldset>
@@ -261,7 +261,7 @@ const groups = [
             <div class="a11y-glass-control">
               <div class="a11y-glass-hints">
                 <span>{L.glassStrong}</span>
-                <output for="a11y-glass" data-glass-value>40%</output>
+                <output for="a11y-glass" data-glass-value>0%</output>
                 <span>{L.glassStrong}</span>
               </div>
               <input
@@ -273,9 +273,9 @@ const groups = [
                 min="0"
                 max="100"
                 step="1"
-                value="40"
+                value="0"
                 aria-label={L.glass}
-                aria-valuetext="40%"
+                aria-valuetext="0%"
               />
             </div>
           </fieldset>
@@ -400,7 +400,7 @@ const groups = [
     margin: 0;
     appearance: none;
     -webkit-appearance: none;
-    background: linear-gradient(to right, var(--accent-primary) var(--glass-progress, 40%), var(--border-strong) var(--glass-progress, 40%));
+    background: linear-gradient(to right, var(--accent-primary) var(--glass-progress, 0%), var(--border-strong) var(--glass-progress, 0%));
     background-size: calc(100% - 18px) 6px;
     background-position: center;
     background-repeat: no-repeat;
@@ -489,7 +489,7 @@ const groups = [
 
   /** Stored glass is panel opacity (0–100%), not the see-through percentage. */
   function getGlassOpacity(value: string | undefined): number {
-    if (typeof value !== "string" || !/^(?:100|[1-9]?\d)%$/.test(value)) return 60;
+    if (typeof value !== "string" || !/^(?:100|[1-9]?\d)%$/.test(value)) return 100;
     return Math.min(100, Math.max(0, Number(value.slice(0, -1))));
   }
 
@@ -598,7 +598,7 @@ const groups = [
           if (typeof v !== "string" || v === "default") continue;
           if (k === "glass") {
             const opacity = 100 - Number(v);
-            if (Number.isInteger(opacity) && opacity >= 0 && opacity <= 100 && opacity !== 60) {
+            if (Number.isInteger(opacity) && opacity >= 0 && opacity <= 100 && opacity !== 100) {
               next.glass = `${opacity}%`;
             }
           } else {

@@ -384,7 +384,7 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
       filter: `${style.backdropFilter} ${style.getPropertyValue("-webkit-backdrop-filter")}`,
     };
   });
-  expect(parseColor(searchPanel.background).alpha).toBeCloseTo(0.6, 1);
+  expect(parseColor(searchPanel.background).alpha).toBe(1);
   expect(searchPanel.filter).toContain("saturate");
   const searchBackdrop = parseColor(
     await dialog.evaluate(
@@ -447,10 +447,9 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
   await expect(page).toHaveURL(/\/admin\/articles\//);
   await expect(dialog).toHaveAttribute("data-command-mode", "action");
   const glass = await readCommandPanel(dialog);
-  expect(glass.alpha).toBeGreaterThanOrEqual(0.55);
-  expect(glass.alpha).toBeLessThanOrEqual(0.65);
-  expect(glass.backdropAlpha).toBeGreaterThanOrEqual(0.08);
-  expect(glass.backdropAlpha).toBeLessThanOrEqual(0.14);
+  expect(glass.alpha).toBe(1);
+  expect(glass.backdropAlpha).toBeGreaterThanOrEqual(0.16);
+  expect(glass.backdropAlpha).toBeLessThanOrEqual(0.2);
   expect(glass.listAlpha).toBe(0);
   expect(glass.hintAlpha).toBe(0);
   expect(glass.innerAlpha).toBe(0);
@@ -458,8 +457,8 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
   expect(glass.row.alpha).toBeLessThan(0.95);
   expect(glass.filter).toContain("blur");
   expect(glass.filter).toContain("saturate");
-  expect(glass.searchAlpha).toBeCloseTo(0.6, 1);
-  expect(glass.actionAlpha).toBeCloseTo(0.6, 1);
+  expect(glass.searchAlpha).toBe(1);
+  expect(glass.actionAlpha).toBe(1);
   const behind = [255, 255, 255].map(
     (channel) => channel * (1 - glass.backdropAlpha),
   );
@@ -520,8 +519,17 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
     name: "ポップアップの透け感",
   });
   const value = glassSetting.locator("[data-glass-value]");
-  await expect(slider).toHaveValue("40");
-  await expect(value).toHaveText("40%");
+  await expect(slider).toHaveValue("0");
+  await expect(value).toHaveText("0%");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--command-glass-opacity")
+          .trim(),
+      ),
+    )
+    .toBe("100%");
 
   // Strongest: 100% see-through (0% panel opacity).
   await slider.focus();
@@ -571,8 +579,8 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
 
   await menu.locator("> summary").click();
   await menu.locator("[data-a11y-reset]").click();
-  await expect(slider).toHaveValue("40");
-  await expect(value).toHaveText("40%");
+  await expect(slider).toHaveValue("0");
+  await expect(value).toHaveText("0%");
   const resetGlass = await page.evaluate(
     () => JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}").glass,
   );
@@ -580,8 +588,7 @@ test("表示設定のスライダーで要対応の透け感を広く調整し�
   await page.reload();
   await page.getByRole("link", { name: "アクションセンター" }).click();
   const standard = await readCommandPanel(dialog);
-  expect(standard.alpha).toBeGreaterThanOrEqual(0.55);
-  expect(standard.alpha).toBeLessThanOrEqual(0.65);
+  expect(standard.alpha).toBe(1);
 });
 
 test("ポップアップの透け感は表示設定からのみ変更できる", async ({ page }) => {
@@ -620,7 +627,7 @@ test("Aa表示設定も0%と100%を即座に反映する", async ({ page }) => {
     );
     return parseColor(color).alpha;
   };
-  expect(await alpha()).toBeCloseTo(0.6, 1);
+  expect(await alpha()).toBe(1);
   await slider.focus();
   await slider.press("Home");
   expect(await alpha()).toBe(1);

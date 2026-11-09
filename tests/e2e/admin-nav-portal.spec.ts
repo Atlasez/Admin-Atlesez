@@ -908,6 +908,65 @@ test("参加中のプロジェクトカードは取得後もレイアウトを�
   expect(cardBox!.width).toBeLessThanOrEqual(groupBox!.width);
 });
 
+test("ポータルのカードと操作要素を角ばった形に統一する", async ({ page }) => {
+  await mockAdminShell(page, {
+    todos: [
+      {
+        id: "square-corner-task",
+        project_id: "atlas",
+        title: "フィードバック依頼を確認",
+        status: "open",
+        due_at: "",
+        due_timezone: "Asia/Tokyo",
+      },
+    ],
+    calendarEvents: [
+      {
+        id: "square-corner-event",
+        kind: "organization",
+        title: "同時作業会",
+        startsAt: new Date().toISOString(),
+        projectName: "アトラス",
+      },
+    ],
+  });
+  await page.goto("admin/portal/");
+
+  const roundedSurfaceSelectors = [
+    ".project-entry",
+    ".project-entry-card",
+    ".home-section",
+    ".calendar-toolbar",
+    ".calendar-filter-option",
+    ".calendar-filter-mark",
+    ".calendar-agenda-section",
+    ".calendar-agenda-item",
+    ".calendar-agenda-copy em",
+    ".todo-card",
+    ".todo-icon",
+    ".todo-kind",
+    ".todo-status",
+  ];
+  for (const selector of roundedSurfaceSelectors) {
+    const element = page.locator(selector).first();
+    await expect(element, `${selector} should have square corners`).toHaveCSS(
+      "border-radius",
+      "0px",
+    );
+  }
+});
+
+test("ポータルの空表示も直角で表示する", async ({ page }) => {
+  await mockAdminShell(page);
+  await page.goto("admin/portal/");
+
+  await expect(page.locator(".calendar-agenda-empty")).toHaveCSS(
+    "border-radius",
+    "0px",
+  );
+  await expect(page.locator(".todo-empty")).toHaveCSS("border-radius", "0px");
+});
+
 test("未参加のプロジェクトを応募導線付きで表示する", async ({ page }) => {
   await mockAdminShell(page, {
     projects: [
