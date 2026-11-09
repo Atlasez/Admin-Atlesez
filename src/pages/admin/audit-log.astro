@@ -51,7 +51,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     const formatDate = (value: string) => { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(date); };
     const targetLabel = (type: string) => ({ article: "記事", permission: "権限", member: "メンバー", task: "タスク", workflow: "状態遷移" }[type] ?? type);
     let nextCursor = "";
-    let loading = false;
+    let loadSequence = 0;
     let retryController: ReturnType<typeof createAdminLoadRetry> | null = null;
     const bindRows = () => list.querySelectorAll<HTMLButtonElement>("[data-audit-entry]").forEach((button) => button.addEventListener("click", () => {
       const entry = JSON.parse(button.dataset.auditEntry ?? "{}");
@@ -65,9 +65,9 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       if (typeof dialog.showModal === "function") dialog.showModal();
     }));
     const load = async (cursor = "", append = false) => {
-      if (loading) return;
-      loading = true;
+      const requestId = ++loadSequence;
       if (!append) { state.hidden = false; list.hidden = true; next.hidden = true; state.textContent = "読み込み中…"; retryController?.begin(); }
+      if (!append) nextCursor = "";
       next.disabled = true;
       const params = new URLSearchParams();
       new FormData(form).forEach((value, key) => params.set(key, String(value)));
@@ -79,6 +79,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         const response = await fetch(`/api/admin/audit-log?${params}`, { credentials: "same-origin", cache: "no-store" });
         if (!response.ok) throw new Error("操作履歴を読み込めませんでした。");
         const data = await response.json() as { entries?: Array<Record<string, unknown>>; pagination?: { nextCursor?: string | null } };
+        if (requestId !== loadSequence) return;
         const entries = Array.isArray(data.entries) ? data.entries : [];
         const html = entries.map((entry) => `<button type="button" class="audit-row${entry.archived_at ? " audit-row--archived" : ""}" data-audit-entry='${escape(JSON.stringify(entry))}'><time datetime="${escape(entry.created_at)}">${escape(formatDate(String(entry.created_at ?? "")))}</time><span class="audit-action">${escape(entry.actionLabel ?? entry.action)}</span><span class="audit-copy"><strong>${escape(entry.summary)}${entry.archived_at ? ' <em>アーカイブ</em>' : ""}</strong><small>${escape(entry.target_label)} · ${escape(entry.actor_email)}</small></span><span class="audit-target">${escape(targetLabel(String(entry.target_type ?? "")))}</span><span class="audit-chevron" aria-hidden="true">›</span></button>`).join("");
         if (append) list.insertAdjacentHTML("beforeend", html); else list.innerHTML = html;
@@ -89,8 +90,11 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         state.hidden = true; list.hidden = false;
         if (!append) retryController?.success();
         bindRows();
-      } catch (error) { count.value = "—"; state.hidden = true; retryController?.fail(error); }
-      finally { loading = false; next.disabled = false; }
+      } catch (error) {
+        if (requestId !== loadSequence) return;
+        count.value = "—"; state.hidden = true; retryController?.fail(error);
+      }
+      finally { if (requestId === loadSequence) next.disabled = false; }
     };
     retryController = createAdminLoadRetry(root, () => load(), "操作履歴を読み込めませんでした.");
     form.addEventListener("input", () => void load()); form.addEventListener("change", () => void load()); form.addEventListener("reset", () => requestAnimationFrame(() => void load())); next.addEventListener("click", () => void load(nextCursor, true)); void load();
