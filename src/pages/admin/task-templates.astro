@@ -1,9 +1,11 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
+import { getCollection } from "astro:content";
+const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order).map((subject) => ({ slug: subject.data.slug, name: subject.data.name.ja }));
 ---
 <AdminLayout title="タスクテンプレート" description="繰り返す作業をテンプレートから作成します">
-  <main class="template-page" data-task-templates data-admin-load-surface aria-busy="true">
+  <main class="template-page" data-task-templates data-assignee-subjects={JSON.stringify(subjects)} data-admin-load-surface aria-busy="true">
     <header><h1>タスクテンプレート</h1><a href="/admin/member-tasks/">← タスク管理</a></header>
     <p>自分用のテンプレートを保存し、同じ作業を手動または定期的に作成できます。定期作成は有効にしたものだけが動きます。</p>
     <details open><summary>テンプレートを追加・編集</summary>
@@ -13,8 +15,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         <label>タスク名 <span>必須</span><input name="title" required maxlength="200" /></label>
         <label>内容<textarea name="details" maxlength="8000" rows="3"></textarea></label>
         <label>プロジェクト<select name="projectId" required></select></label>
-        <label>担当者<select name="assignees" multiple aria-describedby="template-assignees-help"></select></label>
-        <p id="template-assignees-help">運営メンバーは自分のタスクを作成します。運営内運営は所属する担当者を複数選べます。</p>
+        <label>担当者<select name="assignees" data-selection-mode="tags" data-selection-label="担当者を検索" data-search-placeholder="名前・メール・分野担当グループを検索" multiple aria-describedby="template-assignees-help"></select></label>
+        <p id="template-assignees-help">名前やメールで検索して担当者をタグで追加できます。学習サイト運営の管理者は分野担当全体も選べます。</p>
         <label>期限までの日数<input name="dueAfterDays" type="number" min="0" max="90" placeholder="空欄なら期限なし" /></label>
         <label>タイムゾーン<input name="timezone" required value="Asia/Tokyo" /></label>
         <label>定期作成<select name="schedule"><option value="none">手動のみ</option><option value="daily">毎日</option><option value="weekly">毎週</option><option value="monthly">毎月</option></select></label>

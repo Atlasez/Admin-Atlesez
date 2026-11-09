@@ -7,13 +7,15 @@ import {
 
 describe("admin page routes", () => {
   it("exposes every generated admin page through the Worker", () => {
-    expect(ADMIN_PAGE_PATHS).toHaveLength(46);
+    expect(ADMIN_PAGE_PATHS).toHaveLength(47);
     expect(isAdminPagePath("/admin/getting-started/")).toBe(true);
     expect(isAdminPagePath("/admin/getting-started")).toBe(true);
     expect(isAdminPagePath("/admin/task-detail/")).toBe(true);
     expect(isAdminPagePath("/admin/task-templates/")).toBe(true);
+    expect(isAdminPagePath("/admin/design-principles/")).toBe(true);
     expect(isAdminPagePath("/admin/portal-prototype/")).toBe(true);
     expect(ADMIN_PAGE_PATHS).toContain("/admin/portal-prototype");
+    expect(ADMIN_PAGE_PATHS).toContain("/admin/design-principles");
 
     for (const path of ADMIN_PAGE_PATHS) {
       expect(isAdminPagePath(path)).toBe(true);

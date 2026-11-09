@@ -211,10 +211,17 @@ export async function handleTaskTemplates(
     const members = allowed.length
       ? await db
           .prepare(
-            `SELECT m.project_id,m.email,COALESCE(NULLIF(trim(p.display_name),''),'表示名未設定') AS name FROM atlasez_project_memberships m LEFT JOIN atlasez_project_member_lifecycle l ON l.project_id=m.project_id AND lower(l.email)=lower(m.email) LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(m.email) WHERE m.project_id IN (${allowed.map(() => "?").join(",")}) AND COALESCE(l.state,'active')='active' AND NOT EXISTS(SELECT 1 FROM admin_member_lifecycle a WHERE m.project_id='atlas' AND lower(a.email)=lower(m.email) AND a.status='archived')`,
+            `SELECT m.project_id,m.email,COALESCE(NULLIF(trim(p.display_name),''),'表示名未設定') AS name,
+             CASE WHEN m.project_id='atlas' THEN COALESCE((SELECT GROUP_CONCAT(DISTINCT permission.subject) FROM report_admin_permissions permission WHERE lower(permission.email)=lower(m.email)),'') ELSE '' END AS assigned_subjects
+           FROM atlasez_project_memberships m LEFT JOIN atlasez_project_member_lifecycle l ON l.project_id=m.project_id AND lower(l.email)=lower(m.email) LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(m.email) WHERE m.project_id IN (${allowed.map(() => "?").join(",")}) AND COALESCE(l.state,'active')='active' AND NOT EXISTS(SELECT 1 FROM admin_member_lifecycle a WHERE m.project_id='atlas' AND lower(a.email)=lower(m.email) AND a.status='archived')`,
           )
           .bind(...allowed)
-          .all<{ project_id: string; email: string; name: string }>()
+          .all<{
+            project_id: string;
+            email: string;
+            name: string;
+            assigned_subjects: string;
+          }>()
       : { results: [] };
     return json({
       templates: rows.results.map((row) => ({

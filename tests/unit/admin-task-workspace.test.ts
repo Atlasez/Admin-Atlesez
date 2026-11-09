@@ -25,6 +25,7 @@ function fixture() {
     CREATE TABLE atlasez_project_member_lifecycle(project_id TEXT,email TEXT,state TEXT);
     CREATE TABLE admin_member_lifecycle(email TEXT,status TEXT);
     CREATE TABLE editorial_member_profiles(email TEXT,display_name TEXT);
+    CREATE TABLE report_admin_permissions(email TEXT,subject TEXT);
     CREATE TABLE admin_audit_log(id TEXT PRIMARY KEY,actor_email TEXT,action TEXT,target_type TEXT,target_id TEXT,target_label TEXT,summary TEXT,details_json TEXT,created_at TEXT);`);
   sqlite.exec(
     readFileSync(

@@ -1,4 +1,10 @@
 import { readAdminApiJson } from "../lib/admin-api";
+import {
+  buildTaskAssigneeGroups,
+  normalizeTaskAssigneeMembers,
+  selectedTaskAssigneeEmails,
+  type TaskAssigneeSubject,
+} from "../lib/task-assignee-groups";
 import { createAdminLoadRetry } from "./admin-load-retry";
 import type { ChecklistItem } from "../lib/admin-task-workspace";
 
@@ -11,6 +17,7 @@ type Dependency = {
 type WorkspaceData = {
   task: {
     id: string;
+    projectId: string;
     title: string;
     status: string;
     updatedAt: string;
@@ -27,7 +34,11 @@ type WorkspaceData = {
   };
   dependencies: Dependency[];
   candidates: Array<{ id: string; title: string; status: string }>;
-  members: Array<{ email: string; name: string }>;
+  members: Array<{
+    email: string;
+    name: string;
+    assigned_subjects?: string[] | string;
+  }>;
   history: Array<{
     summary: string;
     next_action: string;
@@ -58,6 +69,9 @@ const initialize = () => {
   const field = (name: string) =>
     form.elements.namedItem(name) as HTMLInputElement;
   const assignees = form.elements.namedItem("assignees") as HTMLSelectElement;
+  const assigneeSubjects = JSON.parse(
+    root.dataset.assigneeSubjects || "[]",
+  ) as TaskAssigneeSubject[];
   const taskId = new URLSearchParams(location.search).get("task") ?? "";
   let data: WorkspaceData,
     checklist: ChecklistItem[] = [],
@@ -163,12 +177,32 @@ const initialize = () => {
         });
       get<HTMLButtonElement>("[data-reload-workspace]").disabled = false;
       get("[data-assignment-panel]").hidden = !data.canAssign;
-      assignees.innerHTML = data.members
+      const projectMembers = normalizeTaskAssigneeMembers(
+        data.members.map((member) => ({
+          ...member,
+          display_name: member.name,
+        })),
+      );
+      const groups =
+        data.canAssign && data.task.projectId === "atlas"
+          ? buildTaskAssigneeGroups(projectMembers, assigneeSubjects)
+          : [];
+      const selectedAssignees = new Set(
+        data.task.assigneeEmails.map((email) => email.toLowerCase()),
+      );
+      const groupOptions = groups
         .map(
-          (member) =>
-            `<option value="${escape(member.email)}" ${data.task.assigneeEmails.includes(member.email.toLowerCase()) ? "selected" : ""}>${escape(member.name)}</option>`,
+          (group) =>
+            `<option value="${escape(group.value)}" data-assignee-emails="${escape(JSON.stringify(group.emails))}">${escape(group.label)}</option>`,
         )
         .join("");
+      const peopleOptions = projectMembers
+        .map(
+          (member) =>
+            `<option value="${escape(member.email)}" ${selectedAssignees.has(member.email) ? "selected" : ""}>${escape(member.display_name || member.email)}</option>`,
+        )
+        .join("");
+      assignees.innerHTML = groupOptions + peopleOptions;
       renderChecklist();
       renderDependencies();
       candidates(data.candidates);
@@ -301,9 +335,7 @@ const initialize = () => {
         if (!/^[0-9a-f-]{36}$/i.test(documentId))
           throw new Error("関連原稿のURLを確認してください。");
       }
-      const selected = [...assignees.selectedOptions]
-        .map((option) => option.value)
-        .sort();
+      const selected = selectedTaskAssigneeEmails(assignees).sort();
       const assignedChanged =
         data.canAssign &&
         JSON.stringify(selected) !==

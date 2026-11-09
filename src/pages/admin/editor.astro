@@ -449,7 +449,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       <form method="dialog" data-review-request-form>
         <p class="eyebrow">フィードバック依頼</p>
         <h2 id="review-request-title">フィードバックを誰に依頼しますか？</h2>
-        <label>依頼先<select data-review-request-assignee multiple size="7" required aria-describedby="review-request-assignee-help"><option value="" disabled>担当者を選択</option><option value="*">この分野の担当者全員</option></select><small id="review-request-assignee-help">チェックを入れて複数人を選択できます。「担当者全員」と個別担当者は同時に選べません。</small></label>
+        <label>依頼先<select data-review-request-assignee data-selection-mode="tags" data-selection-label="依頼先を検索" data-search-placeholder="名前・メールで検索" multiple required aria-describedby="review-request-assignee-help"><option value="" disabled>担当者を選択</option><option value="*" data-selection-exclusive="true">この分野の担当者全員</option></select><small id="review-request-assignee-help">名前やメールで検索し、タグで複数人を指定できます。「担当者全員」と個別担当者は同時に選べません。</small></label>
         <label>依頼内容・備考<textarea data-review-request-note maxlength="2000" rows="5" placeholder="重点的に確認してほしい点や期限など"></textarea></label>
         <output data-review-request-message aria-live="polite"></output>
         <div class="approval-actions"><button type="button" data-review-request-cancel class="quiet-action">キャンセル</button><button type="submit" value="request" class="primary-action">フィードバックを依頼する</button></div>
@@ -5115,7 +5115,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (!response.ok) throw new Error(data.error ?? "依頼先を読み込めませんでした。");
       const currentSubject = subject.value;
       const reviewers = (data.reviewers ?? []).filter((reviewer) => reviewer.subjects.includes("*") || reviewer.subjects.includes(currentSubject));
-      reviewRequestAssignee.innerHTML = '<option value="" disabled>担当者を選択</option><option value="*">この分野の担当者全員</option>' + reviewers.map((reviewer) => `<option value="${esc(reviewer.email)}">${esc(reviewer.displayName)}</option>`).join("");
+      reviewRequestAssignee.innerHTML = '<option value="" disabled>担当者を選択</option><option value="*" data-selection-exclusive="true">この分野の担当者全員</option>' + reviewers.map((reviewer) => `<option value="${esc(reviewer.email)}">${esc(reviewer.displayName)}</option>`).join("");
       const currentRequest = data.requests?.find((item) => item.id === documentId);
       const selectedEmails = new Set((currentRequest?.reviewer_email ?? "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
       [...reviewRequestAssignee.options].forEach((option) => { option.selected = selectedEmails.has(option.value.toLowerCase()); });

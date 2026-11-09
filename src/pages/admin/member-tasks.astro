@@ -2,10 +2,12 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 import { getTimeZoneOptions } from "../../lib/timezones";
+import { getCollection } from "astro:content";
 const timezones = getTimeZoneOptions(new Date());
+const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order).map((subject) => ({ slug: subject.data.slug, name: subject.data.name.ja }));
 ---
 <AdminLayout title="タスク管理" description="参加中のプロジェクトのタスクを横断管理します">
-  <main class="member-tasks" data-member-tasks data-admin-load-surface data-admin-load-state="loading" aria-busy="true">
+  <main class="member-tasks" data-member-tasks data-assignee-subjects={JSON.stringify(subjects)} data-admin-load-surface data-admin-load-state="loading" aria-busy="true">
     <header class="task-page-header">
       <div><h1>タスク管理</h1><a href="/admin/task-templates/">テンプレート・定期作成 →</a></div>
       <div class="task-header-actions">
@@ -38,7 +40,7 @@ const timezones = getTimeZoneOptions(new Date());
 
     <section class="create-task" id="task-create" data-create-panel>
       <div class="create-heading"><div><h2>タスクを追加</h2><p>依頼内容と期限を入力して、担当者へ共有します。</p></div><span class="required-note">タスク名は必須</span></div>
-      <div class="create-grid"><label><span>プロジェクト</span><select data-project></select></label><label><span>タスク名</span><input data-title maxlength="200" placeholder="例：記事を確認する" /></label><label><span>担当者</span><select data-assignee multiple size="6" aria-describedby="member-task-assignee-help"><option value="" disabled>担当者を選択</option></select><small id="member-task-assignee-help">チェックを入れて複数人を選択できます。</small></label><label><span>期限</span><input data-due type="datetime-local" /></label><label><span>期限のタイムゾーン</span><select data-timezone>{timezones.map(({value,label})=><option value={value} selected={value==="Asia/Tokyo"}>{label}</option>)}</select></label></div>
+      <div class="create-grid"><label><span>プロジェクト</span><select data-project></select></label><label><span>タスク名</span><input data-title maxlength="200" placeholder="例：記事を確認する" /></label><label><span>担当者</span><select data-assignee data-selection-mode="tags" data-selection-label="担当者を検索" data-search-placeholder="名前・メール・分野担当グループを検索" multiple aria-describedby="member-task-assignee-help"><option value="" disabled>担当者を選択</option></select><small id="member-task-assignee-help">名前やメールで検索してタグを追加できます。分野担当全体も選べます。</small></label><label><span>期限</span><input data-due type="datetime-local" /></label><label><span>期限のタイムゾーン</span><select data-timezone>{timezones.map(({value,label})=><option value={value} selected={value==="Asia/Tokyo"}>{label}</option>)}</select></label></div>
       <label class="details-field"><span>補足・依頼内容</span><textarea data-details maxlength="10000" placeholder="目的、確認してほしい点、完了条件など"></textarea></label>
       <label data-create-test-label><span><input type="checkbox" data-create-test />テスト用タスク（通知を送らない）</span></label>
       <div class="actions"><output data-message aria-live="polite"></output><button class="create-cta" type="button" data-create>タスクを追加<span aria-hidden="true">→</span></button></div>

@@ -99,7 +99,7 @@ test("T-1/T-2/T-5: タスク管理の初期表示が仕様どおりになる", a
   await expect(page.getByRole("heading", { name: "ToDo" })).toHaveCount(0);
 });
 
-test("担当者選択は重複アカウントをまとめ、再描画しても選択表示を維持する", async ({
+test("担当者タグは重複アカウントをまとめ、他の選択・再描画でも維持される", async ({
   page,
 }) => {
   await page.route("**/api/admin/operations**", async (route) => {
@@ -113,9 +113,21 @@ test("担当者選択は重複アカウントをまとめ、再描画しても�
         events: [],
         progress: [],
         members: [
-          { email: "test@example.com", display_name: "テスト" },
-          { email: "TEST@example.com", display_name: "テスト" },
-          { email: "alice@example.com", display_name: "アリス" },
+          {
+            email: "test@example.com",
+            display_name: "テスト",
+            assigned_subjects: "mathematics",
+          },
+          {
+            email: "TEST@example.com",
+            display_name: "テスト",
+            assigned_subjects: "mathematics",
+          },
+          {
+            email: "alice@example.com",
+            display_name: "アリス",
+            assigned_subjects: "mathematics",
+          },
         ],
         availabilityBlocks: [],
         availabilityRules: [],
@@ -126,37 +138,111 @@ test("担当者選択は重複アカウントをまとめ、再描画しても�
   await page.goto("admin/operations/?project=atlas");
   await page.getByRole("button", { name: "タスクを作成・依頼" }).click();
 
-  const testOption = page
-    .locator(".admin-multi-select-option")
-    .filter({ hasText: "テスト" });
+  const search = page.getByRole("combobox", { name: "担当者を検索" });
+  await search.fill("テスト");
+  const testOption = page.getByRole("option", { name: "テスト", exact: true });
   await expect(testOption).toHaveCount(1);
-  const testCheckbox = testOption.locator('input[type="checkbox"]');
-  const testCheckboxHandle = await testCheckbox.elementHandle();
-  await testCheckbox.check();
+  await testOption.click();
+  const testTag = page
+    .locator(".admin-tag-select-chip")
+    .filter({ hasText: "テスト" });
+  await expect(testTag).toHaveCount(1);
+  const testTagHandle = await testTag.elementHandle();
 
-  const otherCheckbox = page
-    .locator(".admin-multi-select-option")
-    .filter({ hasText: "アリス" })
-    .locator('input[type="checkbox"]');
-  await otherCheckbox.check();
-  await otherCheckbox.uncheck();
-  await expect(testCheckbox).toBeChecked();
+  await search.fill("アリス");
+  await page.getByRole("option", { name: "アリス", exact: true }).click();
+  await expect(testTag).toHaveCount(1);
 
   // Operations renders the page again when task-list filters change. Keep the
-  // create dialog open to verify that this does not replace the checkbox row.
+  // create dialog open to ensure an existing selected tag is not replaced.
   await page.locator("[data-task-show-completed]").evaluate((element) => {
     const input = element as HTMLInputElement;
     input.checked = true;
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  const testCheckboxStayedMounted = await testCheckboxHandle?.evaluate(
+  const testTagStayedMounted = await testTagHandle?.evaluate(
     async (element) => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       return element.isConnected;
     },
   );
-  expect(testCheckboxStayedMounted).toBe(true);
-  await expect(testCheckbox).toBeChecked();
+  expect(testTagStayedMounted).toBe(true);
+  await expect(testTag).toHaveCount(1);
+});
+
+test("分野担当グループを選ぶとタスク作成時に個人へ展開する", async ({
+  page,
+}) => {
+  let submittedAssignees: string[] = [];
+  const tasks: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/operations**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (
+      request.method() === "POST" &&
+      url.pathname === "/api/admin/operations/tasks"
+    ) {
+      submittedAssignees = (
+        request.postDataJSON() as { assigneeEmails: string[] }
+      ).assigneeEmails;
+      tasks.push({
+        id: "task-group",
+        title: "数学担当への依頼",
+        status: "open",
+        subject: "mathematics",
+        assignee_email: submittedAssignees.join(","),
+        created_by: "manager@example.com",
+        due_at: null,
+        due_timezone: "Asia/Tokyo",
+        details: "",
+        reminders: [],
+        created_at: "2026-09-01T00:00:00.000Z",
+      });
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({ task: tasks[0] }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        scope: { email: "manager@example.com", isManager: true },
+        project: { id: "atlas", slug: "atlas", name: "Atlasez" },
+        tasks,
+        events: [],
+        progress: [],
+        members: [
+          {
+            email: "test@example.com",
+            display_name: "テスト",
+            assigned_subjects: "mathematics",
+          },
+          {
+            email: "alice@example.com",
+            display_name: "アリス",
+            assigned_subjects: "mathematics",
+          },
+        ],
+        availabilityBlocks: [],
+        availabilityRules: [],
+      }),
+    });
+  });
+
+  await page.goto("admin/operations/?project=atlas");
+  await page.getByRole("button", { name: "タスクを作成・依頼" }).click();
+  const search = page.getByRole("combobox", { name: "担当者を検索" });
+  await search.fill("数学担当全体");
+  await page.getByRole("option", { name: "数学担当全体（2人）" }).click();
+  await page.locator("[data-task-title]").fill("数学担当への依頼");
+  await page.getByRole("button", { name: "タスクを追加" }).click();
+
+  await expect
+    .poll(() => [...submittedAssignees].sort())
+    .toEqual(["alice@example.com", "test@example.com"]);
 });
 
 test("タスク一覧はカーソルで追加読み込みできる", async ({ page }) => {

@@ -27,7 +27,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
 ---
 
 <AdminLayout title={initialPageTitle} description="運営作業を共有する場所">
-  <main class="operations" data-operations data-member-mode={memberMode ? "true" : undefined} data-progress-only={progressOnly ? "true" : undefined} data-progress-overview={progressOverview ? "true" : undefined}>
+  <main class="operations" data-operations data-assignee-subjects={JSON.stringify(subjects)} data-member-mode={memberMode ? "true" : undefined} data-progress-only={progressOnly ? "true" : undefined} data-progress-overview={progressOverview ? "true" : undefined}>
     <header>
       <h1 data-project-title>{initialPageTitle}</h1>
     </header>
@@ -120,9 +120,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
             {subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}
           </select></label
         ><label class="field-label"
-          >担当者<select data-task-assignee multiple size="6" aria-describedby="task-assignee-help">
+          >担当者<select data-task-assignee data-selection-mode="tags" data-selection-label="担当者を検索" data-search-placeholder="名前・メール・分野担当グループを検索" multiple aria-describedby="task-assignee-help">
             <option value="" disabled>担当者を選択</option>
-          </select><small id="task-assignee-help">チェックを入れて複数人を選択できます。</small></label
+          </select><small id="task-assignee-help">名前やメールで検索してタグを追加できます。分野担当全体も選べます。</small></label
         >
         <div class="task-deadline">
           <label class="field-label"
@@ -1360,8 +1360,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
 </style>
 <script>
   import { createAdminLoadRetry } from '../../scripts/admin-load-retry';
+  import { buildTaskAssigneeGroups, normalizeTaskAssigneeMembers, selectedTaskAssigneeEmails, type TaskAssigneeSubject } from '../../lib/task-assignee-groups';
   import { OPERATION_SCOPE_MISSING_MESSAGE, readOperationScope } from '../../lib/operation-overview-scope';
-  type OperationMember = { email: string; display_name?: string };
+  type OperationMember = { email: string; display_name?: string; assigned_subjects?: string[] | string };
   type OperationParticipant = { displayName: string; availability: string; isSelf: boolean };
   type OperationEvent = { id: string; title: string; starts_at: string; ends_at?: string | null; details?: string | null; timezone?: string; source?: string; availability?: string | null; availabilityCounts?: Record<string, number>; participants?: OperationParticipant[] };
   type ReminderRule = { id?: string; remind_at?: string; timezone?: string; label?: string; relative_kind?: string; relative_amount?: number | null; relative_unit?: string | null; relative_start?: string | null; repeat?: string | null };
@@ -1398,6 +1399,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     const progressOverview = root.dataset.progressOverview === 'true';
     const progressSubjectFilters = [...root.querySelectorAll<HTMLInputElement>('[data-progress-subject-filter]')];
     const progressSubjectLabels = new Map(progressSubjectFilters.map((input) => [input.dataset.progressSubjectFilter || '', input.parentElement?.textContent?.trim() || input.dataset.progressSubjectFilter || '']));
+    const assigneeSubjects = JSON.parse(root.dataset.assigneeSubjects || '[]') as TaskAssigneeSubject[];
     const assignee = get<HTMLSelectElement>('[data-task-assignee]');
     const calendar = get<HTMLElement>('[data-event-calendar]');
     const calendarTitle = get<HTMLElement>('[data-calendar-title]');
@@ -1803,28 +1805,19 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         return;
       }
       renderTimezoneOffset();
-      const assignmentMembersByEmail = new Map<string, OperationMember>();
-      for (const member of data.members ?? []) {
-        const email = member.email.trim().toLowerCase();
-        if (!email) continue;
-        const displayName = member.display_name?.trim() || '表示名未設定';
-        const existing = assignmentMembersByEmail.get(email);
-        const existingHasName = existing?.display_name && existing.display_name !== '表示名未設定';
-        const nextHasName = displayName !== '表示名未設定';
-        if (!existing || (!existingHasName && nextHasName)) {
-          assignmentMembersByEmail.set(email, { email, display_name: displayName });
-        }
-      }
-      const assignmentMembers = [...assignmentMembersByEmail.values()];
+      const assignmentMembers = normalizeTaskAssigneeMembers((data.members ?? []).map((member) => ({ ...member, display_name: member.display_name?.trim() || '表示名未設定' })));
       const members = new Map(assignmentMembers.map((member) => [member.email, member.display_name || '表示名未設定']));
       projectTitle.textContent = memberPage ? 'カレンダー' : `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : progressOnly ? '進捗報告' : 'タスク管理'}`;
       get<HTMLElement>('[data-event-create]').hidden = memberPage || !scope.isManager;
       const canManageCurrentProject = Boolean(scope.isManager || scope.projectRole === 'manager');
       taskCreateTestLabel.hidden = !canManageCurrentProject;
-      const assigneeOptionsSignature = JSON.stringify(assignmentMembers.map((member) => [member.email, member.display_name]));
+      const assigneeGroups = canManageCurrentProject && data.project?.id === 'atlas' ? buildTaskAssigneeGroups(assignmentMembers, assigneeSubjects) : [];
+      const assigneeOptionsSignature = JSON.stringify([assignmentMembers.map((member) => [member.email, member.display_name, member.assigned_subjects]), assigneeGroups]);
       if (assignee.dataset.optionsSignature !== assigneeOptionsSignature) {
         const selectedAssignees = new Set([...assignee.selectedOptions].map((option) => option.value.trim().toLowerCase()));
-        assignee.innerHTML = '<option value="" disabled>担当者を選択</option>' + assignmentMembers.map((member) => `<option value="${escapeHtml(member.email)}" ${selectedAssignees.has(member.email) ? 'selected' : ''}>${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
+        const groups = assigneeGroups.map((group) => `<option value="${escapeHtml(group.value)}" data-assignee-emails="${escapeHtml(JSON.stringify(group.emails))}" ${selectedAssignees.has(group.value) ? 'selected' : ''}>${escapeHtml(group.label)}</option>`).join('');
+        const people = assignmentMembers.map((member) => `<option value="${escapeHtml(member.email)}" ${selectedAssignees.has(member.email) ? 'selected' : ''}>${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
+        assignee.innerHTML = '<option value="" disabled>担当者を選択</option>' + groups + people;
         assignee.dataset.optionsSignature = assigneeOptionsSignature;
       }
       const currentProject = progressProjectFilter.value;
@@ -2053,7 +2046,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       if (!progressSubjectFilters.some((item) => item.checked)) { if (all) all.checked = true; }
       renderProgressReports();
     }));
-    get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: taskTitle.value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmails: [...assignee.selectedOptions].map((option) => option.value).filter(Boolean), dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: taskDetails.value, isTestData: taskCreateTest.checked, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); }, 'タスクを追加しました。').then((created) => { if (!created) return; taskTitle.value = ''; taskDetails.value = ''; taskDue.value = ''; taskCreateTest.checked = false; [...assignee.options].forEach((option) => { option.selected = false; }); taskFeedback.value = ''; taskListFeedback.value = 'タスクを追加しました。'; taskCreateDialog.close(); }); });
+    get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: taskTitle.value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmails: selectedTaskAssigneeEmails(assignee), dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: taskDetails.value, isTestData: taskCreateTest.checked, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); }, 'タスクを追加しました。').then((created) => { if (!created) return; taskTitle.value = ''; taskDetails.value = ''; taskDue.value = ''; taskCreateTest.checked = false; [...assignee.options].forEach((option) => { option.selected = false; }); assignee.dispatchEvent(new Event('change', { bubbles: true })); taskFeedback.value = ''; taskListFeedback.value = 'タスクを追加しました。'; taskCreateDialog.close(); }); });
     get<HTMLButtonElement>('[data-add-task-reminder]').addEventListener('click', () => { taskReminderList.insertAdjacentHTML('beforeend', reminderRowHtml()); refreshReminderRows(taskReminderList); });
     refreshReminderRows(taskReminderList);
     root.addEventListener('change', (event) => { const row = (event.target as HTMLElement).closest<HTMLElement>('[data-task-reminder-row]'); if (row) refreshReminderRow(row); });

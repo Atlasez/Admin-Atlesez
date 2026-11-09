@@ -5,6 +5,7 @@ function initial(canEdit = true) {
   return {
     task: {
       id,
+      projectId: "atlas",
       title: "記事の公開前確認",
       status: "doing",
       updatedAt: "2026-10-01T00:00:00Z",
@@ -26,8 +27,16 @@ function initial(canEdit = true) {
     }>,
     candidates: [{ id: dependency, title: "原稿を仕上げる", status: "doing" }],
     members: [
-      { email: "a@example.com", name: "担当A" },
-      { email: "b@example.com", name: "担当B" },
+      {
+        email: "a@example.com",
+        name: "担当A",
+        assigned_subjects: "mathematics",
+      },
+      {
+        email: "b@example.com",
+        name: "担当B",
+        assigned_subjects: "mathematics",
+      },
     ],
     history: [],
     canEdit,
@@ -222,6 +231,28 @@ test("担当変更と次にすることを引き継ぎとしてまとめて送�
   await expect(page.locator('[name="assignees"]')).toHaveValues([
     "b@example.com",
   ]);
+});
+test("引き継ぎでも分野担当グループを指定できる", async ({ page }) => {
+  const state = await mock(page);
+  await page.goto(`/admin/task-detail/?task=${id}`);
+  const search = page.getByRole("combobox", { name: "引き継ぎ先を検索" });
+  await search.fill("数学担当全体");
+  await page.getByRole("option", { name: "数学担当全体（2人）" }).click();
+  await page
+    .getByLabel("現在の状況", { exact: true })
+    .fill("現在の状況をまとめました");
+  await page
+    .getByLabel("次にすること", { exact: true })
+    .fill("数学担当で確認を続けます");
+  await page.getByRole("checkbox", { name: "引き継ぎとして記録する" }).check();
+  await page.getByRole("button", { name: "保存する", exact: true }).click();
+  await expect(page.locator("[data-workspace-message]")).toHaveText(
+    "保存しました。",
+  );
+  expect(state.payload()).toMatchObject({
+    handoff: true,
+    assigneeEmails: ["a@example.com", "b@example.com"],
+  });
 });
 for (const width of [1440, 390])
   test(`閲覧専用とレイアウト ${width}px`, async ({ page }) => {
