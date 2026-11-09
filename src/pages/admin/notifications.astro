@@ -15,6 +15,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
     <section class="notification-summary" aria-label="通知の件数">
       <strong data-unread-count>—</strong><span>件が未読</span>
+      <span class="notification-unread-scope" data-unread-scope hidden aria-live="polite"></span>
       <span class="summary-divider" aria-hidden="true"></span>
       <span data-visible-count>読み込み中…</span>
     </section>
@@ -61,6 +62,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .action-center-link:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
   .notification-summary { align-items: baseline; color: var(--text-secondary); display: flex; gap: .35rem; padding: .85rem .1rem; }
   .notification-summary strong { color: var(--accent-primary); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .notification-unread-scope { color: var(--text-secondary); font-size: .8rem; }
   .summary-divider { background: var(--border-default); height: 1rem; margin: 0 .45rem; width: 1px; }
   .notification-list-panel { border: 1px solid var(--border-default); padding: 1rem; }
   .notification-list-toolbar { align-items: center; border-bottom: 1px solid var(--border-default); display: flex; gap: .8rem; justify-content: space-between; padding-bottom: .8rem; }

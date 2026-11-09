@@ -806,6 +806,112 @@ test("通知の絞り込み中に古い応答が新しい一覧を上書きし�
   ).toBeVisible();
 });
 
+test("通知の絞り込み後に古いJSON読み取りが失敗してもエラーを表示しない", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  let releaseAllResponse!: () => void;
+  const allResponseGate = new Promise<void>((resolve) => {
+    releaseAllResponse = resolve;
+  });
+  let signalAllRequest!: () => void;
+  const allRequestStarted = new Promise<void>((resolve) => {
+    signalAllRequest = resolve;
+  });
+  let signalAllResponse!: () => void;
+  const allResponseFinished = new Promise<void>((resolve) => {
+    signalAllResponse = resolve;
+  });
+
+  await page.route("**/api/admin/notifications**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("unreadOnly") === "true") {
+      await route.fulfill({
+        json: {
+          notifications: [
+            {
+              id: "comment-current123",
+              kind: "comment",
+              title: "現在の未読通知",
+              detail: "最新条件の結果です。",
+              href: "/admin/editor/",
+              read: false,
+            },
+          ],
+          notificationsTruncated: false,
+          nextCursor: null,
+        },
+      });
+      return;
+    }
+
+    signalAllRequest();
+    await allResponseGate;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: "{malformed",
+    });
+    signalAllResponse();
+  });
+
+  await page.goto("admin/notifications/");
+  await allRequestStarted;
+  try {
+    await page.getByRole("button", { name: "未読", exact: true }).click();
+    await expect(
+      page.getByRole("link", { name: "現在の未読通知" }),
+    ).toBeVisible();
+  } finally {
+    releaseAllResponse();
+  }
+
+  await allResponseFinished;
+  await page.waitForTimeout(25);
+  await expect(page.locator("[data-notification-inbox]")).toHaveAttribute(
+    "data-admin-load-state",
+    "ready",
+  );
+  await expect(
+    page.locator('[data-admin-load-error-scope="notification-inbox"]'),
+  ).toBeHidden();
+  await expect(
+    page.getByRole("link", { name: "現在の未読通知" }),
+  ).toBeVisible();
+});
+
+test("未取得の通知がある場合は未読件数の集計範囲を明示する", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  await page.route("**/api/admin/notifications**", (route) =>
+    route.fulfill({
+      json: {
+        notifications: Array.from({ length: 50 }, (_, index) => ({
+          id: "comment-read-" + String(index).padStart(8, "0"),
+          kind: "comment",
+          title: "既読通知" + (index + 1),
+          detail: "取得済みの既読通知です。",
+          href: "/admin/editor/",
+          read: true,
+        })),
+        notificationsTruncated: true,
+        nextCursor: "unfetched-notifications",
+      },
+    }),
+  );
+
+  await page.goto("admin/notifications/");
+
+  const summary = page.locator(".notification-summary");
+  await expect(page.locator("[data-unread-count]")).toHaveText("0");
+  await expect(summary).toContainText("取得済み50件中");
+  await expect(summary).toContainText("続きは未確認");
+  await expect(
+    page.getByRole("button", { name: "さらに読み込む" }),
+  ).toBeVisible();
+});
+
 test("ポータルの読み込みエラーから再試行できる", async ({ page }) => {
   await mockAdminShell(page, { portalFailureOnce: true });
 

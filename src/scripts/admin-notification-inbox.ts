@@ -35,6 +35,7 @@ const initNotificationInbox = () => {
   root.dataset.initialized = "true";
   const list = root.querySelector<HTMLElement>("[data-notification-list]")!;
   const unreadCount = root.querySelector<HTMLElement>("[data-unread-count]")!;
+  const unreadScope = root.querySelector<HTMLElement>("[data-unread-scope]")!;
   const visibleCount = root.querySelector<HTMLElement>("[data-visible-count]")!;
   const pagination = root.querySelector<HTMLElement>(
     "[data-notification-pagination]",
@@ -122,7 +123,11 @@ const initNotificationInbox = () => {
     settings.querySelector<HTMLFieldSetElement>("fieldset")!.disabled =
       !preferences.available;
 
-    unreadCount.textContent = `${unreadTotal}${notificationsTruncated && unreadTotal ? "+" : ""}`;
+    unreadCount.textContent = String(unreadTotal);
+    unreadScope.hidden = !notificationsTruncated;
+    unreadScope.textContent = !notificationsTruncated
+      ? ""
+      : "（取得済み" + rows.length + "件中。続きは未確認）";
     visibleCount.textContent = `${rows.length}${notificationsTruncated ? "+" : ""}件を表示`;
     markAll.hidden = unreadTotal === 0 && !notificationsTruncated;
     markAll.disabled = legacyReminderNormalizationPending;
@@ -169,7 +174,6 @@ const initNotificationInbox = () => {
     const requestFilter = filter;
     const cursor = append ? nextCursor : null;
     if (append && cursor === null) return;
-    let response: Response;
     try {
       const parameters = new URLSearchParams({ limit: "100" });
       if (cursor) parameters.set("cursor", cursor);
@@ -177,37 +181,37 @@ const initNotificationInbox = () => {
       if (requestFilter === "important")
         parameters.set("importance", "important");
       if (requestFilter === "snoozed") parameters.set("snoozedOnly", "true");
-      response = await fetch(`/api/admin/notifications?${parameters}`, {
+      const response = await fetch(`/api/admin/notifications?${parameters}`, {
         credentials: "same-origin",
         cache: "no-store",
       });
+      if (generation !== requestGeneration || requestFilter !== filter) return;
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!response.ok || !contentType.includes("application/json"))
+        throw new Error(
+          response.status === 401
+            ? "ログイン状態を確認してください。"
+            : "通知を読み込めませんでした。",
+        );
+      const data = (await response.json()) as ResponseData;
+      if (generation !== requestGeneration || requestFilter !== filter) return;
+      if (!Array.isArray(data.notifications))
+        throw new Error("通知の形式を確認できませんでした。");
+      preferences = data.preferences ?? preferences;
+      const incoming = data.notifications;
+      rows = append ? [...rows, ...incoming] : incoming;
+      unreadTotal = rows.filter((item) => !item.read).length;
+      notificationsTruncated = data.notificationsTruncated === true;
+      nextCursor = typeof data.nextCursor === "string" ? data.nextCursor : null;
+      legacyReminderNormalizationPending =
+        data.legacyReminderNormalizationPending === true;
+      legacyReminderNormalizationFailed =
+        data.legacyReminderNormalizationFailed === true;
+      render();
     } catch (error) {
       if (generation !== requestGeneration || requestFilter !== filter) return;
       throw error;
     }
-    if (generation !== requestGeneration || requestFilter !== filter) return;
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!response.ok || !contentType.includes("application/json"))
-      throw new Error(
-        response.status === 401
-          ? "ログイン状態を確認してください。"
-          : "通知を読み込めませんでした。",
-      );
-    const data = (await response.json()) as ResponseData;
-    if (generation !== requestGeneration || requestFilter !== filter) return;
-    if (!Array.isArray(data.notifications))
-      throw new Error("通知の形式を確認できませんでした。");
-    preferences = data.preferences ?? preferences;
-    const incoming = data.notifications;
-    rows = append ? [...rows, ...incoming] : incoming;
-    unreadTotal = rows.filter((item) => !item.read).length;
-    notificationsTruncated = data.notificationsTruncated === true;
-    nextCursor = typeof data.nextCursor === "string" ? data.nextCursor : null;
-    legacyReminderNormalizationPending =
-      data.legacyReminderNormalizationPending === true;
-    legacyReminderNormalizationFailed =
-      data.legacyReminderNormalizationFailed === true;
-    render();
   };
   const retry = createAdminLoadRetry(
     root,
