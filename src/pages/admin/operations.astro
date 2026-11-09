@@ -1803,13 +1803,30 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         return;
       }
       renderTimezoneOffset();
-      const members = new Map((data.members ?? []).map((member) => [member.email, member.display_name || '表示名未設定']));
+      const assignmentMembersByEmail = new Map<string, OperationMember>();
+      for (const member of data.members ?? []) {
+        const email = member.email.trim().toLowerCase();
+        if (!email) continue;
+        const displayName = member.display_name?.trim() || '表示名未設定';
+        const existing = assignmentMembersByEmail.get(email);
+        const existingHasName = existing?.display_name && existing.display_name !== '表示名未設定';
+        const nextHasName = displayName !== '表示名未設定';
+        if (!existing || (!existingHasName && nextHasName)) {
+          assignmentMembersByEmail.set(email, { email, display_name: displayName });
+        }
+      }
+      const assignmentMembers = [...assignmentMembersByEmail.values()];
+      const members = new Map(assignmentMembers.map((member) => [member.email, member.display_name || '表示名未設定']));
       projectTitle.textContent = memberPage ? 'カレンダー' : `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : progressOnly ? '進捗報告' : 'タスク管理'}`;
       get<HTMLElement>('[data-event-create]').hidden = memberPage || !scope.isManager;
       const canManageCurrentProject = Boolean(scope.isManager || scope.projectRole === 'manager');
       taskCreateTestLabel.hidden = !canManageCurrentProject;
-      const selectedAssignees = new Set([...assignee.selectedOptions].map((option) => option.value));
-      assignee.innerHTML = '<option value="" disabled>担当者を選択</option>' + (data.members ?? []).map((member) => `<option value="${escapeHtml(member.email)}" ${selectedAssignees.has(member.email) ? 'selected' : ''}>${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
+      const assigneeOptionsSignature = JSON.stringify(assignmentMembers.map((member) => [member.email, member.display_name]));
+      if (assignee.dataset.optionsSignature !== assigneeOptionsSignature) {
+        const selectedAssignees = new Set([...assignee.selectedOptions].map((option) => option.value.trim().toLowerCase()));
+        assignee.innerHTML = '<option value="" disabled>担当者を選択</option>' + assignmentMembers.map((member) => `<option value="${escapeHtml(member.email)}" ${selectedAssignees.has(member.email) ? 'selected' : ''}>${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
+        assignee.dataset.optionsSignature = assigneeOptionsSignature;
+      }
       const currentProject = progressProjectFilter.value;
       progressProjectFilter.innerHTML = '<option value="">すべてのプロジェクト</option>' + (data.projects ?? []).map((project) => `<option value="${escapeHtml(String(project.id))}">${escapeHtml(String(project.name || project.slug || project.id))}</option>`).join('');
       if ([...(data.projects ?? [])].some((project) => String(project.id) === currentProject)) progressProjectFilter.value = currentProject;
@@ -1835,7 +1852,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       tasks.innerHTML = visibleTasks.map((item) => {
         const assigned = taskAssignedTo(item);
         const assignee = String(item.assignee_email ?? '').trim();
-        const assigneeLabel = item.assignee_display_name ?? (assignee === '*' ? '分野担当者全員' : assignee ? assignee.split(',').map((value: string) => members.get(value.trim()) || value.trim()).filter(Boolean).join('、') : '担当未指定');
+        const assigneeLabel = item.assignee_display_name ?? (assignee === '*' ? '分野担当者全員' : assignee ? assignee.split(',').map((value: string) => members.get(value.trim().toLowerCase()) || value.trim()).filter(Boolean).join('、') : '担当未指定');
         const createdAt = Date.parse(String(item.created_at ?? ''));
         const isNew = Number.isFinite(createdAt) && createdAt >= recentCutoff;
         const editorMatch = String(item.details ?? '').match(/\/admin\/editor\/\?document=([0-9a-f-]{36})/i);
