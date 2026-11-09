@@ -13,6 +13,7 @@ const projectLabel = '学習サイト「アトラス」';
     <section aria-label="管理機能">
       <a href={`/admin/permissions/?project=${project}`} data-manager-only data-admin-site={projectSite} hidden><strong>権限管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="権限管理を開く">→</span></a>
       <a data-management-project="atlas" href="/admin/member-management/?project=atlas" data-manager-only data-admin-site="atlas" hidden><strong>運営メンバー管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="運営メンバー管理を開く">→</span></a>
+      <a href="/admin/design-principles/" data-manager-only data-admin-site="atlas" hidden><strong>設計原則</strong><small>フィードバックから整理した、サイト共通の設計方針を管理します。</small><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="設計原則を開く">→</span></a>
       <a data-management-project="atlas" href="/admin/genre-roles/?project=atlas" data-manager-only data-admin-site="atlas" hidden><strong>ジャンル・役割管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="ジャンル・役割管理を開く">→</span></a>
       <a data-management-project="other" href={`/admin/project-profile-requests/?project=${project}`} data-project-manager-only data-admin-site={projectSite} hidden><strong>運営内自己紹介の承認</strong><ul class="role-tags"><li>プロジェクト責任者</li></ul><span aria-label="運営内自己紹介の承認を開く">→</span></a>
       <a href={`/admin/reports/?project=${project}`} data-admin-scope data-management-project="atlas" hidden><strong>問題報告</strong><ul class="role-tags"><li>全分野管理者</li><li>分野担当者（担当分野のみ）</li></ul><span aria-label="問題報告を開く">→</span></a>

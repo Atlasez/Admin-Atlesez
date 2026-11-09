@@ -23,6 +23,7 @@ import {
 } from "./lib/editorial-media";
 
 import { memberTaskFilters } from "./lib/member-task-filters";
+import { parseDesignPrincipleDraft } from "./lib/admin-design-principles";
 import {
   globalAdminPrototypePaths,
   isAdminPagePath,
@@ -2344,6 +2345,10 @@ type AdminAuditAction =
   | "outline_updated"
   | "outline_archived"
   | "outline_restored"
+  | "design_principle_created"
+  | "design_principle_updated"
+  | "design_principle_archived"
+  | "design_principle_restored"
   | "workflow_transition";
 
 type AdminAuditTarget =
@@ -2353,6 +2358,7 @@ type AdminAuditTarget =
   | "task"
   | "taxonomy"
   | "outline"
+  | "design_principle"
   | "workflow"
   | "member_procedure";
 
@@ -2387,6 +2393,10 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   outline_updated: "目次項目を更新",
   outline_archived: "目次項目をアーカイブ",
   outline_restored: "目次項目を復元",
+  design_principle_created: "設計原則を追加",
+  design_principle_updated: "設計原則を更新",
+  design_principle_archived: "設計原則をアーカイブ",
+  design_principle_restored: "設計原則を復元",
   workflow_transition: "状態を変更",
 }[action] ?? action);
 
@@ -11265,6 +11275,151 @@ async function taskTemplates(request:Request,env:Env):Promise<Response> {
   return handleTaskTemplates(request,{db:env.REPORTS,email:scope.email,primaryEmail:primaryAdminEmail(env),projects:await accessibleOperationProjects(env,scope)});
 }
 
+type AdminDesignPrincipleRow = {
+  id: string;
+  title: string;
+  category: string;
+  statement: string;
+  rationale: string;
+  status: string;
+  created_by: string;
+  updated_by: string;
+  created_at: string;
+  updated_at: string;
+};
+type AdminDesignPrincipleSourceRow = {
+  id: string;
+  principle_id: string;
+  label: string;
+  href: string;
+  excerpt: string;
+  sort_order: number;
+};
+
+async function adminDesignPrinciples(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const url = new URL(request.url);
+  const match = url.pathname.match(/^\/api\/admin\/design-principles(?:\/([0-9a-f-]{36}))?$/i);
+  if (!match) return json({ error: "設計原則が見つかりません。" }, 404);
+  const id = match[1];
+  if (request.method === "GET" && !id) {
+    try {
+      const [principleRows, sourceRows] = await Promise.all([
+        env.REPORTS.prepare(
+          `SELECT id,title,category,statement,rationale,status,created_by,updated_by,created_at,updated_at
+           FROM admin_design_principles
+           ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'candidate' THEN 1 ELSE 2 END,category,title COLLATE NOCASE`,
+        ).all<AdminDesignPrincipleRow>(),
+        env.REPORTS.prepare(
+          `SELECT s.id,s.principle_id,s.label,s.href,s.excerpt,s.sort_order
+           FROM admin_design_principle_sources s
+           JOIN admin_design_principles p ON p.id=s.principle_id
+           ORDER BY s.principle_id,s.sort_order,s.id`,
+        ).all<AdminDesignPrincipleSourceRow>(),
+      ]);
+      const sourceMap = new Map<string, AdminDesignPrincipleSourceRow[]>();
+      for (const source of sourceRows.results ?? []) {
+        const values = sourceMap.get(source.principle_id) ?? [];
+        values.push(source);
+        sourceMap.set(source.principle_id, values);
+      }
+      return json({
+        principles: (principleRows.results ?? []).map((principle) => ({
+          ...principle,
+          sources: (sourceMap.get(principle.id) ?? []).map((source) => ({
+            label: source.label,
+            href: source.href,
+            excerpt: source.excerpt,
+          })),
+        })),
+      });
+    } catch {
+      return json({ error: "設計原則用のmigration 0134がまだ適用されていません。" }, 503);
+    }
+  }
+  if (id ? request.method !== "PATCH" : request.method !== "POST")
+    return json({ error: "一覧はGET、新規登録はPOST、更新はPATCHで利用できます。" }, 405);
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (!request.headers.get("content-type")?.includes("application/json"))
+    return json({ error: "JSON形式で送信してください。" }, 415);
+  const payload = await request.json().catch(() => null);
+  const parsed = parseDesignPrincipleDraft(payload);
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const draft = parsed.value;
+  const now = new Date().toISOString();
+  if (!id) {
+    const principleId = crypto.randomUUID();
+    const statements = [
+      env.REPORTS.prepare(
+        `INSERT INTO admin_design_principles
+         (id,title,category,statement,rationale,status,created_by,updated_by,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      ).bind(principleId, draft.title, draft.category, draft.statement, draft.rationale, draft.status, scope.email, scope.email, now, now),
+      ...draft.sources.map((source, sortOrder) =>
+        env.REPORTS.prepare(
+          `INSERT INTO admin_design_principle_sources
+           (id,principle_id,label,href,excerpt,sort_order,created_at)
+           SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM admin_design_principles WHERE id=?)`,
+        ).bind(crypto.randomUUID(), principleId, source.label, source.href, source.excerpt, sortOrder, now, principleId),
+      ),
+    ];
+    try {
+      await env.REPORTS.batch(statements);
+    } catch {
+      return json({ error: "設計原則を保存できませんでした。migration 0134の適用状況を確認してください。" }, 503);
+    }
+    await recordAdminAudit(env, scope.email, "design_principle_created", "design_principle", principleId, draft.title, `設計原則を追加：${draft.title}`, { category: draft.category, status: draft.status, sourceCount: draft.sources.length });
+    return json({ ok: true, id: principleId, updatedAt: now }, 201);
+  }
+
+  if (!/^[0-9a-f-]{36}$/i.test(id))
+    return json({ error: "設計原則IDを確認してください。" }, 400);
+  const current = await env.REPORTS.prepare(
+    "SELECT id,title,status,updated_at FROM admin_design_principles WHERE id=?",
+  ).bind(id).first<Pick<AdminDesignPrincipleRow, "id" | "title" | "status" | "updated_at">>();
+  if (!current) return json({ error: "設計原則が見つかりません。" }, 404);
+  const expectedUpdatedAt = typeof (payload as { updatedAt?: unknown } | null)?.updatedAt === "string"
+    ? (payload as { updatedAt: string }).updatedAt
+    : "";
+  if (!expectedUpdatedAt || expectedUpdatedAt !== current.updated_at)
+    return json({ error: "別の画面で更新されています。再読み込みしてから編集してください。" }, 409);
+  const statements = [
+    env.REPORTS.prepare(
+      `UPDATE admin_design_principles SET title=?,category=?,statement=?,rationale=?,status=?,updated_by=?,updated_at=?
+       WHERE id=? AND updated_at=?`,
+    ).bind(draft.title, draft.category, draft.statement, draft.rationale, draft.status, scope.email, now, id, expectedUpdatedAt),
+    env.REPORTS.prepare(
+      `DELETE FROM admin_design_principle_sources WHERE principle_id=?
+       AND EXISTS(SELECT 1 FROM admin_design_principles WHERE id=? AND updated_at=?)`,
+    ).bind(id, id, now),
+    ...draft.sources.map((source, sortOrder) =>
+      env.REPORTS.prepare(
+        `INSERT INTO admin_design_principle_sources
+         (id,principle_id,label,href,excerpt,sort_order,created_at)
+         SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM admin_design_principles WHERE id=? AND updated_at=?)`,
+      ).bind(crypto.randomUUID(), id, source.label, source.href, source.excerpt, sortOrder, now, id, now),
+    ),
+  ];
+  let results: Array<{ meta?: { changes?: number } }>;
+  try {
+    results = await env.REPORTS.batch(statements);
+  } catch {
+    return json({ error: "設計原則を更新できませんでした。migration 0134の適用状況を確認してください。" }, 503);
+  }
+  if (!results[0]?.meta?.changes)
+    return json({ error: "別の画面で更新されています。再読み込みしてから編集してください。" }, 409);
+  const action: AdminAuditAction =
+    draft.status === "archived" && current.status !== "archived"
+      ? "design_principle_archived"
+      : current.status === "archived" && draft.status !== "archived"
+        ? "design_principle_restored"
+        : "design_principle_updated";
+  await recordAdminAudit(env, scope.email, action, "design_principle", id, draft.title, `設計原則を更新：${draft.title}`, { previousStatus: current.status, status: draft.status, category: draft.category, sourceCount: draft.sources.length });
+  return json({ ok: true, id, updatedAt: now });
+}
+
 async function memberTasksOverview(
   request: Request,
   env: Env,
@@ -11344,7 +11499,11 @@ async function memberTasksOverview(
       .all<Record<string, unknown>>(),
     env.REPORTS.prepare(
       `SELECT m.project_id,m.email,
-        COALESCE(NULLIF(TRIM(p.display_name),''),'') AS display_name
+        COALESCE(NULLIF(TRIM(p.display_name),''),'') AS display_name,
+        CASE WHEN m.project_id='atlas' THEN COALESCE((
+          SELECT GROUP_CONCAT(DISTINCT permission.subject)
+          FROM report_admin_permissions permission WHERE lower(permission.email)=lower(m.email)
+        ),'') ELSE '' END AS assigned_subjects
        FROM atlasez_project_memberships m
        LEFT JOIN editorial_member_profiles p ON p.email=m.email
        WHERE m.project_id IN (${placeholders})
@@ -13969,7 +14128,13 @@ async function operationsOverview(
             ? ` OR permission.subject IN (${scope.subjects.map(() => "?").join(",")})`
             : ""})
       )`;
+  const memberAssignedSubjectsFilter = canSeeAllProjectOperations
+    ? ""
+    : ` AND (permission.subject='*'${scope.subjects.length
+        ? ` OR permission.subject IN (${scope.subjects.map(() => "?").join(",")})`
+        : ""})`;
   const memberValues: unknown[] = [
+    ...(canSeeAllProjectOperations ? [] : scope.subjects),
     project.id,
     ...(canSeeAllProjectOperations ? [] : scope.subjects),
   ];
@@ -14021,14 +14186,16 @@ async function operationsOverview(
         .bind(project.id, scope.email)
         .all(),
       env.REPORTS.prepare(
-        `SELECT DISTINCT m.email, COALESCE(NULLIF(TRIM(profile.display_name), ''), '表示名未設定') AS display_name
+        `SELECT DISTINCT m.email, COALESCE(NULLIF(TRIM(profile.display_name), ''), '表示名未設定') AS display_name,
+          CASE WHEN m.project_id='atlas' THEN COALESCE((SELECT GROUP_CONCAT(DISTINCT permission.subject) FROM report_admin_permissions permission
+            WHERE lower(permission.email)=lower(m.email)${memberAssignedSubjectsFilter}), '') ELSE '' END AS assigned_subjects
          FROM atlasez_project_memberships m
          LEFT JOIN editorial_member_profiles profile ON lower(profile.email)=lower(m.email)
          WHERE m.project_id=?${memberSubjectFilter}
          ORDER BY display_name, m.email`,
       )
         .bind(...memberValues)
-        .all<{ email: string; display_name: string }>(),
+        .all<{ email: string; display_name: string; assigned_subjects: string }>(),
       env.REPORTS.prepare(
         `SELECT a.event_id, a.email, a.availability, CASE WHEN p.display_name IS NULL OR trim(p.display_name) = '' OR lower(trim(p.display_name)) = lower(a.email) THEN '表示名未設定' ELSE trim(p.display_name) END AS display_name FROM editorial_event_availability a JOIN editorial_events e ON e.id = a.event_id AND e.project_id = ? LEFT JOIN editorial_member_profiles p ON p.email = a.email WHERE 1=1${participantSubjectFilter} AND e.id IN (SELECT id FROM editorial_events WHERE project_id=?${eventSubjectFilter}${eventFilter.sql} ORDER BY starts_at ASC,id ASC LIMIT ?)`,
       )
@@ -24342,6 +24509,8 @@ async function handleAdminRequest(
     if (request.method === "DELETE") return removeAtlasMember(request, env);
     return json({ error: "GET、POST、PATCH、DELETEのみ利用できます。" }, 405);
   }
+  if (/^\/api\/admin\/design-principles(?:\/[0-9a-f-]{36})?$/i.test(url.pathname))
+    return adminDesignPrinciples(request, env);
   if (url.pathname === "/api/admin/genre-role-catalog")
     return genreRoleCatalog(request, env);
   if (url.pathname === "/api/admin/genre-role-catalog/assignments")
@@ -24932,6 +25101,8 @@ async function handleAdminRequest(
       "/admin/member-intake/",
       "/admin/member-management",
       "/admin/member-management/",
+      "/admin/design-principles",
+      "/admin/design-principles/",
       "/admin/genre-roles",
       "/admin/genre-roles/",
       "/admin/operations-statistics",

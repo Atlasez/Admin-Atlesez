@@ -35,6 +35,7 @@ const adminPageNames = [
   "co-working",
   "permissions",
   "member-management",
+  "design-principles",
   "genre-roles",
   "operations-statistics",
   "developer",

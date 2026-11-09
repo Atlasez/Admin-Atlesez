@@ -2,6 +2,12 @@ import { readAdminApiJson } from "../lib/admin-api";
 import { adminMutation, withAdminButtonLock } from "./admin-mutation";
 import { createAdminLoadRetry } from "./admin-load-retry";
 import type { TaskTemplate } from "../lib/admin-task-templates";
+import {
+  buildTaskAssigneeGroups,
+  normalizeTaskAssigneeMembers,
+  selectedTaskAssigneeEmails,
+  type TaskAssigneeSubject,
+} from "../lib/task-assignee-groups";
 import { memberStarterTasks } from "../data/member-starter-tasks";
 type Template = Omit<TaskTemplate, "owner_email" | "assignees_json"> & {
   assignees: string[];
@@ -10,7 +16,12 @@ type Data = {
   templates: Template[];
   email: string;
   projects: Array<{ id: string; name: string; role: string }>;
-  members: Array<{ project_id: string; email: string; name: string }>;
+  members: Array<{
+    project_id: string;
+    email: string;
+    name: string;
+    assigned_subjects?: string[] | string;
+  }>;
   error?: string;
 };
 const esc = (value: unknown) =>
@@ -37,6 +48,9 @@ function initialize() {
   let data: Data = { templates: [], projects: [], members: [], email: "" },
     editing: Template | undefined;
   const keys = new Map<string, string>();
+  const assigneeSubjects = JSON.parse(
+    root.dataset.assigneeSubjects || "[]",
+  ) as TaskAssigneeSubject[];
   const controller = new AbortController();
   const starterSelect = root.querySelector<HTMLSelectElement>(
     "[data-starter-task]",
@@ -63,13 +77,42 @@ function initialize() {
         editing?.assignees ??
         [...select.selectedOptions].map((option) => option.value);
     const project = field<HTMLSelectElement>("projectId").value;
-    select.innerHTML = data.members
-      .filter((member) => member.project_id === project)
-      .map(
-        (member) =>
-          `<option value="${esc(member.email)}" ${selected.includes(member.email) ? "selected" : ""}>${esc(member.name)}</option>`,
-      )
-      .join("");
+    const projectMembers = normalizeTaskAssigneeMembers(
+      data.members
+        .filter((member) => member.project_id === project)
+        .map((member) => ({ ...member, display_name: member.name })),
+    );
+    const manager =
+      data.projects.find((p) => p.id === project)?.role === "manager";
+    const groups =
+      manager && project === "atlas"
+        ? buildTaskAssigneeGroups(projectMembers, assigneeSubjects)
+        : [];
+    const normalizedSelected = new Set(
+      selected.map((email) => email.toLowerCase()),
+    );
+    const signature = JSON.stringify([
+      project,
+      projectMembers,
+      groups,
+      [...normalizedSelected],
+    ]);
+    if (select.dataset.optionsSignature !== signature) {
+      const groupOptions = groups
+        .map(
+          (group) =>
+            `<option value="${esc(group.value)}" data-assignee-emails="${esc(JSON.stringify(group.emails))}" ${normalizedSelected.has(group.value) ? "selected" : ""}>${esc(group.label)}</option>`,
+        )
+        .join("");
+      const peopleOptions = projectMembers
+        .map(
+          (member) =>
+            `<option value="${esc(member.email)}" ${normalizedSelected.has(member.email) ? "selected" : ""}>${esc(member.display_name || member.email)}</option>`,
+        )
+        .join("");
+      select.innerHTML = groupOptions + peopleOptions;
+      select.dataset.optionsSignature = signature;
+    }
     if (data.projects.find((p) => p.id === project)?.role !== "manager") {
       for (const option of select.options)
         option.selected =
@@ -178,9 +221,9 @@ function initialize() {
         title: field<HTMLInputElement>("title").value,
         details: field<HTMLTextAreaElement>("details").value,
         projectId: field<HTMLSelectElement>("projectId").value,
-        assignees: [
-          ...field<HTMLSelectElement>("assignees").selectedOptions,
-        ].map((o) => o.value),
+        assignees: selectedTaskAssigneeEmails(
+          field<HTMLSelectElement>("assignees"),
+        ),
         dueAfterDays:
           field<HTMLInputElement>("dueAfterDays").value === ""
             ? null

@@ -1,9 +1,20 @@
 import { readAdminApiJson } from "../lib/admin-api";
 import { formatTaskDeadline } from "../lib/task-deadline";
+import {
+  buildTaskAssigneeGroups,
+  normalizeTaskAssigneeMembers,
+  selectedTaskAssigneeEmails,
+  type TaskAssigneeSubject,
+} from "../lib/task-assignee-groups";
 import { createAdminLoadRetry } from "./admin-load-retry";
 
 type Project = { id: string; name: string; role: string };
-type Member = { project_id: string; email: string; display_name: string };
+type Member = {
+  project_id: string;
+  email: string;
+  display_name: string;
+  assigned_subjects?: string[] | string;
+};
 type Task = {
   id: string;
   project_id: string;
@@ -58,6 +69,9 @@ function initialize() {
   const showTestData = get<HTMLInputElement>("[data-show-test]");
   const createTestData = get<HTMLInputElement>("[data-create-test]");
   const createTestLabel = get<HTMLElement>("[data-create-test-label]");
+  const assigneeSubjects = JSON.parse(
+    root.dataset.assigneeSubjects || "[]",
+  ) as TaskAssigneeSubject[];
   const loadMore = get<HTMLButtonElement>("[data-task-load-more]");
   let data: Data = {};
   const initialParams = new URLSearchParams(location.search);
@@ -96,22 +110,47 @@ function initialize() {
       (item) => item.id === projectSelect.value,
     );
     const label = assigneeSelect.closest("label");
-    if (label)
-      label.hidden = !data.scope?.isManager && project?.role !== "manager";
-    createTestLabel.hidden =
-      !data.scope?.isManager && project?.role !== "manager";
+    const canAssignOthers = Boolean(
+      data.scope?.isManager || project?.role === "manager",
+    );
+    if (label) label.hidden = !canAssignOthers;
+    createTestLabel.hidden = !canAssignOthers;
     const selected = new Set(
       [...assigneeSelect.selectedOptions].map((option) => option.value),
     );
-    assigneeSelect.innerHTML =
-      '<option value="" disabled>担当者を選択</option>' +
+    const projectMembers = normalizeTaskAssigneeMembers(
       (data.members ?? [])
         .filter((member) => member.project_id === projectSelect.value)
+        .map((member) => ({ ...member, name: member.display_name })),
+    );
+    const groups =
+      canAssignOthers && projectSelect.value === "atlas"
+        ? buildTaskAssigneeGroups(projectMembers, assigneeSubjects)
+        : [];
+    const signature = JSON.stringify([
+      projectSelect.value,
+      projectMembers,
+      groups,
+    ]);
+    if (assigneeSelect.dataset.optionsSignature !== signature) {
+      const groupOptions = groups
         .map(
-          (member) =>
-            `<option value="${escape(member.email)}" ${selected.has(member.email) ? "selected" : ""}>${escape(member.display_name)}</option>`,
+          (group) =>
+            `<option value="${escape(group.value)}" data-assignee-emails="${escape(JSON.stringify(group.emails))}" ${selected.has(group.value) ? "selected" : ""}>${escape(group.label)}</option>`,
         )
         .join("");
+      const peopleOptions = projectMembers
+        .map(
+          (member) =>
+            `<option value="${escape(member.email)}" ${selected.has(member.email) ? "selected" : ""}>${escape(member.name || member.email)}</option>`,
+        )
+        .join("");
+      assigneeSelect.innerHTML =
+        '<option value="" disabled>担当者を選択</option>' +
+        groupOptions +
+        peopleOptions;
+      assigneeSelect.dataset.optionsSignature = signature;
+    }
   };
   const query = () => {
     const params = new URLSearchParams({
@@ -458,9 +497,7 @@ function initialize() {
       {
         projectId: projectSelect.value,
         title: get<HTMLInputElement>("[data-title]").value,
-        assigneeEmails: [...assigneeSelect.selectedOptions]
-          .map((option) => option.value)
-          .filter(Boolean),
+        assigneeEmails: selectedTaskAssigneeEmails(assigneeSelect),
         dueAt: get<HTMLInputElement>("[data-due]").value,
         dueTimezone: get<HTMLSelectElement>("[data-timezone]").value,
         details: get<HTMLTextAreaElement>("[data-details]").value,
@@ -474,6 +511,7 @@ function initialize() {
         [...assigneeSelect.options].forEach((option) => {
           option.selected = false;
         });
+        assigneeSelect.dispatchEvent(new Event("change", { bubbles: true }));
       },
     );
   });

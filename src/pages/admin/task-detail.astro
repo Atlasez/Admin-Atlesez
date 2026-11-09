@@ -1,9 +1,11 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
+import { getCollection } from "astro:content";
+const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order).map((subject) => ({ slug: subject.data.slug, name: subject.data.name.ja }));
 ---
 <AdminLayout title="タスク詳細・引き継ぎ" description="完了条件と前後の作業を確認し、担当者へ引き継ぎます">
-  <main class="task-detail" data-task-workspace data-admin-load-surface aria-busy="true">
+  <main class="task-detail" data-task-workspace data-assignee-subjects={JSON.stringify(subjects)} data-admin-load-surface aria-busy="true">
     <header><h1 data-task-title>タスク詳細・引き継ぎ</h1><a href="/admin/member-tasks/">タスク管理へ戻る</a></header>
     <AdminRetryNotice message="タスク詳細を読み込めませんでした。" />
     <p data-access-note role="status"></p>
@@ -13,7 +15,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         <label>次にすること<textarea name="nextAction" maxlength="4000" placeholder="次の担当者が最初にすること、完了条件"></textarea></label>
         <label>判断・対応待ち<textarea name="waitingFor" maxlength="2000" placeholder="誰の何を待っているか"></textarea></label>
         <label>関連原稿のURL<input name="documentUrl" type="text" placeholder="記事編集画面のURLを貼り付け" /></label><a data-document-link hidden>関連原稿を開く</a>
-        <div data-assignment-panel hidden><label>引き継ぎ先<select name="assignees" multiple size="5"></select></label><small>担当者を変更する場合は、引き継ぎ記録を残してください。</small></div>
+        <div data-assignment-panel hidden><label>引き継ぎ先<select name="assignees" data-selection-mode="tags" data-selection-label="引き継ぎ先を検索" data-search-placeholder="名前・メール・分野担当グループを検索" multiple aria-describedby="handoff-assignees-help"></select></label><small id="handoff-assignees-help">名前やメールで担当者を検索できます。学習サイト運営では分野担当全体も選べます。担当者を変更する場合は、引き継ぎ記録を残してください。</small></div>
         <label class="check-label"><input name="handoff" type="checkbox" />引き継ぎとして記録する</label><small>現在の状況と次にすることを履歴へ残します。</small>
       </section>
       <section aria-labelledby="checklist-heading"><h2 id="checklist-heading">完了条件・チェックリスト</h2><p data-checklist-count></p><ul data-checklist></ul><div class="inline-controls"><input data-new-item aria-label="確認項目" maxlength="200" placeholder="例：参考文献を確認する" /><button type="button" data-add-item>項目を追加</button></div></section>
