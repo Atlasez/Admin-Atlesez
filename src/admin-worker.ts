@@ -1429,7 +1429,7 @@ async function getUserStageForEmail(
   };
 }
 
-/** 共通プロフィールだけは、受入済みメンバー本人にも確認させる。 */
+/** 共通プロフィールだけは、受け入れ済みメンバー本人にも確認させる。 */
 async function getMemberOperationScope(
   request: Request,
   env: Env,
@@ -2374,7 +2374,7 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   task_restored: "タスクを復元",
   task_marked_test_data: "タスクを試験データに設定",
   task_unmarked_test_data: "タスクの試験データ指定を解除",
-  member_intake_updated: "受入・初回フォローを更新",
+  member_intake_updated: "応募者・メンバー対応記録を更新",
   member_procedure: "休止・退会・再開の手続きを更新",
   task_workspace_updated: "タスク詳細・引き継ぎを更新",
   taxonomy_created: "分野・カテゴリを追加",
@@ -10207,7 +10207,7 @@ async function provisionAcceptedApplication(
       provisioning_attempt_count: number;
     }>();
   if (!application || application.status !== "accepted")
-    return { status: "skipped", applied: 0, removed: 0, warnings: ["受入済みの応募ではありません。"], attempt: 0, nextAttemptAt: null };
+    return { status: "skipped", applied: 0, removed: 0, warnings: ["受け入れ済みの応募ではありません。"], attempt: 0, nextAttemptAt: null };
   if (application.project_slug === "atlas" && !(await isAtlasMemberActive(env, application.email))) {
     const warning = "休止・退会済みのアトラスメンバーのDiscord同期は停止しています。";
     await env.REPORTS.prepare(
@@ -12839,9 +12839,9 @@ async function memberIntakeTracking(
   if (consultationEmail && !EMAIL_PATTERN.test(consultationEmail))
     return json({ error: "相談先を確認してください。" }, 400);
   if (followUpAt && (!Number.isFinite(Date.parse(followUpAt)) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(followUpAt)))
-    return json({ error: "フォロー予定は日時を指定してください。" }, 400);
+    return json({ error: "次回確認予定日時を指定してください。" }, 400);
   if (typeof payload.followUpCompleted !== "boolean")
-    return json({ error: "フォロー完了状態を指定してください。" }, 400);
+    return json({ error: "確認の完了状態を指定してください。" }, 400);
   if (!Number.isInteger(payload.expectedRevision) || Number(payload.expectedRevision) < 0)
     return json({ error: "記録の更新番号を確認してください。再読み込みしてから保存してください。" }, 400);
   const expectedRevision = Number(payload.expectedRevision);
@@ -12878,11 +12878,11 @@ async function memberIntakeTracking(
       return json({ error: "担当者はこのプロジェクトの運営内運営から選択してください。" }, 403);
   }
   if (payload.followUpCompleted && !followUpAt && !existing?.follow_up_at)
-    return json({ error: "完了にする前にフォロー予定を入力してください。" }, 400);
+    return json({ error: "確認済みにする前に次回確認予定日時を入力してください。" }, 400);
   if (firstTaskTitle && existing?.first_task_id)
     return json({ error: "初回タスクは作成済みです。状態はタスク管理から更新してください。" }, 409);
   if (firstTaskTitle && !membership && !responsibleEmail)
-    return json({ error: "受入準備タスクを作る場合は担当運営者を選択してください。" }, 400);
+    return json({ error: "参加前の準備タスクを作る場合は担当運営者を選択してください。" }, 400);
 
   const now = new Date().toISOString();
   const contactAt = contactStatus === "not_contacted"
@@ -12904,7 +12904,7 @@ async function memberIntakeTracking(
          OR (? > 0 AND EXISTS (SELECT 1 FROM editorial_member_intake_tracking WHERE project_id=? AND email=? AND revision=? AND first_task_id IS NULL))
        )`,
     ).bind(taskId ?? crypto.randomUUID(), access.project.id, null, taskAssigneeEmail, firstTaskTitle,
-      membership ? `初回参加タスク：${email}\n参加後の小さな最初のタスクです。` : `受入準備タスク：${email}\n参加前の案内・準備に関する運営タスクです。`,
+      membership ? `初回参加タスク：${email}\n参加後の小さな最初のタスクです。` : `参加前の準備タスク：${email}\n参加前の案内・準備に関する運営タスクです。`,
       access.scope.email, now, now, firstTaskTitle, expectedRevision, access.project.id, email,
       expectedRevision, access.project.id, email, expectedRevision),
   ];
@@ -12937,7 +12937,7 @@ async function memberIntakeTracking(
     `INSERT INTO admin_audit_log (id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at)
      SELECT ?,?,'member_intake_updated','member',?,?,?, ?,? WHERE changes()=1`,
   ).bind(auditId, access.scope.email, `${access.project.id}:${email}`, email,
-    `メンバー受入フォローを更新：${email}`,
+    `応募者・メンバー対応記録を更新：${email}`,
     JSON.stringify({ projectId: access.project.id, projectSlug, applicationId: currentApp?.id ?? null, contactStatus, responsibleEmail, consultationEmail,
       firstTaskCreated: Boolean(taskId), firstTaskType: taskId ? firstTaskType : null, followUpAt, followUpCompleted: Boolean(followUpCompletedAt) }), now));
   try {
@@ -12946,7 +12946,7 @@ async function memberIntakeTracking(
     if (changes !== 1)
       return json({ error: "記録が別の運営者によって更新されています。再読み込みしてから保存してください。", code: "STALE_INTAKE" }, 409);
   } catch {
-    return json({ error: "受入フォロー記録を保存できませんでした。" }, 500);
+    return json({ error: "応募者・メンバー対応記録を保存できませんでした。" }, 500);
   }
   const updated = await env.REPORTS.prepare(
     `SELECT first_task_id,first_task_title,first_task_type,updated_at FROM editorial_member_intake_tracking WHERE project_id=? AND email=?`,
@@ -13082,7 +13082,7 @@ async function updateApplication(
     return json(
       {
         error:
-          "登録済み運営者との不整合を防ぐため、受入済み応募の状態は戻せません。権限変更は権限管理から行ってください。",
+          "登録済み運営者との不整合を防ぐため、受け入れ済み応募の状態は戻せません。権限変更は権限管理から行ってください。",
       },
       409,
     );
@@ -13136,7 +13136,7 @@ async function updateApplication(
     return json({ ok: true, status });
   }
 
-  // 旧形式の応募は追加列が空でも受入可能にし、自由記述から権限を推測しない。
+  // 旧形式の応募は追加列が空でも受け入れ可能にし、自由記述から権限を推測しない。
   const requestedSubjects =
     payload.desiredSubjects === undefined
       ? null
@@ -13314,7 +13314,7 @@ async function retryApplicationDiscordProvisioning(
   if (!application || application.project_slug !== canonicalApplicationProjectSlug(access.project.slug))
     return json({ error: "応募が見つかりません。" }, 404);
   if (application.status !== "accepted")
-    return json({ error: "受入済みの応募だけDiscord情報の確認を再試行できます。" }, 409);
+    return json({ error: "受け入れ済みの応募だけDiscord情報の確認を再試行できます。" }, 409);
   if (application.project_slug === "atlas" && !(await isAtlasMemberActive(env, application.email)))
     return json({ error: "休止・退会済みのアトラスメンバーのDiscord同期は再試行できません。", code: "MEMBER_INACTIVE" }, 409);
   const now = new Date().toISOString();
@@ -15717,7 +15717,7 @@ async function getOnboarding(request: Request, env: Env): Promise<Response> {
   if (isResponse(current)) return current;
   if (!canAccess(current.stage, "onboarding"))
     return json(
-      { error: "オンボーディングを開始できる段階ではありません。" },
+      { error: "参加後の案内を開始できる段階ではありません。" },
       403,
     );
   const [profile, internalProfile] = await Promise.all([
@@ -15757,7 +15757,7 @@ async function completeOnboarding(
   if (isResponse(current)) return current;
   if (!canAccess(current.stage, "onboarding"))
     return json(
-      { error: "オンボーディングを完了できる段階ではありません。" },
+      { error: "参加後の案内を完了できる段階ではありません。" },
       403,
     );
   if (!isSameOrigin(request))
