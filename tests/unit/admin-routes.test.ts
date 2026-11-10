@@ -38,9 +38,9 @@ describe("admin page routes", () => {
     expect(ADMIN_PAGE_PATHS).toContain("/admin/notifications");
   });
 
-  it("exposes the nested outline editor and prototype pages", () => {
-    expect(isAdminPagePath("/admin/editor/outline")).toBe(true);
-    expect(isAdminPagePath("/admin/editor/outline/")).toBe(true);
+  it("does not expose the removed outline page but keeps prototype pages", () => {
+    expect(isAdminPagePath("/admin/editor/outline")).toBe(false);
+    expect(isAdminPagePath("/admin/editor/outline/")).toBe(false);
     expect(isAdminPagePath("/admin/ui-prototype/editor-toolbar/")).toBe(true);
     expect(isAdminPagePath("/admin/ui-prototype/editor-header-codex/")).toBe(
       true,
