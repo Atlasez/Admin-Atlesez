@@ -50,6 +50,25 @@ const initialize = () => {
   const root = document.querySelector<HTMLElement>("[data-task-workspace]");
   if (!root || root.dataset.ready) return;
   root.dataset.ready = "true";
+  const listBackLink = document.querySelector<HTMLAnchorElement>(
+    "[data-task-list-back]",
+  );
+  const requestedReturnTo = new URLSearchParams(location.search).get(
+    "returnTo",
+  );
+  if (listBackLink && requestedReturnTo) {
+    try {
+      const returnUrl = new URL(requestedReturnTo, location.origin);
+      if (
+        returnUrl.origin === location.origin &&
+        returnUrl.pathname === "/admin/member-tasks/"
+      ) {
+        listBackLink.href = `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`;
+      }
+    } catch {
+      // Invalid return targets keep the existing task-list fallback.
+    }
+  }
   const get = <T extends Element = HTMLElement>(selector: string) =>
     root.querySelector<T>(selector)!;
   const form = get<HTMLFormElement>("[data-workspace-form]"),
