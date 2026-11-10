@@ -3,11 +3,6 @@ import { getCollection } from "astro:content";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 import { MATH_PRESETS } from "../../lib/math-authoring.mjs";
-import {
-  getPlannedArticles,
-  plannedArticleTitle,
-  plannedProgress,
-} from "../../lib/planned";
 
 const LATEX_COMMAND_GROUPS = [
   {
@@ -100,26 +95,6 @@ const conceptOptions = concepts
     nameEn: concept.data.name.en ?? "",
   }))
   .sort((a, b) => a.subject.localeCompare(b.subject) || a.category.localeCompare(b.category) || a.name.localeCompare(b.name, "ja"));
-const plannedArticles = subjects.flatMap((subject) =>
-  getPlannedArticles(subject.slug).map((item) => {
-    const concept = concepts.find(
-      (entry) =>
-        entry.data.subject === item.subject &&
-        entry.data.category === item.category &&
-        entry.data.name.ja === item.title.ja,
-    );
-    return {
-      key: `${item.subject}/${item.category}/${item.order}`,
-      subject: item.subject,
-      category: item.category,
-      title: plannedArticleTitle(item, "ja"),
-      order: item.order,
-      progress: plannedProgress(item),
-      slug: `planned-${item.category}-${item.order}`,
-      conceptId: concept?.id ?? "",
-    };
-  }),
-);
 const commentTags = [
   "定義不足",
   "根拠確認",
@@ -132,7 +107,7 @@ const commentTags = [
   "アクセシビリティ",
   "公開前確認",
 ];
-const editorData = JSON.stringify({ subjects, articles, plannedArticles, conceptOptions, commentTags }).replace(
+const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentTags }).replace(
   /</g,
   "\\u003c",
 );
@@ -145,7 +120,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         <h1>記事編集ワークスペース</h1>
       </div>
       <nav aria-label="運営メニュー">
-        <a href="/admin/editor/outline/">学習サイトの目次</a>
         <a href="/admin/articles/">編集・フィードバックへ戻る</a>
       </nav>
     </header>
@@ -169,22 +143,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         <button type="button" class="sidebar-collapse-toggle" data-sidebar-collapse aria-expanded="true" aria-label="作成済みの記事一覧を閉じる" title="作成済みの記事一覧を閉じる">‹ 作成済みの記事一覧を閉じる</button>
         <div class="document-list-heading"><h2>作成済みの記事</h2><span data-document-count aria-live="polite"></span></div>
         <div class="document-list" data-document-list aria-live="polite"></div>
-        <section class="atlas-outline-panel" aria-labelledby="atlas-outline-heading">
-          <div class="atlas-outline-heading">
-            <div>
-              <p class="eyebrow">学習サイトと同期</p>
-              <h2 id="atlas-outline-heading">学習サイトの目次</h2>
-            </div>
-            <span data-outline-summary aria-live="polite"></span>
-          </div>
-          <p class="atlas-outline-description">公開済み・執筆中・未着手をまとめて確認し、目次からそのまま執筆を始められます。</p>
-          <div class="atlas-outline-filters">
-            <label>分野<select data-outline-subject></select></label>
-            <label>カテゴリ<select data-outline-category></select></label>
-          </div>
-          <a class="atlas-outline-manage-link" href="/admin/genre-roles/?project=atlas">分野・カテゴリの管理</a>
-          <div class="atlas-outline-list" data-atlas-outline aria-live="polite"></div>
-        </section>
       </aside>
 
       <section class="editor-panel" aria-label="原稿編集">
@@ -200,20 +158,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             </div>
           </div>
         </div>
-
-        <dialog class="new-document-choice" data-new-document-choice aria-labelledby="new-document-choice-title">
-          <form method="dialog" class="new-document-choice-panel">
-            <div>
-              <h2 id="new-document-choice-title">新規記事作成</h2>
-              <p>作成方法を選択してください。</p>
-            </div>
-            <div class="new-document-choice-actions">
-              <button type="button" class="primary-action" data-new-from-article>記事から作成</button>
-              <a class="quiet-action" href="/admin/editor/outline/" data-new-from-outline>目次から作成</a>
-            </div>
-            <button type="submit" class="new-document-choice-cancel">キャンセル</button>
-          </form>
-        </dialog>
 
         <form class="document-form" data-document-form hidden>
           <input type="hidden" name="documentId" />
@@ -455,12 +399,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         <div class="approval-actions"><button type="button" data-review-request-cancel class="quiet-action">キャンセル</button><button type="submit" value="request" class="primary-action">フィードバックを依頼する</button></div>
       </form>
     </dialog>
-    <dialog class="reference-dialog" data-reference-dialog aria-labelledby="reference-dialog-title">
-      <div class="reference-dialog-header"><div><p class="eyebrow">公開記事の参考</p><h2 id="reference-dialog-title" data-reference-title>記事を選択してください</h2><p data-reference-meta></p></div><button type="button" class="quiet-action" data-reference-close>閉じる</button></div>
-      <div class="reference-dialog-tabs" role="tablist" aria-label="公開記事の表示方法"><button type="button" role="tab" class="is-selected" data-reference-tab="preview" aria-selected="true" aria-controls="reference-preview-panel">プレビュー</button><button type="button" role="tab" data-reference-tab="source" aria-selected="false" aria-controls="reference-source-panel">Markdown</button></div>
-      <article id="reference-preview-panel" class="article-preview reference-preview" data-reference-preview role="tabpanel" aria-label="公開記事のプレビュー"></article>
-      <pre id="reference-source-panel" class="reference-source" data-reference-source role="tabpanel" aria-label="公開記事のMarkdown原文" hidden></pre>
-    </dialog>
   </main>
 
   <script is:inline>
@@ -515,14 +453,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   select, input, textarea { background: var(--surface); border: 1px solid var(--border); border-radius: .45rem; color: var(--text); font: inherit; }
   select, input { box-sizing: border-box; min-height: 2.35rem; padding: .35rem .55rem; width: 100%; }
   .document-list { display: grid; gap: .45rem; margin-top: .35rem; max-height: 15rem; overflow: auto; padding-right: .1rem; }
-  .atlas-outline-panel { border-top:1px solid var(--border); min-width:0; padding-top:.75rem; }.atlas-outline-heading { align-items:end; display:flex; gap:.5rem; justify-content:space-between; }.atlas-outline-heading h2 { color:var(--text); font-size:1rem; margin:0; }.atlas-outline-heading > span { color:var(--muted); flex:0 0 auto; font-size:.68rem; font-weight:800; text-align:right; }.atlas-outline-description { color:var(--muted); font-size:.72rem; line-height:1.5; margin:.4rem 0 .6rem; }.atlas-outline-filters { display:grid; gap:.4rem; }.atlas-outline-filters label { color:var(--muted); display:grid; font-size:.7rem; font-weight:800; gap:.22rem; }.atlas-outline-filters select { font-size:.76rem; min-height:2.1rem; }.atlas-outline-manage-link { color:var(--accent); display:inline-block; font-size:.7rem; font-weight:700; margin-top:.55rem; text-decoration:none; }.atlas-outline-manage-link:hover { text-decoration:underline; }.atlas-outline-list { max-height:34rem; margin-top:.65rem; overflow:auto; padding-right:.15rem; }.outline-category { border-top:1px solid var(--border); padding:.55rem 0 .2rem; }.outline-category h3 { color:var(--text); font-size:.78rem; margin:0 0 .25rem; }.outline-category-title { align-items:center; display:flex; gap:.3rem; justify-content:space-between; }.outline-category-count { color:var(--muted); font-size:.64rem; font-weight:700; }.outline-article { border-bottom:1px dashed color-mix(in srgb, var(--border), transparent 20%); display:grid; gap:.28rem; padding:.42rem 0; }.outline-article-row { align-items:start; display:flex; gap:.35rem; justify-content:space-between; }.outline-article-title { color:var(--text); font-size:.74rem; line-height:1.4; min-width:0; }.outline-status { border:1px solid var(--border); border-radius:999px; flex:0 0 auto; font-size:.61rem; font-weight:800; padding:.1rem .3rem; }.outline-status-published { background:#e6f4ea; border-color:#83b995; color:#24643a; }.outline-status-planned { background:#f1f3f5; color:#596773; }.outline-status-progress { background:#fff2cc; border-color:#d9a429; color:#714f00; }.outline-status-editorial { background:#e8f3fb; border-color:#8bb9d6; color:#185c86; }.outline-article-meta { color:var(--muted); font-size:.64rem; line-height:1.4; }.outline-article-actions { display:flex; flex-wrap:wrap; gap:.35rem; }.outline-article .quiet-action { font-size:.68rem; min-height:1.95rem; padding:.28rem .45rem; width:auto; }
   .document-card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid transparent; border-radius: 0; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: .5rem; justify-content: space-between; padding: .6rem .7rem; text-align: left; width: 100%; }
   .document-card:hover, .document-card[aria-current="true"] { border-color: var(--accent); border-left-color: var(--accent); box-shadow: none; }
   .document-card small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.document-card-publication { color: var(--muted); flex: 0 0 auto; font-size: .62rem; font-weight: 800; white-space: nowrap; }.document-card-publication-source { color: var(--success,#4fbf79); }.document-card-publication-proposal { color: var(--accent); }
   .state { border-radius: 999px; font-size: .7rem; font-weight: 800; padding: .14rem .4rem; width: fit-content; }
   .state-draft { background: #edf1f5; color: #52606d; }.state-in-review { background: #fff0c6; color: #805500; }.state-on-hold { background: #f4e5e7; color: #8a3b49; }.state-approved { background: #def4e6; color: #267143; }
   .approval-dialog { width: min(92vw, 31rem); border: 1px solid #d9e3eb; border-radius: 1rem; padding: 1.5rem; color: #183047; box-shadow: 0 1.5rem 5rem #162c4030; }.approval-dialog::backdrop { background: #10203388; }.approval-dialog h2 { margin: .2rem 0 .65rem; }.approval-dialog p { line-height: 1.7; }.approval-actions { display: flex; justify-content: flex-end; gap: .65rem; margin-top: 1.25rem; flex-wrap: wrap; }
-  .reference-dialog { background:var(--surface); border:1px solid var(--border); border-radius:.8rem; box-shadow:0 1.5rem 5rem #162c4030; color:var(--text); max-height:88vh; padding:1rem; width:min(94vw,68rem); }.reference-dialog::backdrop { background:#10203388; }.reference-dialog-header { align-items:start; border-bottom:1px solid var(--border); display:flex; gap:1rem; justify-content:space-between; padding:.2rem 0 .8rem; }.reference-dialog-header h2 { font-size:1.35rem; margin:.15rem 0 .25rem; }.reference-dialog-header p:last-child { color:var(--muted); font-size:.76rem; margin:0; }.reference-dialog-tabs { border-bottom:1px solid var(--border); display:flex; gap:.2rem; margin:.7rem 0; }.reference-dialog-tabs button { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); cursor:pointer; font:inherit; font-size:.76rem; font-weight:800; padding:.45rem .6rem; }.reference-dialog-tabs button.is-selected,.reference-dialog-tabs button:hover { border-bottom-color:var(--accent); color:var(--accent); }.reference-preview { background:var(--surface); border:1px solid var(--border); border-radius:.4rem; box-sizing:border-box; height:calc(88vh - 10rem); min-height:18rem; overflow:auto; }.reference-source { background:#18212b; border-radius:.4rem; box-sizing:border-box; color:#eef6ff; font-family:var(--font-mono); font-size:.82rem; line-height:1.65; margin:0; max-height:calc(88vh - 10rem); min-height:18rem; overflow:auto; padding:.9rem; white-space:pre-wrap; }.reference-source[hidden],.reference-preview[hidden] { display:none; }
   .reference-library-dialog { background:var(--surface); border:1px solid var(--border); border-radius:.8rem; box-shadow:0 1.5rem 5rem #162c4030; color:var(--text); max-height:90vh; padding:1rem; width:min(94vw,60rem); }.reference-library-dialog::backdrop { background:#10203388; }.reference-library-inner { display:grid; gap:1rem; max-height:calc(90vh - 2rem); overflow:auto; }.reference-library-header { align-items:start; border-bottom:1px solid var(--border); display:flex; gap:1rem; justify-content:space-between; padding:.2rem 0 .8rem; }.reference-library-header h2 { font-size:1.35rem; margin:.15rem 0 .3rem; }.reference-library-header p:last-child { color:var(--muted); font-size:.76rem; line-height:1.5; margin:0; }.reference-entry-form { background:var(--surface-alt); border:1px solid var(--border); border-radius:.55rem; display:grid; gap:.65rem; grid-template-columns:repeat(2,minmax(0,1fr)); padding:.8rem; }.reference-entry-form label { display:grid; font-size:.75rem; font-weight:800; gap:.25rem; }.reference-entry-form label:nth-of-type(2),.reference-entry-form label:nth-of-type(6),.reference-entry-form label:nth-of-type(7) { grid-column:span 2; }.reference-entry-actions { align-items:center; display:flex; flex-wrap:wrap; gap:.5rem; grid-column:span 2; }.reference-entry-actions output { color:var(--muted); font-size:.74rem; }.reference-library-section { display:grid; gap:.5rem; }.reference-library-section-heading { align-items:center; display:flex; gap:.5rem; justify-content:space-between; }.reference-library-section-heading h3 { font-size:.95rem; margin:0; }.reference-library-section-heading span { color:var(--muted); font-size:.72rem; }.reference-library-list { display:grid; gap:.5rem; }.reference-library-item { background:var(--surface-alt); border:1px solid var(--border); border-left:3px solid var(--accent); display:grid; gap:.4rem; padding:.6rem .7rem; }.reference-library-item.is-used { border-left-color:var(--success,#2e8b57); }.reference-library-item header { align-items:start; display:flex; gap:.5rem; justify-content:space-between; }.reference-library-item b { font-size:.82rem; overflow-wrap:anywhere; }.reference-library-item p { color:var(--muted); font-size:.73rem; line-height:1.45; margin:0; }.reference-library-item small { color:var(--muted); font-size:.68rem; }.reference-library-item-actions { display:flex; flex-wrap:wrap; gap:.35rem; }.reference-library-item-actions button { min-height:1.9rem; padding:.25rem .5rem; width:auto; }.reference-library-empty { color:var(--muted); font-size:.78rem; margin:0; padding:.7rem 0; }
   .editor-panel { background: var(--surface); display:flex; flex-direction:column; min-width:0; padding:clamp(1rem, 2vw, 1.5rem); }
   /* base.cssの共通.empty-stateは横並びのflexを持つため、編集開始案内では
@@ -531,15 +467,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .editor-workspace .empty-state { align-items: stretch; color: var(--muted); display: flex; flex-direction: column; justify-content: center; margin: 5rem auto; max-width: 38rem; text-align: center; }
   .editor-workspace .empty-state[hidden] { display: none !important; }
   .editor-start-actions{display:grid;gap:1rem;margin:1.4rem auto 0;max-width:32rem;text-align:left;width:100%}.editor-start-actions>.primary-action{justify-self:center}.editor-start-actions .source-picker{background:var(--surface-alt);border:1px solid var(--border);border-radius:.65rem;margin:0;padding:1rem}.editor-start-actions .source-picker strong{color:var(--text);font-size:.9rem}.editor-start-actions .source-picker>span{font-size:.76rem;font-weight:500;line-height:1.5}.editor-start-actions .source-picker .quiet-action{justify-self:start}
-  .new-document-choice { background: var(--surface); border: 1px solid var(--border); border-radius: .65rem; color: var(--text); padding: 0; width: min(28rem, calc(100vw - 2rem)); }
-  .new-document-choice::backdrop { background: rgb(0 0 0 / .52); }
-  .new-document-choice-panel { display: grid; gap: 1rem; padding: 1.25rem; }
-  .new-document-choice-panel h2 { font-size: 1.05rem; margin: 0; }
-  .new-document-choice-panel p { color: var(--muted); font-size: .78rem; margin: .35rem 0 0; }
-  .new-document-choice-actions { display: grid; gap: .55rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .new-document-choice-actions > * { align-items: center; display: inline-flex; justify-content: center; min-height: 2.35rem; text-align: center; text-decoration: none; }
-  .new-document-choice-cancel { background: transparent; border: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: .76rem; justify-self: end; padding: .25rem .35rem; }
-  .new-document-choice-cancel:hover { color: var(--text); }
   .document-form { display:grid; flex:1 1 auto; gap:1rem; min-height:0; }.document-form[hidden]{display:none!important}
   .directive-completion-hint, .latex-completion-hint { color:var(--muted); font-size:.72rem; line-height:1.5; margin:0; }.directive-completion-hint code, .latex-completion-hint code { background:var(--surface-alt); border:1px solid var(--border); border-radius:.25rem; padding:.05rem .2rem; }.directive-completion-hint kbd, .latex-completion-hint kbd { background:var(--surface-alt); border:1px solid var(--border); border-radius:.25rem; font:inherit; margin-left:.18rem; padding:.05rem .25rem; }
   .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls>span:not(.pane-layout-control){color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-control{display:inline-flex}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:1.9rem;padding:.2rem .5rem}.pane-layout-control>button:first-child{border-radius:.35rem 0 0 .35rem}.pane-layout-control>.pane-popout-toggle{border-left-color:var(--border);border-radius:0 .35rem .35rem 0;font-size:.9rem;line-height:1;min-width:1.7rem;padding:.2rem .35rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected,.pane-layout-controls button[aria-pressed="true"],.pane-layout-control.is-popped-out>button{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}.pane-layout-control>.pane-popout-toggle:hover{background:var(--accent);color:var(--surface)}
@@ -1260,23 +1187,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 </style>
 
 <style is:global>
-  /* JSで生成する目次項目にも、記事編集画面のデザイントークンを適用する。 */
-  .atlas-outline-list { max-height:34rem; margin-top:.65rem; overflow:auto; padding-right:.15rem; }
-  .outline-category { border-top:1px solid var(--border-default); padding:.55rem 0 .2rem; }
-  .outline-category-title { align-items:center; display:flex; gap:.3rem; justify-content:space-between; }
-  .outline-category h3 { color:var(--text-primary); font-size:.78rem; margin:0 0 .25rem; }
-  .outline-category-count { color:var(--text-secondary); font-size:.64rem; font-weight:700; }
-  .outline-article { border-bottom:1px dashed color-mix(in srgb, var(--border-default), transparent 20%); display:grid; gap:.28rem; padding:.42rem 0; }
-  .outline-article-row { align-items:start; display:flex; gap:.35rem; justify-content:space-between; }
-  .outline-article-title { color:var(--text-primary); font-size:.74rem; line-height:1.4; min-width:0; overflow-wrap:anywhere; }
-  .outline-status { border:1px solid var(--border-default); border-radius:999px; flex:0 0 auto; font-size:.61rem; font-weight:800; padding:.1rem .3rem; }
-  .outline-status-published { background:#e6f4ea; border-color:#83b995; color:#24643a; }
-  .outline-status-planned { background:#f1f3f5; color:#596773; }
-  .outline-status-progress { background:#fff2cc; border-color:#d9a429; color:#714f00; }
-  .outline-status-editorial { background:#e8f3fb; border-color:#8bb9d6; color:#185c86; }
-  .outline-article-meta { color:var(--text-secondary); font-size:.64rem; line-height:1.4; }
-  .atlas-outline-list .quiet-action { align-self:start; font-size:.68rem; justify-self:start; min-height:1.95rem; padding:.28rem .45rem; width:auto; }
-  @media (max-width:700px) { .atlas-outline-list { max-height:34rem; } .atlas-outline-list .quiet-action { width:auto; } }
 </style>
 
 <style is:global>
@@ -1442,7 +1352,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   type Subject = { slug: string; name: string; status: "published" | "preparing"; categories: { slug: string; name: string; order: number }[] };
   type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string; status: "draft" | "in-review" | "published"; catalogState?: "managed" | "unmanaged" | "needs-registration" | "duplicate" | "identity-conflict" | "editorial-only"; editorialDocumentId?: string | null };
   type PublicCatalogEntry = { locale?: unknown; subject?: unknown; category?: unknown; slug?: unknown; source_article_id?: unknown; title?: unknown; summary?: unknown; concept_id?: unknown; public_status?: unknown; state?: unknown; editorial_document_id?: unknown };
-  type PlannedArticle = { key: string; subject: string; category: string; title: string; order: number; progress: "not-started" | "in-progress"; slug: string; conceptId: string };
   type ConceptOption = { id: string; subject: string; category: string; name: string; nameEn: string };
   type EditorialAsset = { id: string; filename: string; mediaType: string; bytes: number; alt: string; latexName: string; createdAt: string; marker: string };
   type LockedRange = { start: number; end: number; text: string };
@@ -1485,13 +1394,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       history.scrollRestoration = "manual";
       resetEditorEntryScroll();
     }
-    let { subjects, articles: initialArticles, plannedArticles, conceptOptions, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[]; conceptOptions: ConceptOption[]; commentTags: string[] };
+    let { subjects, articles: initialArticles, conceptOptions, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; conceptOptions: ConceptOption[]; commentTags: string[] };
     const staticArticles = initialArticles;
     let articles = initialArticles;
-    let publicCatalogSource: "api" | "static" = "static";
     // The document list and selected document can render from the server response
-    // immediately.  The public catalog is enrichment used by the outline/source
-    // picker, so keep a handle for flows that explicitly need that catalog.
+    // immediately. The public article catalog is still needed by the source-article
+    // picker and direct source-article links.
     let publicCatalogReady: Promise<void> = Promise.resolve();
     const externalStatementIds = [...new Set(articles.flatMap((article) => [...article.body.matchAll(/\{#([A-Za-z][A-Za-z0-9_-]*)\}/g)].map((match) => match[1].toLowerCase())))];
     const form = root.querySelector<HTMLFormElement>("[data-document-form]")!;
@@ -1515,10 +1423,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const empty = root.querySelector<HTMLElement>("[data-editor-empty]")!;
     const list = root.querySelector<HTMLElement>("[data-document-list]")!;
     const documentCount = root.querySelector<HTMLElement>("[data-document-count]")!;
-    const outlineSubject = root.querySelector<HTMLSelectElement>("[data-outline-subject]")!;
-    const outlineCategory = root.querySelector<HTMLSelectElement>("[data-outline-category]")!;
-    const outlineList = root.querySelector<HTMLElement>("[data-atlas-outline]")!;
-    const outlineSummary = root.querySelector<HTMLElement>("[data-outline-summary]")!;
     const sourcePicker = root.querySelector<HTMLSelectElement>("[data-source-article]")!;
     const sourceSubject = root.querySelector<HTMLSelectElement>("[data-source-subject]")!;
     const subject = form.elements.namedItem("subject") as HTMLSelectElement;
@@ -1720,14 +1624,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const progressBody = root.querySelector<HTMLTextAreaElement>("[data-progress-body]")!;
     const revisions = root.querySelector<HTMLElement>("[data-revision-list]")!;
     const feedbackRequestHistory = root.querySelector<HTMLElement>("[data-feedback-request-history]")!;
-    const referenceDialog = root.querySelector<HTMLDialogElement>("[data-reference-dialog]")!;
-    const referenceTitle = root.querySelector<HTMLElement>("[data-reference-title]")!;
-    const referenceMeta = root.querySelector<HTMLElement>("[data-reference-meta]")!;
-    const referencePreview = root.querySelector<HTMLElement>("[data-reference-preview]")!;
-    const referenceSource = root.querySelector<HTMLElement>("[data-reference-source]")!;
     const newDocumentButton = root.querySelector<HTMLButtonElement>("[data-new-document]")!;
-    const newDocumentChoice = root.querySelector<HTMLDialogElement>("[data-new-document-choice]")!;
-    const newFromArticleButton = root.querySelector<HTMLButtonElement>("[data-new-from-article]")!;
     const documentSidebar = root.querySelector<HTMLElement>(".document-sidebar")!;
     const sidebarCollapseButton = root.querySelector<HTMLButtonElement>("[data-sidebar-collapse]")!;
     const personalNote = root.querySelector<HTMLTextAreaElement>("[data-personal-note]")!;
@@ -3034,12 +2931,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         const normalized = normalizePublicCatalog(data.catalog);
         if (!normalized) throw new Error("公開記事カタログの形式を確認できませんでした。");
         articles = normalized;
-        publicCatalogSource = "api";
       } catch {
         articles = staticArticles;
-        publicCatalogSource = "static";
       }
-      root.dataset.publicCatalogSource = publicCatalogSource;
     };
     const normalizeCustomMathPresets = (raw: unknown): CustomMathPreset[] => {
       if (!Array.isArray(raw)) return [];
@@ -4161,7 +4055,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           connectCollaboration(savedId);
           // 新規原稿を保存した直後にURLも永続的な原稿IDへ切り替える。
           // new=1 のまま再読み込みすると、保存済み原稿ではなく空の新規原稿を
-          // 再生成してしまい、目次との紐付けや作成者表示が失われるため。
+          // 再生成してしまい、既存の学習サイト連携や作成者表示が失われるため。
           const nextQuery = new URLSearchParams({ document: savedId });
           if (outlineId) nextQuery.set("outlineId", outlineId);
           window.history.replaceState({}, "", `${window.location.pathname}?${nextQuery.toString()}${window.location.hash}`);
@@ -4729,48 +4623,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId || "";
       heading.textContent = source ? `${source.title}（運営管理へ登録）` : "新規原稿";
     };
-    const openOutlineDocument = (document: Omit<Document, "body">) => { void openDocument(document.id).then(() => loadRevisions(document.id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); };
     const renderDocuments = () => { const unique = [...new Map(documents.map((item) => [item.id, item])).values()]; documentCount.textContent = unique.length ? `${unique.length}件` : ""; list.innerHTML = unique.length ? unique.map((item) => { const learningSitePublished = !item.published_at && item.document_kind !== "update-proposal" && learningSiteHasPublishedSource(item.source_article_id); const proposalLabel = item.document_kind === "update-proposal" ? '<span class="document-card-publication document-card-publication-proposal">更新案</span>' : ""; const publicationLabel = item.published_at ? '<span class="document-card-publication">公開済み・運営管理中</span>' : learningSitePublished ? '<span class="document-card-publication document-card-publication-source">学習サイト公開済み</span>' : '<span class="document-card-publication">未公開</span>'; const publicationDescription = item.document_kind === "update-proposal" ? "公開記事の更新案" : item.published_at ? "公開済み・運営管理中" : learningSitePublished ? "学習サイト公開済み" : "未公開"; return `<button class="document-card" type="button" data-document-id="${item.id}" aria-label="${esc(item.subject)} / ${esc(item.category)}・${statusLabel[item.status]}・${publicationDescription}の記事を開く"><small>${esc(item.subject)} / ${esc(item.category)}</small><span class="state state-${item.status}">${statusLabel[item.status]}</span>${proposalLabel}${publicationLabel}</button>`; }).join("") : '<p class="comment-empty">まだ保存された記事はありません。</p>'; };
-    const allowedOutlineSubjects = () => subjects.filter((item) => assignedSubjects.length ? assignedSubjects.includes(item.slug) : isManager);
     const documentForSourceArticle = (article: SourceArticle) => documents.find((item) => item.document_kind === "update-proposal" && item.base_document_id && documents.some((base) => base.id === item.base_document_id && base.source_article_id === article.articleId)) ?? documents.find((item) => item.source_article_id === article.articleId && item.document_kind !== "update-proposal") ?? documents.find((item) => item.subject === article.subject && item.category === article.category && item.slug === article.slug && item.document_kind !== "update-proposal");
-    const documentForPlannedArticle = (item: PlannedArticle) => documents.find((document) => document.subject === item.subject && document.category === item.category && document.title === item.title);
-    const fillOutlineCategories = (selected = outlineCategory.value) => {
-      const selectedSubject = subjects.find((item) => item.slug === outlineSubject.value);
-      if (!selectedSubject) { outlineCategory.innerHTML = '<option value="">カテゴリはありません</option>'; outlineCategory.disabled = true; return; }
-      const categories = new Map(selectedSubject.categories.map((item) => [item.slug, item]));
-      plannedArticles.filter((item) => item.subject === selectedSubject.slug).forEach((item) => { if (!categories.has(item.category)) categories.set(item.category, { slug: item.category, name: item.category, order: 999 }); });
-      const options = [...categories.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "ja"));
-      outlineCategory.disabled = options.length === 0;
-      outlineCategory.innerHTML = [`<option value="">すべてのカテゴリ</option>`, ...options.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`)].join("");
-      outlineCategory.value = options.some((item) => item.slug === selected) ? selected : "";
-    };
-    const fillOutlineSubjects = (selected = outlineSubject.value) => {
-      const available = allowedOutlineSubjects();
-      outlineSubject.innerHTML = available.length ? available.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}${item.status === "preparing" ? "（準備中）" : ""}</option>`).join("") : '<option value="">担当分野がありません</option>';
-      outlineSubject.disabled = available.length === 0;
-      outlineSubject.value = available.some((item) => item.slug === selected) ? selected : available[0]?.slug ?? "";
-      fillOutlineCategories();
-    };
-    const renderAtlasOutline = () => {
-      const selectedSubject = subjects.find((item) => item.slug === outlineSubject.value);
-      if (!selectedSubject) { outlineSummary.textContent = ""; outlineList.innerHTML = '<p class="comment-empty">担当分野の目次を読み込めません。</p>'; return; }
-      const selectedCategory = outlineCategory.value;
-      const categoryMap = new Map(selectedSubject.categories.map((item) => [item.slug, item]));
-      plannedArticles.filter((item) => item.subject === selectedSubject.slug).forEach((item) => { if (!categoryMap.has(item.category)) categoryMap.set(item.category, { slug: item.category, name: item.category, order: 999 }); });
-      const categories = [...categoryMap.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "ja")).filter((item) => !selectedCategory || item.slug === selectedCategory);
-      const publishedArticles = articles.filter((item) => item.status === "published" && item.subject === selectedSubject.slug);
-      const planned = plannedArticles.filter((item) => item.subject === selectedSubject.slug);
-      outlineSummary.textContent = `${publishedArticles.length}記事・${planned.length}件の予定（${publicCatalogSource === "api" ? "API同期" : "静的データ"}）`;
-      outlineList.innerHTML = categories.length ? categories.map((categoryItem) => {
-        const categoryArticles = publishedArticles.filter((item) => item.category === categoryItem.slug).sort((a, b) => a.title.localeCompare(b.title, "ja"));
-        const categoryPlanned = planned.filter((item) => item.category === categoryItem.slug).sort((a, b) => a.order - b.order);
-        const entries = [
-          ...categoryArticles.map((item) => { const document = documentForSourceArticle(item); const update = Boolean(document && document.document_kind !== "update-proposal" && document.published_at); const updateInProgress = Boolean(document && (document.document_kind === "update-proposal" || activeUpdateProposalDocumentIds.has(document.id) || hasUnpublishedPublicationChanges(document))); return { title: item.title, status: document ? updateInProgress ? `公開済み・更新案作成中（${statusLabel[document.status]}）` : update ? `公開済み・更新案を作成可能（${statusLabel[document.status]}）` : `公開済み・運営原稿あり（${statusLabel[document.status]}）` : "公開済み・未登録", statusClass: document ? "outline-status-editorial" : "outline-status-published", actionMarkup: `<button type="button" class="quiet-action" data-reference-article="${esc(item.articleId)}">本文を見る</button>${document ? `<button type="button" class="quiet-action" data-outline-article="${esc(item.articleId)}"${update ? ' data-start-update="true"' : ""}>${updateInProgress ? "更新案作成中" : update ? "更新案を作成" : "運営原稿を開く"}</button>` : `<button type="button" class="quiet-action" data-outline-article="${esc(item.articleId)}">運営管理へ登録</button>`}`, articleId: item.articleId, plannedKey: "", meta: document ? `${item.slug} ・ 公開記事と運営原稿を紐付け済み` : `${item.slug} ・ 学習サイトで公開中／運営原稿なし` }; }),
-          ...categoryPlanned.map((item) => { const document = documentForPlannedArticle(item); const conceptReady = Boolean(item.conceptId); return { title: item.title, status: document ? `運営原稿・${statusLabel[document.status]}` : !conceptReady ? "概念未設定" : item.progress === "in-progress" ? "執筆中" : "未着手", statusClass: document ? "outline-status-editorial" : conceptReady && item.progress === "in-progress" ? "outline-status-progress" : "outline-status-planned", actionMarkup: document ? `<button type="button" class="quiet-action" data-outline-planned="${esc(item.key)}">運営原稿を開く</button>` : conceptReady ? `<button type="button" class="quiet-action" data-outline-planned="${esc(item.key)}">執筆を開始</button>` : '<span class="outline-article-meta">concepts.yamlへの概念登録が必要です</span>', articleId: "", plannedKey: item.key, meta: !conceptReady ? "公開前提を未設定" : item.progress === "in-progress" ? "学習サイトで執筆中" : "今後作成予定" }; }),
-        ];
-        return `<section class="outline-category"><div class="outline-category-title"><h3>${esc(categoryItem.name)}</h3><span class="outline-category-count">${entries.length}件</span></div>${entries.length ? entries.map((entry) => `<article class="outline-article"><div class="outline-article-row"><span class="outline-article-title">${esc(entry.title)}</span><span class="outline-status ${entry.statusClass}">${esc(entry.status)}</span></div><span class="outline-article-meta">${esc(entry.meta)}</span><div class="outline-article-actions">${entry.actionMarkup}</div></article>`).join("") : '<p class="comment-empty">このカテゴリの目次はまだありません。</p>'}</section>`;
-      }).join("") : '<p class="comment-empty">この分野の目次情報はまだありません。</p>';
-    };
     const loadEditorialTaxonomy = async () => {
       try {
         const response = await fetch("/api/admin/editor/taxonomy?project=atlas", { credentials: "same-origin", cache: "no-store" });
@@ -4786,7 +4640,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         });
         subjects = [...merged.values()];
       } catch {
-        // 動的カタログが未適用の環境では静的な目次をそのまま使う。
+        // 動的カタログが未適用の環境では静的な分野・カテゴリを使う。
       }
     };
     const loadDocuments = async () => {
@@ -4801,26 +4655,20 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       assignedSubjects = data.scope?.subjects ?? [];
       root.dataset.manager = String(isManager);
       newDocumentButton.disabled = !(isManager || assignedSubjects.length);
-      // 原稿一覧と目次は独立ページへ移行したため、編集画面では左バーを表示しない。
+      // 記事一覧は別画面に置き、編集画面では左バーを表示しない。
       documentSidebar.setAttribute("hidden", "");
       documentSidebar.setAttribute("aria-hidden", "true");
       (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager;
       if (currentDocument) updatePublicationActions(currentDocument);
 
       // Render the editor list from the first response without waiting for the
-      // public catalog (which can be considerably slower on a cold edge).  The
-      // catalog then refreshes only the source/outline enrichment in place.
-      // Starting this request before the outline work is important: rendering
-      // hundreds of planned entries can otherwise delay discovery of the fetch.
+      // public catalog (which can be considerably slower on a cold edge). The
+      // catalog and dynamic taxonomy refresh article-source and form options.
       publicCatalogReady = Promise.all([loadPublicCatalog(), loadEditorialTaxonomy()]).then(() => {
         populateEditorSubjects(); fillCategories(category.value, true); populateSourceSubjects(); fillSourceArticles();
-        window.setTimeout(() => { fillOutlineSubjects(); renderAtlasOutline(); }, 0);
       });
       void publicCatalogReady.catch(() => undefined);
       populateEditorSubjects(); fillCategories(category.value, true); populateSourceSubjects(); fillSourceArticles(); renderDocuments();
-      // Keep the first response path responsive; outline enrichment is useful
-      // but not required to open and edit the selected article.
-      window.setTimeout(() => { fillOutlineSubjects(); renderAtlasOutline(); }, 0);
       void loadPublicationIntegration();
       editorLoadRetry?.success();
     };
@@ -5035,58 +4883,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     });
     conceptId.addEventListener("invalid", () => { conceptIdAdvanced.open = true; conceptIdPreview.textContent = "概念を選択するか、概念IDを入力してください"; });
     sourceSubject.addEventListener("change", fillSourceArticles);
-    outlineSubject.addEventListener("change", () => { fillOutlineCategories(); renderAtlasOutline(); });
-    outlineCategory.addEventListener("change", renderAtlasOutline);
-    outlineList.addEventListener("click", (event) => {
-      const referenceButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-reference-article]");
-      if (referenceButton) {
-        const article = articles.find((item) => item.articleId === referenceButton.dataset.referenceArticle);
-        if (!article) return;
-        referenceTitle.textContent = article.title;
-        referenceMeta.textContent = `${article.subject} / ${article.category} / ${article.slug} ・ 公開済み記事の構成を参考表示`;
-        referenceSource.textContent = article.body;
-        void renderPreviewInto(referencePreview, article.body, []);
-        referencePreview.hidden = false;
-        referenceSource.hidden = true;
-        root.querySelectorAll<HTMLButtonElement>("[data-reference-tab]").forEach((tab) => {
-          const selected = tab.dataset.referenceTab === "preview";
-          tab.classList.toggle("is-selected", selected);
-          tab.setAttribute("aria-selected", String(selected));
-        });
-        referenceDialog.showModal();
-        return;
-      }
-      const articleButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-outline-article]");
-      if (articleButton) {
-        const article = articles.find((item) => item.articleId === articleButton.dataset.outlineArticle);
-        if (!article) return;
-        const existing = documentForSourceArticle(article);
-        if (existing) { void openDocument(existing.id).then(() => loadRevisions(existing.id)).then(() => { if (articleButton.dataset.startUpdate === "true") beginUpdateProposal(); }).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); return; }
-        emptyDocument(article);
-        saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。入力すると自動保存されます。保存だけでは自動公開されません。";
-        return;
-      }
-      const plannedButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-outline-planned]");
-      if (!plannedButton) return;
-      const item = plannedArticles.find((planned) => planned.key === plannedButton.dataset.outlinePlanned);
-      if (!item) return;
-      const existing = documentForPlannedArticle(item);
-      if (existing) { openOutlineDocument(existing); return; }
-      emptyDocument({ articleId: "", title: item.title, subject: item.subject, category: item.category, slug: item.slug, summary: "学習サイトの目次から作成する記事です。本文と要約を入力してください。", conceptId: item.conceptId, body: "", status: "published" });
-      heading.textContent = `${item.title}（新規原稿）`;
-      saveMessage.value = "未着手の目次から新規原稿を始めます。入力すると自動保存され、運営側の原稿一覧に追加されます。";
-    });
-    root.querySelector<HTMLButtonElement>("[data-reference-close]")!.addEventListener("click", () => referenceDialog.close());
-    root.querySelectorAll<HTMLButtonElement>("[data-reference-tab]").forEach((tab) => tab.addEventListener("click", () => {
-      const selected = tab.dataset.referenceTab === "preview";
-      referencePreview.hidden = !selected;
-      referenceSource.hidden = selected;
-      root.querySelectorAll<HTMLButtonElement>("[data-reference-tab]").forEach((item) => {
-        const active = item === tab;
-        item.classList.toggle("is-selected", active);
-        item.setAttribute("aria-selected", String(active));
-      });
-    }));
     sidebarCollapseButton.addEventListener("click", () => setSidebarCollapsed(!root.classList.contains("sidebar-collapsed"), true));
     status.addEventListener("change", () => {
       state.textContent = statusLabel[status.value as keyof typeof statusLabel];
@@ -5512,14 +5308,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     form.addEventListener("invalid", (event) => {
       if (event.target instanceof HTMLElement && metadata.contains(event.target)) metadata.open = true;
     }, true);
-    const openNewDocumentChoice = () => {
-      if (!newDocumentChoice.open) newDocumentChoice.showModal();
-    };
-    newDocumentButton.addEventListener("click", openNewDocumentChoice);
-    newFromArticleButton.addEventListener("click", () => {
-      newDocumentChoice.close();
+    newDocumentButton.addEventListener("click", () => {
       emptyDocument();
-      saveMessage.value = "記事から新規原稿を開始しました。入力すると自動保存されます。";
+      saveMessage.value = "新規原稿を開始しました。入力すると自動保存されます。";
     });
     root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "運営管理へ登録する公開記事を選んでください。"; return; } const existing = documents.find((item) => item.source_article_id === source.articleId) ?? documents.find((item) => item.subject === source.subject && item.category === source.category && item.slug === source.slug); if (existing) { void openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。新しい原稿は作成していません。"; return; } emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。入力すると自動保存されます。保存だけでは自動公開されません。"; });
     list.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-document-id]"); if (button) { const id=button.dataset.documentId??""; void openDocument(id).then(()=>loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); } });
@@ -5637,7 +5428,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     // 旧バージョンの折りたたみ状態を復元しない。編集画面に左バーは存在しない。
     root.classList.remove("sidebar-collapsed");
     document.addEventListener("astro:before-swap", () => { disconnectCollaboration(); releaseAllAssetPreviews(); }, { once: true });
-    const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const sourceArticleId = query.get("sourceArticle"); const isNewDocument = query.get("new") === "1"; const chooseNewDocument = isNewDocument && query.get("choose") === "1"; const updateModeRequested = query.get("mode") === "update";
+    const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const sourceArticleId = query.get("sourceArticle"); const isNewDocument = query.get("new") === "1"; const updateModeRequested = query.get("mode") === "update";
     if ((reviewDocumentId || sourceArticleId || isNewDocument) && !window.location.hash) {
       initialScrollRestoreUntil = performance.now() + 15_000;
       [0, 50, 250, 750, 1_500, 3_000, 4_500, 8_000, 12_000].forEach((delay) => window.setTimeout(restoreInitialEditorScroll, delay));
@@ -5668,9 +5459,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (existing) { await openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。"; }
         else { emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。入力すると自動保存されます。保存だけでは自動公開されません。"; }
       } else if (isNewDocument) {
-        // 目次からの新規作成では、動的に追加された分野・カテゴリを
-        // selectへ反映してから初期値を適用する。先にemptyDocumentを呼ぶと
-        // 静的カタログの先頭分野へフォールバックしてしまう。
+        // 動的に追加された分野・カテゴリをselectへ反映してから、
+        // URLに初期値がある場合は適用する。
         await publicCatalogReady;
         const seededSubject = query.get("subject")?.trim() ?? "";
         const seededCategory = query.get("category")?.trim() ?? "";
@@ -5682,11 +5472,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (hasSeed) {
           const seed: SourceArticle = { articleId: "", title: seededTitle, subject: seededSubject, category: seededCategory, slug: seededSlug, summary: seededSummary, conceptId: seededConceptId, body: "", status: "draft" };
           emptyDocument(seed);
-          saveMessage.value = "目次から新規原稿を開始しました。本文を入力すると自動保存されます。";
-        } else if (!chooseNewDocument) emptyDocument();
+          saveMessage.value = "新規原稿を開始しました。本文を入力すると自動保存されます。";
+        } else emptyDocument();
       }
       resetEditorEntryScroll(); restoreInitialEditorScroll();
-      if (chooseNewDocument) window.requestAnimationFrame(openNewDocumentChoice);
       requestAnimationFrame(() => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); restoreInitialEditorScroll(); requestAnimationFrame(restoreInitialEditorScroll); });
     };
     editorLoadRetry = createAdminLoadRetry(root, () => loadEditorEntry(), "原稿一覧を読み込めませんでした。", { scope: "editor-documents" });

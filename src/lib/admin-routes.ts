@@ -82,8 +82,6 @@ export const globalAdminPrototypePaths = uiPrototypeNames.flatMap((name) => {
 // Nested pages stay out of the top-level navigation list while still passing
 // through the admin Worker page gate.
 const adminNestedPagePathSet = new Set([
-  "/admin/editor/outline",
-  "/admin/editor/outline/",
   "/admin/member-profile/edit",
   "/admin/member-profile/edit/",
   ...globalAdminPrototypePaths,

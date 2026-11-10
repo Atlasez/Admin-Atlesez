@@ -97,7 +97,6 @@ async function mockAdminApi(
   },
   document: Record<string, unknown> = documentItem,
   feedbackRequests: Record<string, unknown>[] = [],
-  outlineEntries: Record<string, unknown>[] = [],
 ) {
   await page.route("**/api/admin/**", async (route) => {
     const request = route.request();
@@ -108,24 +107,6 @@ async function mockAdminApi(
         documents: [document],
         mentionNames: ["Alice", "Bob"],
         scope,
-      };
-    } else if (url.pathname === "/api/admin/editor/outline") {
-      payload = {
-        entries: outlineEntries.length
-          ? outlineEntries
-          : [
-              {
-                id: "outline-1",
-                key: "mathematics/group-theory/2",
-                subject: "mathematics",
-                category: "group-theory",
-                slug: "lagrange-theorem",
-                title: "ラグランジュの定理",
-                summary: "群の位数と部分群の関係",
-                order: 2,
-                status: "active",
-              },
-            ],
       };
     } else if (url.pathname === "/api/admin/editor/taxonomy") {
       payload = { catalog: [] };
@@ -229,116 +210,24 @@ test("記事編集画面で該当記事の問題報告を確認できる", async
   );
 });
 
-test("新規記事作成では記事作成方法を選択できる", async ({ page }) => {
+test("目次ページを廃止し、新規記事作成は直接開始する", async ({ page }) => {
   await mockAdminApi(page);
-  await page.goto("./admin/editor/?new=1&choose=1");
+  const removedPage = await page.goto("./admin/editor/outline/");
+  expect(removedPage?.status()).toBe(404);
 
-  const dialog = page.locator("[data-new-document-choice]");
-  await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "記事から作成" }),
-  ).toBeVisible();
-  await expect(
-    dialog.getByRole("link", { name: "目次から作成" }),
-  ).toHaveAttribute("href", "/admin/editor/outline/");
-
-  await dialog.getByRole("button", { name: "記事から作成" }).click();
-  await expect(dialog).toBeHidden();
+  await page.goto("./admin/editor/?new=1&from=articles");
   await expect(page.locator("[data-document-form]")).toBeVisible();
   await expect(page.locator('input[name="title"]')).toHaveValue("");
-});
-
-test("記事編集画面に目次サイドバーを追加せず、独立した目次から執筆を開始できる", async ({
-  page,
-}) => {
-  await mockAdminApi(page);
-  await page.goto("./admin/editor/?new=1");
-
-  await expect(page.locator(".document-sidebar")).toBeHidden();
-  await expect(
-    page.getByRole("link", { name: "学習サイトの目次" }),
-  ).toHaveAttribute("href", "/admin/editor/outline/");
-});
-
-test("独立した目次ページから未着手の記事を執筆開始できる", async ({ page }) => {
-  await mockAdminApi(page);
-  await page.goto("./admin/editor/outline/");
-  await expect(
-    page.getByRole("heading", { name: "学習サイトの目次" }),
-  ).toBeVisible();
-  await page.locator("[data-outline-subject]").selectOption("mathematics");
-  await expect(
-    page.locator("[data-outline-list] .outline-entry").first(),
-  ).toBeVisible();
-  const startLink = page.locator("[data-outline-list] a").first();
-  await expect(startLink).toHaveText(/執筆を開始|記事を開く/);
-  const href = await startLink.getAttribute("href");
-  expect(href).toContain("subject=mathematics");
-  if (href?.includes("new=1")) {
-    await page.goto(`.${href}`);
-    await expect(page.locator('input[name="title"]')).toHaveValue(
-      "ラグランジュの定理",
-    );
-    await expect(page.locator('input[name="slug"]')).toHaveValue(
-      "lagrange-theorem",
-    );
-  }
-});
-
-test("目次APIがHTMLを返しても内部のJSON解析エラーを表示しない", async ({
-  page,
-}, testInfo) => {
-  await page.route("**/api/admin/editor/**", (route) =>
-    route.fulfill({
-      status: 502,
-      contentType: "text/html",
-      body: "<!doctype html><title>temporary upstream error</title>",
-    }),
+  await expect(page.locator("[data-new-document-choice]")).toHaveCount(0);
+  await expect(page.getByText("学習サイトの目次", { exact: true })).toHaveCount(
+    0,
   );
-  await page.goto("./admin/editor/outline/?subject=mathematics");
-  await expect(page.locator("[data-outline-list]")).toContainText(
-    "原稿一覧を読み込めませんでした。（HTTP 502）",
-  );
-  await expect(page.locator("body")).not.toContainText("Unexpected token");
-  await page.screenshot({
-    path: testInfo.outputPath("outline-html-error.png"),
-    fullPage: true,
-  });
-});
+  await expect(page.getByRole("link", { name: /目次/ })).toHaveCount(0);
 
-test("目次APIのDB列名を画面モデルへ正規化して表示する", async ({ page }) => {
-  await mockAdminApi(
-    page,
-    undefined,
-    undefined,
-    [],
-    [
-      {
-        id: "outline-db-1",
-        subject_slug: "mathematics",
-        category_slug: "group-theory",
-        slug: "concentration-test",
-        title: "集中不等式",
-        summary: "APIのsnake_case行",
-        sort_order: 10,
-        parent_id: null,
-        status: "active",
-      },
-    ],
-  );
-  await page.goto(
-    "./admin/editor/outline/?subject=mathematics&category=group-theory",
-  );
-  await expect(
-    page
-      .locator("[data-outline-list] .outline-entry-title")
-      .filter({ hasText: "集中不等式" }),
-  ).toHaveCount(1);
-  await expect(
-    page
-      .locator("[data-outline-list] .outline-entry-meta")
-      .filter({ hasText: "concentration-test" }),
-  ).toHaveCount(1);
+  await page.goto("./admin/editor/");
+  await page.getByRole("button", { name: "新規原稿を作成" }).click();
+  await expect(page.locator("[data-document-form]")).toBeVisible();
+  await expect(page.locator('input[name="title"]')).toHaveValue("");
 });
 
 test("分野情報APIの失敗時は読み込み中を残さず、再試行で表示を復旧する", async ({
@@ -441,11 +330,10 @@ test("分野情報APIの失敗時は読み込み中を残さず、再試行で�
   await expect(page.locator("[data-genre-roles] .loading")).toHaveCount(0);
 });
 
-test("分野・カテゴリ・目次を順に追加して、目次から記事作成へ進める", async ({
+test("分野・カテゴリを管理し、新規原稿の選択肢へ反映する", async ({
   page,
 }, testInfo) => {
   const taxonomy: Array<Record<string, unknown>> = [];
-  const outlineEntries: Array<Record<string, unknown>> = [];
   let sequence = 0;
   await page.route("**/api/admin/**", async (route) => {
     const request = route.request();
@@ -508,38 +396,6 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({ catalog: taxonomy }),
-      });
-      return;
-    }
-    if (url.pathname === "/api/admin/editor/outline") {
-      if (request.method() === "POST") {
-        const body = JSON.parse(request.postData() ?? "{}");
-        const id = `outline-${++sequence}`;
-        const entry = {
-          id,
-          key: id,
-          subject: body.subject,
-          category: body.category,
-          slug: body.slug || `outline-${sequence}`,
-          title: body.title,
-          summary: body.summary ?? "",
-          order: Number(body.sortOrder ?? 0),
-          sort_order: Number(body.sortOrder ?? 0),
-          status: "active",
-          document_id: null,
-        };
-        outlineEntries.push(entry);
-        await route.fulfill({
-          status: 201,
-          contentType: "application/json",
-          body: JSON.stringify({ ok: true, id }),
-        });
-        return;
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ entries: outlineEntries }),
       });
       return;
     }
@@ -757,43 +613,21 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
     page.locator("[data-taxonomy-content] .taxonomy-card").nth(0),
   ).toContainText("統計学");
 
-  await page.goto("./admin/editor/outline/?subject=subject-1");
-  await expect(page.locator("[data-outline-subject]")).toHaveValue("subject-1");
-  await page.getByText("目次項目を追加", { exact: true }).click();
-  await expect(
-    page.locator('[data-form-category] option[value="category-2"]'),
-  ).toHaveText("機械学習（基礎）");
-  await page.locator("[data-form-category]").selectOption("category-2");
-  await page
-    .locator('[data-outline-form] input[name="title"]')
-    .fill("集中不等式");
-  await page
-    .locator('[data-outline-form] input[name="slug"]')
-    .fill("concentration-inequality");
-  await page.locator('[data-outline-form] button[type="submit"]').click();
-  await expect(
-    page.locator("[data-outline-list] .outline-entry-title", {
-      hasText: "集中不等式",
-    }),
-  ).toBeVisible();
-  await expect(page.locator("[data-outline-list] a").first()).toHaveAttribute(
-    "href",
-    /subject-1/,
+  await page.goto("./admin/editor/?new=1");
+  const editorSubject = page.locator('select[name="subject"]');
+  const editorCategory = page.locator('select[name="category"]');
+  await expect(page.locator("[data-document-form]")).toBeVisible();
+  await expect(editorSubject.locator('option[value="subject-1"]')).toHaveText(
+    "情報",
   );
-  const articleHref = await page
-    .locator("[data-outline-list] a")
-    .first()
-    .getAttribute("href");
-  expect(articleHref).toContain("new=1");
-  expect(articleHref).toContain("outline-");
-  await page.goto(`.${articleHref}`);
-  await expect(page.locator('input[name="title"]')).toHaveValue("集中不等式");
-  await expect(page.locator('input[name="slug"]')).toHaveValue(
-    "concentration-inequality",
+  await editorSubject.selectOption("subject-1");
+  await expect(editorCategory.locator('option[value="category-2"]')).toHaveText(
+    "機械学習（基礎）",
   );
-  await expect(page.locator('select[name="subject"]')).toHaveValue("subject-1");
-  await expect(page.locator('select[name="category"]')).toHaveValue(
-    "category-2",
+  await expect(page.getByRole("link", { name: "目次を開く" })).toHaveCount(0);
+  await expect(page.getByText("目次から作成", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("学習サイトの目次", { exact: true })).toHaveCount(
+    0,
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("./admin/genre-roles/?project=atlas");
@@ -810,173 +644,7 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   });
 });
 
-test("目次項目をドラッグして親子関係を変更し、再読込後も維持できる", async ({
-  page,
-}) => {
-  const entries = [
-    {
-      id: "outline-a",
-      key: "outline-a",
-      subject: "mathematics",
-      category: "group-theory",
-      slug: "lagrange-theorem",
-      title: "ラグランジュの定理",
-      summary: "",
-      order: 10,
-      sort_order: 10,
-      parent_id: null,
-      status: "active",
-      document_id: null,
-    },
-    {
-      id: "outline-b",
-      key: "outline-b",
-      subject: "mathematics",
-      category: "group-theory",
-      slug: "group-order",
-      title: "群の位数",
-      summary: "",
-      order: 20,
-      sort_order: 20,
-      parent_id: null,
-      status: "active",
-      document_id: null,
-    },
-  ];
-  let savedItems: Array<Record<string, unknown>> = [];
-  await page.route("**/api/admin/**", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    if (url.pathname === "/api/admin/editor/outline") {
-      if (request.method() === "PATCH") {
-        const body = JSON.parse(request.postData() ?? "{}");
-        if (body.action === "reorder" && Array.isArray(body.items)) {
-          savedItems = body.items;
-          for (const item of body.items) {
-            const entry = entries.find((candidate) => candidate.id === item.id);
-            if (entry) {
-              entry.parent_id = item.parentId ?? null;
-              entry.sort_order = Number(item.sortOrder ?? entry.sort_order);
-            }
-          }
-        }
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ ok: true }),
-        });
-        return;
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ entries }),
-      });
-      return;
-    }
-    if (url.pathname === "/api/admin/editor/documents") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          documents: [],
-          scope: { subjects: [], isManager: true },
-        }),
-      });
-      return;
-    }
-    if (url.pathname === "/api/admin/editor/taxonomy") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ catalog: [] }),
-      });
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({}),
-    });
-  });
-
-  await page.goto(
-    "./admin/editor/outline/?subject=mathematics&category=group-theory",
-  );
-  const source = page.locator(
-    '[data-outline-entry][data-entry-id="outline-a"]',
-  );
-  const target = page.locator(
-    '[data-outline-entry][data-entry-id="outline-b"]',
-  );
-  await expect(source).toBeVisible();
-  await expect(target).toBeVisible();
-  await page.evaluate(() => {
-    const source = document.querySelector<HTMLElement>(
-      '[data-outline-entry][data-entry-id="outline-a"]',
-    );
-    const target = document.querySelector<HTMLElement>(
-      '[data-outline-entry][data-entry-id="outline-b"]',
-    );
-    if (!source || !target) throw new Error("目次項目が見つかりません。");
-    const dataTransfer = new DataTransfer();
-    source.dispatchEvent(
-      new DragEvent("dragstart", { bubbles: true, dataTransfer }),
-    );
-    const rect = target.getBoundingClientRect();
-    const clientY = rect.top + rect.height / 2;
-    target.dispatchEvent(
-      new DragEvent("dragover", { bubbles: true, clientY, dataTransfer }),
-    );
-    target.dispatchEvent(
-      new DragEvent("drop", { bubbles: true, clientY, dataTransfer }),
-    );
-    source.dispatchEvent(
-      new DragEvent("dragend", { bubbles: true, dataTransfer }),
-    );
-  });
-  await expect(
-    page.getByRole("button", { name: "並び順を保存" }),
-  ).toBeEnabled();
-  await page.getByRole("button", { name: "並び順を保存" }).click();
-  await expect
-    .poll(() => savedItems.find((item) => item.id === "outline-a")?.parentId)
-    .toBe("outline-b");
-  await page.reload();
-  await expect(
-    page.locator(
-      '.outline-children[data-parent-id="outline-b"] [data-entry-id="outline-a"]',
-    ),
-  ).toBeVisible();
-});
-
-test("目次項目を選択して編集・アーカイブ操作を開始できる", async ({ page }) => {
-  await mockAdminApi(page);
-  await page.goto("./admin/editor/outline/");
-  const outlineArchiveCheckbox = page.locator(
-    "[data-outline-include-archived]",
-  );
-  const outlineArchiveBox = await outlineArchiveCheckbox.boundingBox();
-  expect(outlineArchiveBox?.width).toBeLessThanOrEqual(20);
-  expect(outlineArchiveBox?.height).toBeLessThanOrEqual(20);
-  await page.locator("[data-outline-subject]").selectOption("mathematics");
-  const entry = page.locator("[data-outline-entry]").first();
-  await expect(entry).toBeVisible();
-  await expect(entry.locator("[data-outline-select]")).toBeEnabled();
-  await expect(entry.getByRole("button", { name: "編集" })).toBeVisible();
-  await expect(entry.getByRole("button", { name: "アーカイブ" })).toBeVisible();
-
-  await entry.locator("[data-outline-select]").check();
-  await expect(page.getByText("1件選択")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "選択項目を確認" }),
-  ).toBeEnabled();
-  await expect(
-    page.getByRole("button", { name: "並び順を保存" }),
-  ).toBeDisabled();
-});
-
-test("タスク管理と目次のチェックボックスはコンパクトなサイズで表示する", async ({
+test("タスク管理の完了チェックボックスはコンパクトなサイズで表示する", async ({
   page,
 }) => {
   await mockAdminApi(page);
@@ -985,61 +653,6 @@ test("タスク管理と目次のチェックボックスはコンパクトな�
   const taskBox = await taskCheckbox.boundingBox();
   expect(taskBox?.width).toBeLessThanOrEqual(20);
   expect(taskBox?.height).toBeLessThanOrEqual(20);
-
-  await page.goto("./admin/editor/outline/");
-  await page.locator("[data-outline-subject]").selectOption("mathematics");
-  const outlineCheckbox = page.locator("[data-outline-select]").first();
-  const outlineBox = await outlineCheckbox.boundingBox();
-  expect(outlineBox?.width).toBeLessThanOrEqual(20);
-  expect(outlineBox?.height).toBeLessThanOrEqual(20);
-});
-
-test("目次項目は階層表示とキーボード代替操作を提供する", async ({ page }) => {
-  await mockAdminApi(page, undefined, undefined, undefined, [
-    {
-      id: "outline-parent",
-      key: "outline-parent",
-      subject: "mathematics",
-      category: "group-theory",
-      slug: "groups",
-      title: "群",
-      summary: "",
-      order: 1,
-      status: "active",
-    },
-    {
-      id: "outline-child",
-      key: "outline-child",
-      subject: "mathematics",
-      category: "group-theory",
-      slug: "cyclic-groups",
-      title: "巡回群",
-      summary: "",
-      parent_id: "outline-parent",
-      order: 2,
-      status: "active",
-    },
-  ]);
-  await page.goto("./admin/editor/outline/");
-  await page.locator("[data-outline-subject]").selectOption("mathematics");
-  await expect(page.getByText("巡回群")).toBeVisible();
-  await expect(
-    page.locator("[data-parent-id=outline-parent] [data-outline-entry]"),
-  ).toHaveCount(1);
-  await expect(
-    page.getByRole("button", { name: "巡回群を上へ" }),
-  ).toBeVisible();
-});
-
-test("目次項目の編集はダイアログで行える", async ({ page }) => {
-  await mockAdminApi(page);
-  await page.goto("./admin/editor/outline/");
-  await page.locator("[data-outline-subject]").selectOption("mathematics");
-  await page.locator("[data-edit-entry]").first().click();
-  await expect(page.locator("[data-outline-edit-dialog]")).toBeVisible();
-  await expect(
-    page.locator("[data-outline-edit-dialog] input[name=title]"),
-  ).toHaveValue("ラグランジュの定理");
 });
 
 test("既存記事では設定を要約表示し、本文までの占有高を抑える", async ({
@@ -2665,31 +2278,6 @@ test("公開済み記事の本文は更新案を作成するまでロックす�
       fullPage: true,
     });
   }
-});
-
-test("記事一覧は保存済みの更新案を作成中として表示する", async ({ page }) => {
-  const publishedUpdateDocument = {
-    ...documentItem,
-    status: "draft" as const,
-    published_at: "2026-08-30T01:34:00.000Z",
-    updated_at: "2026-09-01T01:34:00.000Z",
-  };
-  await mockAdminApi(page, undefined, publishedUpdateDocument);
-  await page.goto("./admin/editor/?new=1");
-
-  const article = page
-    .locator(".outline-article", { hasText: "群の定義" })
-    .first();
-  await expect(article.locator(".outline-status")).toContainText(
-    "更新案作成中",
-  );
-  await expect(article.locator("[data-outline-article]")).toHaveText(
-    "更新案作成中",
-  );
-  await page.screenshot({
-    path: "test-results/editor-article-list-update-in-progress.png",
-    fullPage: true,
-  });
 });
 
 test("更新案の保存成功と現行版への切り替えを独立して扱う", async ({ page }) => {
