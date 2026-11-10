@@ -474,6 +474,44 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
   expect(contrast(glass.meta, row)).toBeGreaterThanOrEqual(4.5);
 });
 
+test("要対応ポップアップは検索結果なしと作業なしを区別する", async ({
+  page,
+}) => {
+  await mockShell(page);
+  await page.goto("admin/articles/");
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  const search = dialog.locator("[data-admin-command-input]");
+  await search.fill("該当なし");
+  await expect(dialog.locator(".admin-command-empty")).toHaveText(
+    "検索・絞り込み条件に一致する項目はありません。",
+  );
+  await expect(dialog).not.toContainText(
+    "現在、実行が必要な項目はありません。",
+  );
+});
+
+test("要対応ポップアップは対応項目がない場合に作業なしを示す", async ({
+  page,
+}) => {
+  await mockShell(page);
+  await page.route("**/api/admin/action-center*", (route) =>
+    route.fulfill({
+      json: {
+        generatedAt: "2026-11-10T00:00:00.000Z",
+        counts: { today: 0, dueSoon: 0, approvals: 0, assigned: 0 },
+        items: [],
+      },
+    }),
+  );
+  await page.goto("admin/articles/");
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  await expect(dialog.locator(".admin-command-empty")).toHaveText(
+    "現在、実行が必要な項目はありません。",
+  );
+});
+
 test("要対応ポップアップは透過を減らす設定で不透明に戻る", async ({ page }) => {
   await mockShell(page);
   await page.goto("admin/articles/");
