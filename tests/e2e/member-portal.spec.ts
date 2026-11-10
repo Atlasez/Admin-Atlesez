@@ -589,7 +589,16 @@ test("運営事務局でプロフィール変更を却下できる", async ({ pa
   await page
     .getByLabel("処理メモ（任意）")
     .fill("所属情報を再確認してください");
+  const reviewResponse = page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      request.method() === "PATCH" &&
+      new URL(response.url()).pathname ===
+        "/api/admin/profile-change-requests/66666666-6666-4666-8666-666666666666"
+    );
+  });
   await page.getByRole("button", { name: "却下する", exact: true }).click();
+  await reviewResponse;
   expect(action).toBe("reject");
 });
 

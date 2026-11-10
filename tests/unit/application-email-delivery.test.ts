@@ -54,8 +54,13 @@ function environment() {
   const db = new DatabaseSync(":memory:");
   databases.push(db);
   db.exec(`
+    CREATE TABLE atlasez_member_applications (
+      id TEXT PRIMARY KEY,
+      intake_reconciliation_required INTEGER NOT NULL DEFAULT 0
+    );
     CREATE TABLE atlasez_application_email_deliveries (
       id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL,
       recipient_email TEXT NOT NULL,
       subject TEXT NOT NULL,
       text_body TEXT NOT NULL,
@@ -96,11 +101,15 @@ function insertDelivery(
   },
 ) {
   db.prepare(
+    "INSERT OR IGNORE INTO atlasez_member_applications(id,intake_reconciliation_required) VALUES (?,0)",
+  ).run(delivery.id);
+  db.prepare(
     `INSERT INTO atlasez_application_email_deliveries
-      (id,recipient_email,subject,text_body,html_body,status,attempt_count,
+      (id,application_id,recipient_email,subject,text_body,html_body,status,attempt_count,
        next_attempt_at,claim_token,claimed_at,first_attempt_at,created_at,updated_at)
-     VALUES (?,?,'Test','Text','<p>Test</p>',?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,'Test','Text','<p>Test</p>',?,?,?,?,?,?,?,?)`,
   ).run(
+    delivery.id,
     delivery.id,
     `${delivery.id}@atlasez.test`,
     delivery.status,
@@ -117,6 +126,26 @@ function insertDelivery(
     delivery.claimedAt ?? delivery.now,
   );
 }
+
+it("does not apply staging recipient-domain restrictions to production delivery", async () => {
+  const { db, env } = environment();
+  const now = new Date("2026-11-03T00:00:00.000Z");
+  env.EMAIL_FROM = "Atlasez <noreply@atlasez.org>";
+  insertDelivery(db, {
+    id: "production-path-delivery",
+    status: "pending",
+    attemptCount: 0,
+    claimedAt: null,
+    claimToken: null,
+    now: now.toISOString(),
+  });
+  const fetcher = vi.fn(async () => new Response("{}", { status: 200 }));
+
+  await expect(
+    dispatchApplicationEmails(env, { now, fetcher, logger: console }),
+  ).resolves.toMatchObject({ sent: 1, failed: 0, skipped: false });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
 
 it("retries only expired sending claims and keeps the provider idempotency key", async () => {
   const { db, env } = environment();

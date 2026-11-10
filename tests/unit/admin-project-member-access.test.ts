@@ -836,3 +836,599 @@ it("Atlasだけの責任者にも対象自己紹介の承認導線とAPIを許�
     (await request("/api/admin/profile-change-requests", manager)).status,
   ).toBe(403);
 });
+
+it("一般メンバーのauth-statusは管理者向けmanagerProjectsを公開しない", async () => {
+  const { member, request } = fixture();
+  const email = "ordinary-member@atlasez.test";
+  member(email, "thinking-cafe", "member");
+
+  const response = await request("/api/admin/auth-status", email);
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(await response.json()).toMatchObject({
+    isManager: false,
+    canAccessAdmin: false,
+    managerProjects: [],
+  });
+
+  const globalAdminResponse = await request(
+    "/api/admin/auth-status",
+    "global@atlasez.test",
+  );
+  expect(
+    globalAdminResponse.status,
+    await globalAdminResponse.clone().text(),
+  ).toBe(200);
+  expect(await globalAdminResponse.json()).toMatchObject({
+    isManager: true,
+    managerProjects: expect.arrayContaining(["thinking-cafe"]),
+  });
+});
+
+it("auth-status hides paused manager projects while preserving another active membership", async () => {
+  const { db, member, request, now } = fixture();
+  const manager = "multi-project-manager@atlasez.test";
+  member(manager, "thinking-cafe", "manager");
+  member(manager, "secretariat", "manager");
+  db.prepare(
+    `INSERT INTO atlasez_project_member_lifecycle
+       (project_id,email,state,role_snapshot,last_request_id,updated_at)
+     VALUES ('thinking-cafe',?,'paused','manager','lifecycle-fixture',?)`,
+  ).run(manager, now);
+
+  const response = await request("/api/admin/auth-status", manager);
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(await response.json()).toMatchObject({
+    isManager: false,
+    canAccessAdmin: false,
+    managerProjects: ["secretariat"],
+  });
+  expect(
+    (await request("/api/admin/member-calendar?project=thinking-cafe", manager))
+      .status,
+  ).toBe(403);
+  expect(
+    (await request("/api/admin/member-calendar?project=secretariat", manager))
+      .status,
+  ).toBe(200);
+});
+
+it("same interview-notification retry is idempotent but a changed schedule is queued", async () => {
+  const { db, member, application, request, now } = fixture();
+  const manager = "cafe-manager@atlasez.test";
+  const id = "eeeeeeee-1111-4111-8111-111111111111";
+  member(manager, "thinking-cafe", "manager", false);
+  application(id, "thinking-cafe");
+  db.prepare(
+    `INSERT INTO atlasez_application_interviews
+       (id,application_id,scheduled_at,timezone,mode,zoom_url,location,status,created_by,created_at,updated_by,updated_at)
+     VALUES ('interview-fixture',?,'2026-11-10T10:00:00.000Z','Asia/Tokyo','in_person','',?,'scheduled',?,?,?,?)`,
+  ).run(id, "会議室A", manager, now, manager, now);
+  const path = `/api/admin/applications/${id}/interview/notify?project=thinking-cafe`;
+
+  const first = await request(path, manager, "POST", {});
+  expect(first.status, await first.clone().text()).toBe(200);
+  expect(await first.json()).toMatchObject({ notificationQueued: true });
+  const firstDeliveryId = (
+    db
+      .prepare(
+        "SELECT id FROM atlasez_application_email_deliveries WHERE application_id=? AND kind='applicant_interview_invitation'",
+      )
+      .get(id) as { id: string }
+  ).id;
+  db.prepare(
+    `UPDATE atlasez_application_email_deliveries
+        SET status='sent',sent_at=?,updated_at=?
+      WHERE application_id=? AND kind='applicant_interview_invitation'`,
+  ).run(now, now, id);
+
+  const duplicate = await request(path, manager, "POST", {});
+  expect(duplicate.status, await duplicate.clone().text()).toBe(200);
+  expect(await duplicate.json()).toMatchObject({
+    notificationQueued: false,
+    alreadyQueued: true,
+    deliveryStatus: "sent",
+  });
+  expect(
+    db
+      .prepare(
+        `SELECT status,sent_at,text_body FROM atlasez_application_email_deliveries
+        WHERE application_id=? AND kind='applicant_interview_invitation'`,
+      )
+      .get(id),
+  ).toMatchObject({ status: "sent", sent_at: now });
+  expect(
+    db
+      .prepare(
+        "SELECT notification_count FROM atlasez_application_interviews WHERE application_id=?",
+      )
+      .get(id),
+  ).toEqual({ notification_count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_interview_history WHERE application_id=? AND event_type='notification_queued'",
+      )
+      .get(id),
+  ).toEqual({ count: 1 });
+
+  const explicitResendKey = "123e4567-e89b-42d3-a456-426614174000";
+  const explicitResend = await request(path, manager, "POST", {
+    idempotencyKey: explicitResendKey,
+  });
+  expect(explicitResend.status, await explicitResend.clone().text()).toBe(200);
+  expect(await explicitResend.json()).toMatchObject({
+    notificationQueued: false,
+    alreadyQueued: true,
+    deliveryStatus: "sent",
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT notification_count FROM atlasez_application_interviews WHERE application_id=?",
+      )
+      .get(id),
+  ).toEqual({ notification_count: 1 });
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_application_interview_history WHERE application_id=? AND event_type='notification_queued'",
+      )
+      .get(id),
+  ).toEqual({ count: 1 });
+
+  db.prepare(
+    `UPDATE atlasez_application_interviews
+        SET scheduled_at='2026-11-11T10:00:00.000Z',location='会議室B',updated_at=?
+      WHERE application_id=?`,
+  ).run(new Date(Date.parse(now) + 1_000).toISOString(), id);
+  const rescheduled = await request(path, manager, "POST", {
+    idempotencyKey: explicitResendKey,
+  });
+  expect(rescheduled.status, await rescheduled.clone().text()).toBe(200);
+  expect(await rescheduled.json()).toMatchObject({ notificationQueued: true });
+  const delivery = db
+    .prepare(
+      `SELECT id,status,sent_at,text_body FROM atlasez_application_email_deliveries
+      WHERE application_id=? AND kind='applicant_interview_invitation'`,
+    )
+    .get(id) as {
+    id: string;
+    status: string;
+    sent_at: string | null;
+    text_body: string;
+  };
+  expect(delivery.status).toBe("pending");
+  expect(delivery.sent_at).toBeNull();
+  expect(delivery.text_body).toContain("会議室B");
+  expect(delivery.id).not.toBe(firstDeliveryId);
+  expect(
+    db
+      .prepare(
+        "SELECT notification_count FROM atlasez_application_interviews WHERE application_id=?",
+      )
+      .get(id),
+  ).toEqual({ notification_count: 2 });
+
+  db.prepare(
+    `UPDATE atlasez_application_email_deliveries
+        SET status='sent',sent_at=?,updated_at=?
+      WHERE application_id=? AND kind='applicant_interview_invitation'`,
+  ).run(now, now, id);
+  db.prepare(
+    `UPDATE atlasez_application_interviews
+        SET scheduled_at='2026-11-10T10:00:00.000Z',location='会議室A',updated_at=?
+      WHERE application_id=?`,
+  ).run(new Date(Date.parse(now) + 2_000).toISOString(), id);
+  const restoredSchedule = await request(path, manager, "POST", {});
+  expect(restoredSchedule.status, await restoredSchedule.clone().text()).toBe(
+    200,
+  );
+  expect(await restoredSchedule.json()).toMatchObject({
+    notificationQueued: true,
+  });
+  const restoredDelivery = db
+    .prepare(
+      `SELECT id,status,sent_at,text_body FROM atlasez_application_email_deliveries
+      WHERE application_id=? AND kind='applicant_interview_invitation'`,
+    )
+    .get(id) as {
+    id: string;
+    status: string;
+    sent_at: string | null;
+    text_body: string;
+  };
+  expect(restoredDelivery.id).not.toBe(firstDeliveryId);
+  expect(restoredDelivery.id).not.toBe(delivery.id);
+  expect(restoredDelivery.status).toBe("pending");
+  expect(restoredDelivery.sent_at).toBeNull();
+  expect(restoredDelivery.text_body).toContain("会議室A");
+  expect(
+    db
+      .prepare(
+        "SELECT notification_count FROM atlasez_application_interviews WHERE application_id=?",
+      )
+      .get(id),
+  ).toEqual({ notification_count: 3 });
+});
+
+it("does not replace an in-flight interview email when the schedule changes", async () => {
+  const { db, member, application, request, now } = fixture();
+  const manager = "cafe-manager@atlasez.test";
+  const id = "ffffffff-1111-4111-8111-111111111111";
+  member(manager, "thinking-cafe", "manager", false);
+  application(id, "thinking-cafe");
+  db.prepare(
+    `INSERT INTO atlasez_application_interviews
+       (id,application_id,scheduled_at,timezone,mode,zoom_url,location,status,created_by,created_at,updated_by,updated_at)
+     VALUES ('interview-sending',?,'2026-11-10T10:00:00.000Z','Asia/Tokyo','in_person','',?,'scheduled',?,?,?,?)`,
+  ).run(id, "会議室A", manager, now, manager, now);
+  const path = `/api/admin/applications/${id}/interview/notify?project=thinking-cafe`;
+  expect((await request(path, manager, "POST", {})).status).toBe(200);
+  db.prepare(
+    `UPDATE atlasez_application_email_deliveries SET status='sending',claim_token='fixture-claim'
+      WHERE application_id=? AND kind='applicant_interview_invitation'`,
+  ).run(id);
+  db.prepare(
+    `UPDATE atlasez_application_interviews SET location='会議室B' WHERE application_id=?`,
+  ).run(id);
+
+  const response = await request(path, manager, "POST", {
+    idempotencyKey: "123e4567-e89b-42d3-a456-426614174001",
+  });
+  expect(response.status, await response.clone().text()).toBe(409);
+  expect(await response.json()).toMatchObject({
+    code: "INTERVIEW_NOTIFICATION_IN_FLIGHT",
+  });
+  expect(
+    db
+      .prepare(
+        `SELECT status,text_body FROM atlasez_application_email_deliveries
+        WHERE application_id=? AND kind='applicant_interview_invitation'`,
+      )
+      .get(id),
+  ).toMatchObject({ status: "sending" });
+  expect(
+    db
+      .prepare(
+        "SELECT notification_count FROM atlasez_application_interviews WHERE application_id=?",
+      )
+      .get(id),
+  ).toEqual({ notification_count: 1 });
+});
+
+it("does not treat a queued email for a stale interview schedule as current", async () => {
+  const { db, env, member, application, request, now } = fixture();
+  const manager = "cafe-manager@atlasez.test";
+  const id = "aaaaaaaa-2222-4222-8222-222222222222";
+  member(manager, "thinking-cafe", "manager", false);
+  application(id, "thinking-cafe");
+  db.prepare(
+    `INSERT INTO atlasez_application_interviews
+       (id,application_id,scheduled_at,timezone,mode,zoom_url,location,status,created_by,created_at,updated_by,updated_at)
+     VALUES ('interview-stale-schedule',?,'2026-11-10T10:00:00.000Z','Asia/Tokyo','in_person','',?,'scheduled',?,?,?,?)`,
+  ).run(id, "会議室A", manager, now, manager, now);
+  const path = `/api/admin/applications/${id}/interview/notify?project=thinking-cafe`;
+  expect((await request(path, manager, "POST", {})).status).toBe(200);
+  db.prepare(
+    `UPDATE atlasez_application_email_deliveries
+        SET status='sent',sent_at=?,updated_at=?
+      WHERE application_id=? AND kind='applicant_interview_invitation'`,
+  ).run(now, now, id);
+
+  const originalBatch = env.REPORTS.batch;
+  let changedSchedule = false;
+  env.REPORTS.batch = async (statements) => {
+    if (
+      !changedSchedule &&
+      statements.length === 3 &&
+      statements[0]?.query.includes("atlasez_application_email_deliveries")
+    ) {
+      changedSchedule = true;
+      db.prepare(
+        `UPDATE atlasez_application_interviews
+            SET scheduled_at='2026-11-11T10:00:00.000Z',location='会議室B'
+          WHERE application_id=?`,
+      ).run(id);
+    }
+    return originalBatch(statements);
+  };
+
+  const response = await request(path, manager, "POST", {});
+  expect(changedSchedule).toBe(true);
+  expect(response.status, await response.clone().text()).toBe(409);
+  expect(await response.json()).toMatchObject({ code: "STALE_INTERVIEW" });
+  expect(
+    db
+      .prepare(
+        `SELECT status,text_body FROM atlasez_application_email_deliveries
+          WHERE application_id=? AND kind='applicant_interview_invitation'`,
+      )
+      .get(id),
+  ).toMatchObject({ status: "sent" });
+});
+
+it("does not overwrite a concurrent interview update or record false history", async () => {
+  const { db, env, member, application, request, now } = fixture();
+  const manager = "cafe-manager@atlasez.test";
+  const id = "bbbbbbbb-2222-4222-8222-222222222222";
+  member(manager, "thinking-cafe", "manager", false);
+  application(id, "thinking-cafe");
+  db.prepare(
+    `INSERT INTO atlasez_application_interviews
+       (id,application_id,scheduled_at,timezone,mode,zoom_url,location,status,created_by,created_at,updated_by,updated_at)
+     VALUES ('interview-concurrent-save',?,'2026-11-10T10:00:00.000Z','Asia/Tokyo','in_person','',?,'scheduled',?,?,?,?)`,
+  ).run(id, "元の会場", manager, now, manager, now);
+
+  const originalBatch = env.REPORTS.batch;
+  let concurrentUpdate = false;
+  env.REPORTS.batch = async (statements) => {
+    if (
+      !concurrentUpdate &&
+      statements.length === 2 &&
+      statements[0]?.query.includes("UPDATE atlasez_application_interviews")
+    ) {
+      concurrentUpdate = true;
+      db.prepare(
+        `UPDATE atlasez_application_interviews
+            SET scheduled_at='2026-11-11T10:00:00.000Z',location='先に保存された会場',updated_at=?
+          WHERE application_id=?`,
+      ).run(new Date(Date.parse(now) + 5_000).toISOString(), id);
+    }
+    return originalBatch(statements);
+  };
+
+  const response = await request(
+    `/api/admin/applications/${id}/interview?project=thinking-cafe`,
+    manager,
+    "PUT",
+    {
+      scheduledAt: "2026-11-12T10:00:00.000Z",
+      timezone: "Asia/Tokyo",
+      mode: "in_person",
+      location: "古い入力の会場",
+    },
+  );
+  expect(concurrentUpdate).toBe(true);
+  expect(response.status, await response.clone().text()).toBe(409);
+  expect(await response.json()).toMatchObject({ code: "INTERVIEW_CHANGED" });
+  expect(
+    db
+      .prepare(
+        `SELECT scheduled_at,location FROM atlasez_application_interviews
+          WHERE application_id=?`,
+      )
+      .get(id),
+  ).toEqual({
+    scheduled_at: "2026-11-11T10:00:00.000Z",
+    location: "先に保存された会場",
+  });
+  expect(
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM atlasez_application_interview_history
+          WHERE application_id=? AND event_type='schedule_updated'`,
+      )
+      .get(id),
+  ).toEqual({ count: 0 });
+});
+
+it("reports committed interview data when its audit-history insert is ignored", async () => {
+  const { db, member, application, request } = fixture();
+  const manager = "cafe-manager@atlasez.test";
+  const id = "cccccccc-2222-4222-8222-222222222222";
+  member(manager, "thinking-cafe", "manager", false);
+  application(id, "thinking-cafe");
+  db.exec(
+    `CREATE TRIGGER ignore_interview_history
+       BEFORE INSERT ON atlasez_application_interview_history
+       BEGIN SELECT RAISE(IGNORE); END;`,
+  );
+
+  const response = await request(
+    `/api/admin/applications/${id}/interview?project=thinking-cafe`,
+    manager,
+    "PUT",
+    {
+      scheduledAt: "2026-11-15T10:00:00.000Z",
+      timezone: "Asia/Tokyo",
+      mode: "in_person",
+      location: "検証会場",
+    },
+  );
+  expect(response.status, await response.clone().text()).toBe(503);
+  expect(await response.json()).toMatchObject({
+    code: "INTERVIEW_HISTORY_UNCONFIRMED",
+    interviewSaved: true,
+  });
+  expect(
+    db
+      .prepare(
+        `SELECT scheduled_at,location FROM atlasez_application_interviews
+          WHERE application_id=?`,
+      )
+      .get(id),
+  ).toEqual({
+    scheduled_at: "2026-11-15T10:00:00.000Z",
+    location: "検証会場",
+  });
+  expect(
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM atlasez_application_interview_history
+          WHERE application_id=?`,
+      )
+      .get(id),
+  ).toEqual({ count: 0 });
+});
+
+it("does not change an interview while its previous notification is pending", async () => {
+  const { db, member, application, request, now } = fixture();
+  const manager = "cafe-manager@atlasez.test";
+  const id = "dddddddd-2222-4222-8222-222222222222";
+  member(manager, "thinking-cafe", "manager", false);
+  application(id, "thinking-cafe");
+  db.prepare(
+    `INSERT INTO atlasez_application_interviews
+       (id,application_id,scheduled_at,timezone,mode,zoom_url,location,status,created_by,created_at,updated_by,updated_at)
+     VALUES ('interview-pending-notice',?,'2026-11-10T10:00:00.000Z','Asia/Tokyo','in_person','',?,'scheduled',?,?,?,?)`,
+  ).run(id, "現在の会場", manager, now, manager, now);
+  const notify = await request(
+    `/api/admin/applications/${id}/interview/notify?project=thinking-cafe`,
+    manager,
+    "POST",
+    {},
+  );
+  expect(notify.status, await notify.clone().text()).toBe(200);
+  expect(await notify.json()).toMatchObject({ notificationQueued: true });
+
+  const update = await request(
+    `/api/admin/applications/${id}/interview?project=thinking-cafe`,
+    manager,
+    "PUT",
+    {
+      scheduledAt: "2026-11-12T10:00:00.000Z",
+      timezone: "Asia/Tokyo",
+      mode: "in_person",
+      location: "変更後の会場",
+    },
+  );
+  expect(update.status, await update.clone().text()).toBe(409);
+  expect(await update.json()).toMatchObject({
+    code: "INTERVIEW_NOTIFICATION_IN_PROGRESS",
+  });
+  expect(
+    db
+      .prepare(
+        `SELECT scheduled_at,location FROM atlasez_application_interviews
+          WHERE application_id=?`,
+      )
+      .get(id),
+  ).toEqual({
+    scheduled_at: "2026-11-10T10:00:00.000Z",
+    location: "現在の会場",
+  });
+  expect(
+    db
+      .prepare(
+        `SELECT status,text_body FROM atlasez_application_email_deliveries
+          WHERE application_id=? AND kind='applicant_interview_invitation'`,
+      )
+      .get(id),
+  ).toMatchObject({ status: "pending" });
+});
+
+it("does not allow a reviewer to change a finalized interview decision", async () => {
+  const { db, member, application, request, now } = fixture();
+  const manager = "cafe-manager@atlasez.test";
+  const id = "eeeeeeee-2222-4222-8222-222222222222";
+  member(manager, "thinking-cafe", "manager", false);
+  application(id, "thinking-cafe");
+  db.prepare(
+    `UPDATE atlasez_member_applications SET status='accepted' WHERE id=?`,
+  ).run(id);
+  db.prepare(
+    `INSERT INTO atlasez_application_interview_reviews
+       (id,application_id,interview_id,note,assigned_subjects,decision,finalized_at,finalized_by,created_by,created_at,updated_by,updated_at)
+     VALUES ('final-review',?,NULL,'承認済みの所見','mathematics','accepted',?,?,?, ?,?,?)`,
+  ).run(id, now, manager, manager, now, manager, now);
+
+  const response = await request(
+    `/api/admin/applications/${id}/interview-review?project=thinking-cafe`,
+    manager,
+    "PUT",
+    {
+      note: "別の結論に変える入力",
+      assignedSubjects: ["mathematics"],
+      decision: "rejected",
+    },
+  );
+  expect(response.status, await response.clone().text()).toBe(409);
+  expect(await response.json()).toMatchObject({
+    code: "INTERVIEW_REVIEW_FINALIZED",
+  });
+  expect(
+    db
+      .prepare(
+        `SELECT note,decision,finalized_at FROM atlasez_application_interview_reviews
+          WHERE application_id=?`,
+      )
+      .get(id),
+  ).toMatchObject({
+    note: "承認済みの所見",
+    decision: "accepted",
+    finalized_at: now,
+  });
+  expect(
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM atlasez_application_interview_history
+          WHERE application_id=? AND event_type='review_saved'`,
+      )
+      .get(id),
+  ).toEqual({ count: 0 });
+});
+
+it("does not overwrite a concurrent interview-review save", async () => {
+  const { db, env, member, application, request, now } = fixture();
+  const manager = "cafe-manager@atlasez.test";
+  const id = "ffffffff-2222-4222-8222-222222222222";
+  member(manager, "thinking-cafe", "manager", false);
+  application(id, "thinking-cafe");
+  db.prepare(
+    `INSERT INTO atlasez_application_interview_reviews
+       (id,application_id,interview_id,note,assigned_subjects,decision,created_by,created_at,updated_by,updated_at)
+     VALUES ('review-concurrent',?,NULL,'元のメモ','mathematics','pending',?,?,?,?)`,
+  ).run(id, manager, now, manager, now);
+
+  const originalBatch = env.REPORTS.batch;
+  let concurrentUpdate = false;
+  env.REPORTS.batch = async (statements) => {
+    if (
+      !concurrentUpdate &&
+      statements.length === 2 &&
+      statements[0]?.query.includes(
+        "UPDATE atlasez_application_interview_reviews",
+      )
+    ) {
+      concurrentUpdate = true;
+      db.prepare(
+        `UPDATE atlasez_application_interview_reviews
+            SET note='先に保存されたメモ',decision='hold',updated_at=?
+          WHERE application_id=?`,
+      ).run(new Date(Date.parse(now) + 5_000).toISOString(), id);
+    }
+    return originalBatch(statements);
+  };
+
+  const response = await request(
+    `/api/admin/applications/${id}/interview-review?project=thinking-cafe`,
+    manager,
+    "PUT",
+    {
+      note: "古い入力",
+      assignedSubjects: ["mathematics"],
+      decision: "rejected",
+    },
+  );
+  expect(concurrentUpdate).toBe(true);
+  expect(response.status, await response.clone().text()).toBe(409);
+  expect(await response.json()).toMatchObject({
+    code: "INTERVIEW_REVIEW_CHANGED",
+  });
+  expect(
+    db
+      .prepare(
+        `SELECT note,decision FROM atlasez_application_interview_reviews
+          WHERE application_id=?`,
+      )
+      .get(id),
+  ).toEqual({ note: "先に保存されたメモ", decision: "hold" });
+  expect(
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM atlasez_application_interview_history
+          WHERE application_id=? AND event_type='review_saved'`,
+      )
+      .get(id),
+  ).toEqual({ count: 0 });
+});

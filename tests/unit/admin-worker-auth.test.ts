@@ -1,4 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
+import { createHash } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import worker from "../../src/admin-worker";
 
@@ -673,7 +675,8 @@ describe("Google OAuth login callback", () => {
           };
           return statement;
         },
-        batch: async () => [],
+        batch: async (statements: Statement[]) =>
+          Promise.all(statements.map((statement) => statement.run())),
       },
       ASSETS: { fetch: async () => new Response("protected page") },
     };
@@ -983,11 +986,58 @@ describe("Google OAuth login callback", () => {
       expect(authorizationUrl.searchParams.get("state")).not.toBe(
         "wrong-state",
       );
-      expect(response.status).toBe(400);
-      await expect(response.json()).resolves.toMatchObject({
-        error: "Googleログインの確認に失敗しました。もう一度お試しください。",
-      });
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe("/admin/login-error/");
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(response.headers.get("location")).not.toContain(
+        "authorization-code",
+      );
+      expect(response.headers.getSetCookie()).toContainEqual(
+        expect.stringContaining("Max-Age=0; Path=/auth/google"),
+      );
       expect(googleFetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("redirects token exchange failures without leaving OAuth parameters in the URL", async () => {
+    const oauthEnv = env("google-oauth", {
+      GOOGLE_OAUTH_CLIENT_ID: "oauth-client-id",
+      GOOGLE_OAUTH_CLIENT_SECRET: "oauth-client-secret",
+    });
+    const prepare = vi.spyOn(oauthEnv.REPORTS, "prepare");
+    const googleFetch = vi.fn(
+      async () => new Response("provider unavailable", { status: 503 }),
+    );
+    vi.stubGlobal("fetch", googleFetch);
+    try {
+      const login = await worker.fetch(
+        new Request("https://admin.example/auth/google/login"),
+        oauthEnv as never,
+      );
+      const authorizationUrl = new URL(login.headers.get("location")!);
+      const stateCookie = login.headers.get("set-cookie")!.split(";", 1)[0];
+      const callback = await worker.fetch(
+        new Request(
+          `https://admin.example/auth/google/callback?code=unit-test-code&state=${encodeURIComponent(authorizationUrl.searchParams.get("state")!)}`,
+          { headers: { cookie: stateCookie } },
+        ),
+        oauthEnv as never,
+      );
+
+      expect(callback.status).toBe(303);
+      expect(callback.headers.get("location")).toBe("/admin/login-error/");
+      expect(callback.headers.get("location")).not.toContain("unit-test-code");
+      expect(callback.headers.get("location")).not.toContain("state=");
+      expect(callback.headers.get("cache-control")).toBe("no-store");
+      expect(callback.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(callback.headers.getSetCookie()).toContainEqual(
+        expect.stringContaining("Max-Age=0; Path=/auth/google"),
+      );
+      expect(googleFetch).toHaveBeenCalledTimes(1);
+      expect(prepare).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
     }
@@ -1045,11 +1095,11 @@ describe("Google OAuth login callback", () => {
         oauthEnv as never,
       );
 
-      expect(callback.status).toBe(403);
-      await expect(callback.json()).resolves.toMatchObject({
-        error: "確認済みのGoogleメールアドレスが必要です。",
-      });
-      expect(callback.headers.getSetCookie()).toEqual([]);
+      expect(callback.status).toBe(303);
+      expect(callback.headers.get("location")).toBe("/admin/login-error/");
+      expect(callback.headers.getSetCookie()).toContainEqual(
+        expect.stringContaining("Max-Age=0; Path=/auth/google"),
+      );
       expect(prepare).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
@@ -2142,70 +2192,143 @@ describe("applicant stage server-side access", () => {
   });
 
   it("accepts a complete student-council application and records its project", async () => {
-    const inserts: unknown[][] = [];
-    const applicationEnv = {
-      ADMIN_AUTH_MODE: "google-oauth",
-      REPORTS: {
-        prepare: (query: string) => {
-          const statement = new Statement(query);
-          statement.first = async <T>() => {
-            if (query.includes("admin_auth_sessions"))
-              return { email: "council-applicant@example.com" } as T;
-            return null as T | null;
-          };
-          statement.run = async () => {
-            if (query.includes("INSERT INTO atlasez_member_applications"))
-              inserts.push([]);
-            return { meta: { changes: 1 } };
-          };
-          return statement;
-        },
-        batch: async () => [],
-      },
-      ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
-    };
-    const response = await worker.fetch(
-      new Request("https://admin.example/api/apply", {
-        method: "POST",
-        headers: {
-          cookie: "atlasez_admin_session=logged-in",
-          origin: "https://admin.example",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          projectSlug: "student-council-exchange",
-          familyName: "テスト",
-          givenName: "太郎",
-          familyNameKana: "てすと",
-          givenNameKana: "たろう",
-          formLanguage: "ja",
-          affiliationEmail: "student@school.example",
-          affiliationType: "高等学校",
-          institution: "テスト高等学校",
-          grade: "高2",
-          country: "日本",
-          timezone: "Asia/Tokyo",
-          birthDate: "2008-01-01",
-          residenceCity: "東京都",
-          referralSource: "テスト",
-          interests: "企画運営",
-          message: "応募テストです。",
-          motivationReasons: "活動に参加したい。",
-          desiredRoles: "企画",
-          interviewAvailability: "平日夕方",
-          projectAnswers: {
-            councilStatus: "生徒会所属中",
-            councilRole: "書記",
-            councilPlans: "学校を越えた交流会を企画したい。",
+    const db = new DatabaseSync(":memory:");
+    try {
+      const migrationDirectory = new URL("../../migrations/", import.meta.url);
+      for (const file of readdirSync(migrationDirectory)
+        .filter((name) => name.endsWith(".sql"))
+        .sort())
+        db.exec(readFileSync(new URL(file, migrationDirectory), "utf8"));
+      const token = "logged-in";
+      db.prepare(
+        "INSERT INTO admin_auth_sessions(session_hash,email,expires_at,created_at) VALUES (?,?,?,?)",
+      ).run(
+        createHash("sha256").update(token).digest("hex"),
+        "council-applicant@example.com",
+        "2099-01-01T00:00:00.000Z",
+        new Date().toISOString(),
+      );
+      const applicationEnv = {
+        ADMIN_AUTH_MODE: "google-oauth",
+        APPLICATION_OPERATIONS_EMAILS: "operator@atlasez.test",
+        REPORTS: {
+          prepare: (query: string) => {
+            type SqliteBoundValue =
+              null | number | bigint | string | NodeJS.ArrayBufferView;
+            let values: SqliteBoundValue[] = [];
+            return {
+              bind(...nextValues: unknown[]) {
+                values = nextValues as SqliteBoundValue[];
+                return this;
+              },
+              async run() {
+                return {
+                  meta: {
+                    changes: Number(db.prepare(query).run(...values).changes),
+                  },
+                };
+              },
+              async first<T>() {
+                return (
+                  (db.prepare(query).get(...values) as T | undefined) ?? null
+                );
+              },
+              async all<T>() {
+                return { results: db.prepare(query).all(...values) as T[] };
+              },
+            };
           },
+          batch: async (
+            statements: Array<{
+              run: () => Promise<{ meta: { changes: number } }>;
+            }>,
+          ) => {
+            db.exec("BEGIN");
+            try {
+              const results = [];
+              for (const statement of statements)
+                results.push(await statement.run());
+              db.exec("COMMIT");
+              return results;
+            } catch (error) {
+              db.exec("ROLLBACK");
+              throw error;
+            }
+          },
+        },
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      };
+      const response = await worker.fetch(
+        new Request("https://admin.example/api/apply", {
+          method: "POST",
+          headers: {
+            cookie: "atlasez_admin_session=logged-in",
+            origin: "https://admin.example",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            projectSlug: "student-council-exchange",
+            familyName: "テスト",
+            givenName: "太郎",
+            familyNameKana: "てすと",
+            givenNameKana: "たろう",
+            formLanguage: "ja",
+            affiliationEmail: "student@school.example",
+            affiliationType: "高等学校",
+            institution: "テスト高等学校",
+            grade: "高2",
+            country: "日本",
+            timezone: "Asia/Tokyo",
+            birthDate: "2008-01-01",
+            residenceCity: "東京都",
+            referralSource: "テスト",
+            interests: "企画運営",
+            message: "応募テストです。",
+            motivationReasons: "活動に参加したい。",
+            desiredRoles: "企画",
+            interviewAvailability: "平日夕方",
+            projectAnswers: {
+              councilStatus: "生徒会所属中",
+              councilRole: "書記",
+              councilPlans: "学校を越えた交流会を企画したい。",
+            },
+          }),
         }),
-      }),
-      applicationEnv as never,
-    );
+        applicationEnv as never,
+      );
 
-    expect(response.status).toBe(201);
-    expect(await response.json()).toMatchObject({ ok: true });
-    expect(inserts).toHaveLength(1);
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({
+        ok: true,
+        responseTaskCreated: true,
+        emailQueued: true,
+        emailQueueCount: 2,
+        emailProviderConfigured: false,
+      });
+      expect(
+        db
+          .prepare(
+            "SELECT project_slug FROM atlasez_member_applications WHERE email=?",
+          )
+          .get("council-applicant@example.com"),
+      ).toEqual({ project_slug: "student-council-exchange" });
+      expect(
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM editorial_tasks WHERE created_by='応募フォーム'",
+          )
+          .get(),
+      ).toEqual({ count: 1 });
+      expect(
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM atlasez_application_email_deliveries",
+          )
+          .get(),
+      ).toEqual({ count: 2 });
+    } finally {
+      db.close();
+    }
   });
 
   it("sends a Google-authenticated user without an application to the applicant start page", async () => {

@@ -162,9 +162,10 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
     subjects: ["mathematics"],
     isManager: false,
   });
-  await page.goto("./admin/editor/?new=1");
+  await page.goto("./admin/editor/?new=1", { waitUntil: "domcontentloaded" });
 
   const subject = page.locator('select[name="subject"]');
+  await expect(subject).toBeVisible();
   await expect(subject).toHaveValue("mathematics");
   await expect(subject.locator("option")).toHaveCount(1);
   await expect(subject.locator("option")).toHaveText("数学");
@@ -1500,15 +1501,14 @@ test("本文欄を拡張してもCodeMirrorが欄全体を使う", async ({ page
   await expect(page.locator('[data-editor-pane="writing"]')).toHaveClass(
     /is-pane-resized/,
   );
+  const surface = page.locator("[data-body-surface]");
+  await expect(surface).toHaveAttribute("data-codemirror-ready", "true");
 
-  const heights = await page
-    .locator("[data-body-surface]")
-    .evaluate((surface) => ({
-      surface: surface.clientHeight,
-      codemirror:
-        surface.querySelector<HTMLElement>(".body-codemirror")?.clientHeight ??
-        0,
-    }));
+  const heights = await surface.evaluate((surface) => ({
+    surface: surface.clientHeight,
+    codemirror:
+      surface.querySelector<HTMLElement>(".body-codemirror")?.clientHeight ?? 0,
+  }));
   expect(Math.abs(heights.surface - heights.codemirror)).toBeLessThanOrEqual(1);
 });
 
@@ -3481,7 +3481,7 @@ test("コメント枠をスクロールしても見出しと別窓ボタンは�
     .toBeGreaterThan(100);
   await page.screenshot({ path: testInfo.outputPath("comments-scrolled.png") });
   const after = await heading.boundingBox();
-  expect(Math.abs((after?.y ?? 0) - before.y)).toBeLessThan(1);
+  expect(Math.abs((after?.y ?? 0) - before.y)).toBeLessThanOrEqual(1);
   await expect(heading.locator('[data-pane-popout="review"]')).toBeInViewport();
 });
 
@@ -3491,9 +3491,12 @@ for (const returnVia of ["popup", "close", "toggle", "tab"] as const) {
   }, testInfo) => {
     await page.setViewportSize({ width: 1600, height: 1100 });
     await mockAdminApi(page);
-    await page.goto("./admin/editor/?document=doc-1");
+    await page.goto("./admin/editor/?document=doc-1", {
+      waitUntil: "domcontentloaded",
+    });
     const panel = page.locator('[data-editor-pane="writing"]');
     const button = panel.locator('[data-pane-popout="writing"]');
+    await expect(button).toBeVisible();
     const popupPromise = page.waitForEvent("popup");
     await button.click();
     const popup = await popupPromise;

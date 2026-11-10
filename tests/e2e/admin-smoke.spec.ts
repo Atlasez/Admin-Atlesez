@@ -624,7 +624,10 @@ for (const [label, path] of responsiveSmokePages) {
     test(`${label}が${width}pxで横方向に崩れない`, async ({ page }) => {
       await mockAdminApis(page);
       await page.setViewportSize({ width, height: 900 });
-      await page.goto(path);
+      // This assertion measures layout. Wait for parsed markup and its
+      // render-blocking styles, not every later resource on the editor page.
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await expect(page.locator("main")).toBeVisible();
       const geometry = await page.evaluate(() => ({
         viewport: window.innerWidth,
         scrollWidth: document.documentElement.scrollWidth,
