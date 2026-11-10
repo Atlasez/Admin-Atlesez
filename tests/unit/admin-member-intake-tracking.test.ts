@@ -142,7 +142,7 @@ function fixture() {
   return { db, member, application, request, now };
 }
 
-it("応募後フォローをproject/emailで保存し、初回タスクから通知を作らず応募削除後も保持する", async () => {
+it("応募者・メンバー対応記録をproject/emailで保存し、初回タスクから通知を作らず応募削除後も保持する", async () => {
   const { db, member, application, request, now } = fixture();
   const email = "new-member@atlasez.test";
   const applicationId = "11111111-1111-4111-8111-111111111111";
@@ -296,7 +296,7 @@ it("応募後フォローをproject/emailで保存し、初回タスクから通
   expect(ownEntries[0]).not.toHaveProperty("application_id");
 });
 
-it("応募情報がない直接追加メンバーも受入フォローに記録でき、他プロジェクト対象を拒否する", async () => {
+it("応募情報がない直接追加メンバーも対応記録を保存でき、他プロジェクト対象を拒否する", async () => {
   const { db, member, request } = fixture();
   const email = "direct-member@atlasez.test";
   member(email);
@@ -377,7 +377,7 @@ it("応募中は初回タスクを担当運営者へ割り当て、同じ初期r
   ).toEqual({
     assignee_email: "manager@atlasez.test",
     details:
-      "受入準備タスク：applicant@atlasez.test\n参加前の案内・準備に関する運営タスクです。",
+      "参加前の準備タスク：applicant@atlasez.test\n参加前の案内・準備に関する運営タスクです。",
   });
   expect(
     db
