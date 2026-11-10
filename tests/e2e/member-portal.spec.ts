@@ -865,6 +865,72 @@ test("タスク詳細から戻ると検索条件・表示対象・一覧位置�
     .toBeLessThanOrEqual(3);
 });
 
+test("遷移イベント後に古いタスク一覧位置を適用しない", async ({ page }) => {
+  await baseAdminMocks(page);
+  let releaseSecondPage!: () => void;
+  let markSecondPageStarted!: () => void;
+  const secondPageGate = new Promise<void>((resolve) => {
+    releaseSecondPage = resolve;
+  });
+  const secondPageStarted = new Promise<void>((resolve) => {
+    markSecondPageStarted = resolve;
+  });
+  const firstPageTasks = Array.from({ length: 50 }, (_, index) => ({
+    id: `task-${index + 1}`,
+    project_id: "atlas",
+    title: `タスク ${index + 1}`,
+    status: "open",
+    created_by_me: true,
+    can_update: false,
+  }));
+  await page.route("**/api/admin/member-tasks**", async (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const isSecondPage = params.get("cursor") === "second-page";
+    if (isSecondPage) {
+      markSecondPageStarted();
+      await secondPageGate;
+    }
+    return route.fulfill({
+      json: {
+        scope: {
+          email: "manager@example.com",
+          isManager: true,
+          memberAccess: true,
+        },
+        projects: [{ id: "atlas", name: "アトラス", role: "manager" }],
+        tasks: isSecondPage
+          ? [
+              {
+                id: "task-51",
+                project_id: "atlas",
+                title: "タスク 51",
+                status: "open",
+                created_by_me: true,
+                can_update: false,
+              },
+            ]
+          : firstPageTasks,
+        pagination: {
+          nextCursor: isSecondPage ? null : "second-page",
+          hasMore: !isSecondPage,
+        },
+      },
+    });
+  });
+
+  await page.goto(
+    "admin/member-tasks/?view=created&__returnScroll=1200&__returnCount=51",
+  );
+  await secondPageStarted;
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event("astro:before-swap"));
+    window.scrollTo(0, 0);
+  });
+  releaseSecondPage();
+
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test("横断タスクで閲覧のみのタスクは状態保存とアーカイブを表示しない", async ({
   page,
 }) => {

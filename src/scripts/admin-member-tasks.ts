@@ -463,16 +463,25 @@ function initialize() {
   };
   const restoreListPosition = async () => {
     if (restoreScrollY === null) return;
+    const restorationVersion = requestVersion;
+    const isCurrentContext = () =>
+      root.isConnected && requestVersion === restorationVersion;
+    if (!isCurrentContext()) return;
     const targetCount = Math.min(
       restoreTaskCount ?? data.tasks?.length ?? 0,
       1000,
     );
     while ((data.tasks?.length ?? 0) < targetCount && nextCursor) {
+      if (!isCurrentContext()) return;
       const previousCount = data.tasks?.length ?? 0;
       const loadedPage = await loadMoreTasks();
       if (!loadedPage || (data.tasks?.length ?? 0) <= previousCount) break;
     }
-    requestAnimationFrame(() => window.scrollTo(0, restoreScrollY));
+    if (!isCurrentContext()) return;
+    requestAnimationFrame(() => {
+      if (!isCurrentContext()) return;
+      window.scrollTo(0, restoreScrollY);
+    });
   };
   loadMore.addEventListener("click", () => void loadMoreTasks());
   const mutate = async (
