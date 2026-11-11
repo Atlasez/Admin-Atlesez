@@ -19,6 +19,7 @@ export type ApplicationEmailDeliveryOptions = {
   fetcher?: (input: string, init?: RequestInit) => Promise<Response>;
   logger?: Pick<Console, "info" | "error">;
   limit?: number;
+  channel?: "seminar";
 };
 
 type Delivery = {
@@ -72,7 +73,7 @@ const sendEmail = async (
         to: [delivery.recipient_email],
         subject: delivery.subject,
         text: delivery.text_body,
-        html: delivery.html_body,
+        ...(delivery.html_body ? { html: delivery.html_body } : {}),
       }),
       signal: controller.signal,
     });
@@ -86,6 +87,10 @@ export async function dispatchApplicationEmails(
   options: ApplicationEmailDeliveryOptions = {},
 ) {
   const logger = options.logger ?? console;
+  const table =
+    options.channel === "seminar"
+      ? "seminar_email_deliveries"
+      : "atlasez_application_email_deliveries";
   const apiKey = env.RESEND_API_KEY?.trim();
   const from = env.EMAIL_FROM?.trim();
   if (!apiKey || !from) {
@@ -117,7 +122,7 @@ export async function dispatchApplicationEmails(
   // 待ち時間が長くても、実際のキー保持期間を超えるまでは同じキーで再試行する。
   const limit = Math.min(100, Math.max(1, options.limit ?? 100));
   const outsideIdempotencyWindow = (await env.REPORTS.prepare(
-    `UPDATE atlasez_application_email_deliveries
+    `UPDATE ${table}
         SET status='failed',claim_token=NULL,claimed_at=NULL,
             last_error='provider_idempotency_window_expired',updated_at=?
       WHERE status IN ('sending','retry','pending') AND attempt_count>0
@@ -136,7 +141,7 @@ export async function dispatchApplicationEmails(
     );
 
   const expiredClaims = (await env.REPORTS.prepare(
-    `UPDATE atlasez_application_email_deliveries
+    `UPDATE ${table}
         SET status='failed',claim_token=NULL,claimed_at=NULL,
             last_error='claim_expired_max_attempts',updated_at=?
       WHERE status='sending' AND attempt_count>=?
@@ -153,7 +158,7 @@ export async function dispatchApplicationEmails(
 
   const ready = await env.REPORTS.prepare(
     `SELECT id,recipient_email,subject,text_body,html_body,attempt_count,first_attempt_at,created_at
-       FROM atlasez_application_email_deliveries
+       FROM ${table}
       WHERE attempt_count<? AND (
         (status='pending' AND next_attempt_at<=? AND (attempt_count=0 OR first_attempt_at>?))
         OR (status='retry' AND next_attempt_at<=? AND first_attempt_at>?)
@@ -178,7 +183,7 @@ export async function dispatchApplicationEmails(
   for (const delivery of ready.results ?? []) {
     if (!EMAIL_PATTERN.test(delivery.recipient_email)) {
       await env.REPORTS.prepare(
-        "UPDATE atlasez_application_email_deliveries SET status='failed',last_error='invalid_recipient',updated_at=? WHERE id=?",
+        `UPDATE ${table} SET status='failed',last_error='invalid_recipient',updated_at=? WHERE id=?`,
       )
         .bind(now, delivery.id)
         .run();
@@ -187,7 +192,7 @@ export async function dispatchApplicationEmails(
     }
     const claimToken = crypto.randomUUID();
     const claim = (await env.REPORTS.prepare(
-      `UPDATE atlasez_application_email_deliveries
+      `UPDATE ${table}
           SET status='sending',claim_token=?,claimed_at=?,first_attempt_at=COALESCE(first_attempt_at,?),
               attempt_count=attempt_count+1,updated_at=?
         WHERE id=? AND attempt_count<? AND (
@@ -220,7 +225,7 @@ export async function dispatchApplicationEmails(
         const canRetry =
           retryableStatus(response.status) && nextAttempt < MAX_ATTEMPTS;
         await env.REPORTS.prepare(
-          `UPDATE atlasez_application_email_deliveries
+          `UPDATE ${table}
               SET status=?,next_attempt_at=?,last_error=?,claim_token=NULL,claimed_at=NULL,updated_at=?
             WHERE id=? AND status='sending' AND claim_token=?`,
         )
@@ -239,7 +244,7 @@ export async function dispatchApplicationEmails(
         continue;
       }
       await env.REPORTS.prepare(
-        `UPDATE atlasez_application_email_deliveries
+        `UPDATE ${table}
             SET status='sent',sent_at=?,claim_token=NULL,claimed_at=NULL,last_error='',updated_at=?
           WHERE id=? AND status='sending' AND claim_token=?`,
       )
@@ -254,7 +259,7 @@ export async function dispatchApplicationEmails(
           ? "timeout"
           : "network_or_provider";
       await env.REPORTS.prepare(
-        `UPDATE atlasez_application_email_deliveries
+        `UPDATE ${table}
             SET status=?,next_attempt_at=?,last_error=?,claim_token=NULL,claimed_at=NULL,updated_at=?
           WHERE id=? AND status='sending' AND claim_token=?`,
       )
