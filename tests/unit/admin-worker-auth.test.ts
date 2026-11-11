@@ -1057,6 +1057,170 @@ describe("Google OAuth login callback", () => {
   });
 });
 
+describe("approved admin gate pages", () => {
+  const oauthEnv = () =>
+    env("google-oauth", {
+      GOOGLE_OAUTH_CLIENT_ID: "oauth-client-id",
+      GOOGLE_OAUTH_CLIENT_SECRET: "oauth-client-secret",
+    });
+
+  it("shows the login page to browsers and still starts Google OAuth otherwise", async () => {
+    const page = await worker.fetch(
+      new Request(
+        "https://admin.example/auth/google/login?returnTo=/admin/portal/",
+        { headers: { accept: "text/html,application/xhtml+xml,*/*;q=0.8" } },
+      ),
+      oauthEnv() as never,
+    );
+    expect(page.status).toBe(200);
+    expect(page.headers.get("content-type")).toContain("text/html");
+    const body = await page.text();
+    expect(body).toContain("管理サイトへログイン");
+    expect(body).toContain("Googleアカウントでログイン");
+    expect(body).toContain("start=1");
+    expect(body).toContain(encodeURIComponent("/admin/portal/"));
+    expect(body).not.toContain("accounts.google.com");
+
+    const started = await worker.fetch(
+      new Request(
+        "https://admin.example/auth/google/login?start=1&returnTo=/admin/portal/",
+        { headers: { accept: "text/html" } },
+      ),
+      oauthEnv() as never,
+    );
+    expect(started.status).toBe(302);
+    expect(started.headers.get("location")).toContain(
+      "accounts.google.com/o/oauth2/v2/auth",
+    );
+
+    const client = await worker.fetch(
+      new Request("https://admin.example/auth/google/login"),
+      oauthEnv() as never,
+    );
+    expect(client.status).toBe(302);
+    expect(client.headers.get("location")).toContain("accounts.google.com");
+  });
+
+  it("renders the OAuth failure page for browsers and keeps the JSON error", async () => {
+    const settings = oauthEnv();
+    const login = await worker.fetch(
+      new Request("https://admin.example/auth/google/login"),
+      settings as never,
+    );
+    const stateCookie = login.headers.get("set-cookie")!.split(";", 1)[0];
+    const callbackUrl =
+      "https://admin.example/auth/google/callback?code=authorization-code&state=wrong-state";
+    const browser = await worker.fetch(
+      new Request(callbackUrl, {
+        headers: { cookie: stateCookie, accept: "text/html" },
+      }),
+      settings as never,
+    );
+    expect(browser.status).toBe(400);
+    expect(browser.headers.get("content-type")).toContain("text/html");
+    const html = await browser.text();
+    expect(html).toContain("ログインを確認できませんでした");
+    expect(html).toContain(
+      "Googleログインの確認に失敗しました。もう一度お試しください。",
+    );
+    expect(html).toContain('href="/auth/google/login"');
+    expect(html).not.toContain("<script");
+
+    const programmatic = await worker.fetch(
+      new Request(callbackUrl, {
+        headers: { cookie: stateCookie, accept: "application/json" },
+      }),
+      settings as never,
+    );
+    expect(programmatic.status).toBe(400);
+    await expect(programmatic.json()).resolves.toEqual({
+      error: "Googleログインの確認に失敗しました。もう一度お試しください。",
+    });
+  });
+
+  it("shows a return link after logout", async () => {
+    const response = await worker.fetch(
+      new Request("https://admin.example/auth/logged-out"),
+      oauthEnv() as never,
+    );
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain("<h1>ログアウトしました</h1>");
+    expect(body).toContain("管理サイトへ戻る");
+    expect(body).toContain('href="/auth/google/login"');
+    expect(response.headers.get("content-security-policy")).toContain(
+      "default-src 'none'",
+    );
+    expect(response.headers.get("content-security-policy")).toContain(
+      "style-src 'unsafe-inline'",
+    );
+  });
+
+  it("returns the admin 404 page and keeps unknown API responses as JSON", async () => {
+    const missing = await worker.fetch(
+      new Request("https://admin.example/this-page-is-missing"),
+      oauthEnv() as never,
+    );
+    expect(missing.status).toBe(404);
+    const body = await missing.text();
+    expect(body).toContain("ページが見つかりません");
+    expect(body).not.toContain("Google Sites");
+    expect(body).toContain('href="/auth/google/login"');
+
+    const api = await worker.fetch(
+      new Request("https://admin.example/api/not-a-route"),
+      oauthEnv() as never,
+    );
+    expect(api.status).toBe(404);
+    expect(api.headers.get("content-type")).toContain("application/json");
+    await expect(api.json()).resolves.toEqual({ error: "Not found" });
+  });
+
+  it("renders the page error screen and keeps unexpected API failures as JSON", async () => {
+    const page = await worker.fetch(
+      new Request("https://admin.example/favicon.svg"),
+      {
+        ...oauthEnv(),
+        ASSETS: {
+          fetch: async () => {
+            throw new Error("asset exploded <script>");
+          },
+        },
+      } as never,
+    );
+    expect(page.status).toBe(500);
+    const html = await page.text();
+    expect(html).toContain("ページを表示できませんでした");
+    expect(html).toContain("受付番号");
+    expect(html).toContain('href="/favicon.svg"');
+    expect(html).not.toContain("asset exploded");
+    expect(html).not.toContain("<script>");
+
+    const api = await worker.fetch(
+      new Request("https://admin.example/api/user/status", {
+        headers: { cookie: "atlasez_admin_session=session-token" },
+      }),
+      {
+        ...oauthEnv(),
+        REPORTS: {
+          prepare() {
+            throw new Error("db exploded");
+          },
+          batch: async () => [],
+        },
+      } as never,
+    );
+    expect(api.status).toBe(500);
+    expect(api.headers.get("content-type")).toContain("application/json");
+    const body = (await api.json()) as { error: string; requestId: string };
+    expect(body.error).toContain("データを読み込めませんでした");
+    expect(body.requestId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+    expect(JSON.stringify(body)).not.toContain("db exploded");
+  });
+});
+
 describe("standalone macOS app authentication", () => {
   it("routes app login through the existing Google OAuth callback", async () => {
     const state = "s".repeat(43);
