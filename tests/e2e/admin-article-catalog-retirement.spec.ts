@@ -198,21 +198,20 @@ test("分野一覧とカテゴリ別の記事表示をプロトタイプに合�
   });
 
   await page.locator('[data-subject-quick="mathematics"]').click();
-  await expect(page.locator("[data-list] .article")).toHaveCount(4);
+  await expect(page.locator("[data-list] .article")).toHaveCount(5);
   await expect(
     page.locator("[data-list] .article-group__heading"),
   ).toContainText("群論");
   await expect(
     page.locator("[data-list] .article-group__heading"),
   ).toContainText("5件");
+  await expect(page.locator("[data-list] [data-expand-category]")).toHaveCount(
+    0,
+  );
   await page.screenshot({
     path: "test-results/admin-articles-horizontal-subjects.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: "残り1件を表示" }).click();
-  await expect(page.locator("[data-list] .article")).toHaveCount(5);
-  await page.getByRole("button", { name: "先頭4件に戻す" }).click();
-  await expect(page.locator("[data-list] .article")).toHaveCount(4);
 
   await page.locator('[data-subject-quick="physics"]').click();
   await expect(page.locator("[data-list]")).toContainText("力学の記事");
