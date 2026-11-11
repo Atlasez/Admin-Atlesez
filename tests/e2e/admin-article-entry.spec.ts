@@ -492,6 +492,91 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-list] .article")).toHaveCount(1);
   });
 
+  test("分野を選ぶと追加操作なしですべての記事を表示する", async ({ page }) => {
+    const requestedUrls: string[] = [];
+    const makeMathArticle = (index: number) => ({
+      id: `math-doc-${index}`,
+      subject: "mathematics",
+      category: "group-theory",
+      title: `数学の記事 ${index}`,
+      status: "draft" as const,
+      updated_at: new Date(Date.UTC(2026, 8, 30 - index)).toISOString(),
+      published_at: null,
+    });
+
+    await page.route(editorDocumentListRoute, async (route) => {
+      const url = new URL(route.request().url());
+      requestedUrls.push(url.href);
+      if (url.searchParams.get("subject") === "mathematics") {
+        if (url.searchParams.get("cursor") === "math-page-2") {
+          await route.fulfill({
+            json: {
+              scope: { email: "alice@example.com", allSubjects: true },
+              documents: [makeMathArticle(101)],
+              pagination: { limit: 100, hasMore: false, nextCursor: null },
+            },
+          });
+          return;
+        }
+        await route.fulfill({
+          json: {
+            scope: { email: "alice@example.com", allSubjects: true },
+            documents: Array.from({ length: 100 }, (_, index) =>
+              makeMathArticle(index + 1),
+            ),
+            pagination: {
+              limit: 100,
+              hasMore: true,
+              nextCursor: "math-page-2",
+            },
+          },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com", allSubjects: true },
+          documents: [
+            makeMathArticle(1),
+            {
+              id: "physics-doc-1",
+              subject: "physics",
+              category: "mechanics",
+              title: "物理の記事",
+              status: "draft",
+              updated_at: "2026-08-01T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+          pagination: { limit: 20, hasMore: true, nextCursor: "global-page-2" },
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=subject-load-all");
+    await expect(page.locator("[data-article-load-more]")).toBeVisible();
+    await page.locator('[data-subject-quick="mathematics"]').click();
+
+    await expect(page.locator("[data-list] .article")).toHaveCount(101);
+    await expect(
+      page.locator('[data-document-id="math-doc-101"]'),
+    ).toContainText("数学の記事 101");
+    await expect(
+      page.locator("[data-list] [data-expand-category]"),
+    ).toHaveCount(0);
+    await expect(page.locator("[data-article-pagination]")).toBeHidden();
+    expect(
+      requestedUrls.some(
+        (url) => new URL(url).searchParams.get("subject") === "mathematics",
+      ),
+    ).toBe(true);
+    expect(
+      requestedUrls.some(
+        (url) => new URL(url).searchParams.get("cursor") === "math-page-2",
+      ),
+    ).toBe(true);
+  });
+
   test("D-3a: 公開予約済みの記事を日時付きで表示し、絞り込める", async ({
     page,
   }) => {

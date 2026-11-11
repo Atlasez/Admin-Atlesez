@@ -2204,15 +2204,19 @@ describe("admin worker editor APIs", () => {
       },
     };
     const response = await worker.fetch(
-      new Request("http://localhost/api/admin/editor/documents", {
-        headers: { "Cf-Access-Authenticated-User-Email": "math@example.com" },
-      }),
+      new Request(
+        "http://localhost/api/admin/editor/documents?subject=physics",
+        {
+          headers: { "Cf-Access-Authenticated-User-Email": "math@example.com" },
+        },
+      ),
       env as never,
     );
 
     expect(response.status).toBe(200);
     expect(documentQueries).toHaveLength(1);
     expect(documentQueries[0]).toContain("d.subject IN (?)");
+    expect(documentQueries[0]).toContain("d.subject = ?");
     expect(documentQueries[0]).not.toContain(
       "publication_review_stage='subject-coordinator'",
     );

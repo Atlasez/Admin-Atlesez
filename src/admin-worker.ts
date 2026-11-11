@@ -6742,6 +6742,7 @@ async function listEditorialDocuments(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  const searchParams = new URL(request.url).searchParams;
   const filters: string[] = [];
   const values: unknown[] = [];
   if (!scope.allSubjects) {
@@ -6765,9 +6766,13 @@ async function listEditorialDocuments(
     filters.push(`(${subjectFilter} OR (publication_review_stage='project-leader' AND ? = 1))`);
     values.push(...subjectValues, scope.isProjectLeader ? 1 : 0);
   }
-  const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
+  const requestedSubject = searchParams.get("subject")?.trim();
+  if (requestedSubject) {
+    filters.push("d.subject = ?");
+    values.push(requestedSubject);
+  }
+  const includeArchived = searchParams.get("includeArchived") === "1";
   if (!includeArchived) filters.push("d.archived_at IS NULL");
-  const searchParams = new URL(request.url).searchParams;
   // Keep the first page small enough for Cloudflare's Worker CPU budget. The
   // article index can load additional pages explicitly, so a smaller default
   // does not reduce coverage while avoiding 503s when the D1 result contains
