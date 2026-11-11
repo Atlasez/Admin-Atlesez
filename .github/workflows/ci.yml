@@ -56,10 +56,10 @@ jobs:
           # Ubuntuミラーに依存せず、ロックファイルと同じ版のブラウザーを使う。
           playwright_version="$(node -p 'require("@playwright/test/package.json").version')"
           docker run --rm --init --ipc=host --user "$(id -u):$(id -g)" \
-            -e CI=true -e BASE_PATH -e E2E_BASE_URL \
+            -e CI=true -e HOME=/tmp -e BASE_PATH -e E2E_BASE_URL \
             -v "$GITHUB_WORKSPACE:/work" -w /work \
             "mcr.microsoft.com/playwright:v${playwright_version}-noble" \
-            node ./node_modules/@playwright/test/cli.js test
+            npx playwright test
       - name: Lighthouse CI（品質検査）
         run: |
           npm install -g @lhci/cli
