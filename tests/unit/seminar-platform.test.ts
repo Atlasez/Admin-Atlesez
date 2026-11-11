@@ -26,8 +26,6 @@ const payload = () => ({
 function fixture() {
   const { db, env, request } = createAdminTestEnvironment();
   db.exec(`
-    INSERT INTO atlasez_projects(id,slug,name,created_at)
-      VALUES('seminar-platform','seminar-platform','ゼミプラットフォーム','2026-01-01');
     INSERT INTO atlasez_project_memberships(project_id,email,role,joined_at)
       VALUES('seminar-platform','${operator}','manager','2026-01-01'),
         ('seminar-platform','${inactive}','manager','2026-01-01');
@@ -254,6 +252,36 @@ describe("seminar platform", () => {
     expect(JSON.stringify(entry)).not.toMatch(
       /非公開|企画者氏名|審査メモ|organizer@/,
     );
+  });
+
+  it("routes proposals to active global reviewers when the seminar project has no active managers", async () => {
+    const { db, env, request } = fixture();
+    env.ADMIN_PRIMARY_EMAIL = "";
+    const globalReviewer = "fallback@atlasez.test";
+    const pausedReviewer = "paused-global@atlasez.test";
+    db.exec(`
+      DELETE FROM atlasez_project_memberships WHERE email='${operator}';
+      DELETE FROM report_admin_permissions WHERE subject='*';
+      INSERT INTO report_admin_permissions(email,subject)
+        VALUES('${globalReviewer}','*'),('${pausedReviewer}','*');
+      INSERT INTO atlasez_project_member_lifecycle(project_id,email,state,role_snapshot,last_request_id,updated_at)
+        VALUES('atlas','${pausedReviewer}','paused','manager','test','2026-01-01');
+    `);
+    const proposal = await request(`${api}/proposals`, host, payload());
+    expect(proposal.status).toBe(201);
+    const { number } = await proposal.json();
+    expect(
+      db.prepare("SELECT recipient_email FROM seminar_email_deliveries").all(),
+    ).toEqual([{ recipient_email: globalReviewer }]);
+    const decision = { decision: "approved" };
+    expect(
+      (await request(`${api}/${number}/review`, pausedReviewer, decision))
+        .status,
+    ).toBe(403);
+    expect(
+      (await request(`${api}/${number}/review`, globalReviewer, decision))
+        .status,
+    ).toBe(200);
   });
 
   it("limits participation approval to the host and protects private workspaces", async () => {

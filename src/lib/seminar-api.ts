@@ -134,12 +134,25 @@ async function submitProposal(
        SELECT lower(hex(randomblob(16))),s.number,r.email,?,?,?,?,?
          FROM seminars s
          CROSS JOIN (
-           SELECT lower(m.email) AS email FROM atlasez_project_memberships m
-           JOIN atlasez_projects p ON p.id=m.project_id
-           WHERE p.slug IN ('seminar-platform','semi-platform') AND m.role='manager'
+           WITH recipients AS (
+             SELECT lower(m.email) AS email FROM atlasez_project_memberships m
+             JOIN atlasez_projects p ON p.id=m.project_id
+             WHERE (p.id IN ('seminar-platform','semi-platform')
+                    OR p.slug IN ('seminar-platform','semi-platform'))
+               AND m.role='manager' AND trim(m.email)<>''
+               AND NOT EXISTS (SELECT 1 FROM atlasez_project_member_lifecycle l
+                               WHERE l.project_id=m.project_id AND lower(l.email)=lower(m.email) AND l.state!='active')
+             UNION SELECT ? WHERE ?<>''
+           )
+           SELECT email FROM recipients
+           UNION
+           SELECT lower(trim(g.email)) FROM report_admin_permissions g
+           WHERE g.subject='*' AND trim(g.email)<>''
+             AND NOT EXISTS (SELECT 1 FROM recipients)
              AND NOT EXISTS (SELECT 1 FROM atlasez_project_member_lifecycle l
-                             WHERE l.project_id=m.project_id AND lower(l.email)=lower(m.email) AND l.state!='active')
-           UNION SELECT ? WHERE ?<>''
+                             WHERE l.project_id='atlas' AND lower(l.email)=lower(g.email) AND l.state!='active')
+             AND NOT EXISTS (SELECT 1 FROM admin_member_lifecycle l
+                             WHERE lower(l.email)=lower(g.email) AND l.status='archived')
          ) r
        WHERE s.host_id=? AND s.submission_key=? AND changes()=1`,
       )
