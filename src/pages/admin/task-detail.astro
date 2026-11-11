@@ -4,7 +4,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 ---
 <AdminLayout title="タスク詳細・引き継ぎ" description="完了条件と前後の作業を確認し、担当者へ引き継ぎます">
   <main class="task-detail" data-task-workspace data-admin-load-surface aria-busy="true">
-    <header><h1 data-task-title>タスク詳細・引き継ぎ</h1><a href="/admin/member-tasks/" data-task-list-back>タスク管理へ戻る</a></header>
+    <header><h1 data-task-title>タスク詳細・引き継ぎ</h1><div><a href="/admin/profile-requests/" data-profile-approval-link hidden>メンバー情報の承認を開く</a> <a href="/admin/member-tasks/" data-task-list-back>タスク管理へ戻る</a></div></header>
     <AdminRetryNotice message="タスク詳細を読み込めませんでした。" />
     <p data-access-note role="status"></p>
     <form data-workspace-form hidden>

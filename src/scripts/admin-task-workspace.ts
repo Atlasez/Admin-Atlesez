@@ -13,6 +13,7 @@ type WorkspaceData = {
     id: string;
     title: string;
     status: string;
+    subject: string | null;
     updatedAt: string;
     assigneeEmails: string[];
   };
@@ -148,6 +149,10 @@ const initialize = () => {
       data = await api<WorkspaceData>(`/api/admin/task-workspaces/${taskId}`);
       const workspace = data.workspace;
       get("[data-task-title]").textContent = data.task.title;
+      const approvalLink = get<HTMLAnchorElement>(
+        "[data-profile-approval-link]",
+      );
+      approvalLink.hidden = data.task.subject !== "member-profile-change";
       field("summary").value = workspace.summary;
       field("nextAction").value = workspace.nextAction;
       field("waitingFor").value = workspace.waitingFor;
