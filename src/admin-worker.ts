@@ -23010,10 +23010,10 @@ async function adminNotifications(
       [scope.email, scope.email, scope.email, ...notificationProjectBindings, scope.email],
     ),
     queryNotificationSource<{
-      id: string; title: string; task_kind: string; details: string; project_id: string;
+      id: string; title: string; task_kind: string; details: string; project_id: string; subject: string | null;
       feedback_document_id: string | null; project_slug: string; updated_at: string;
     }>(
-      `SELECT t.id,t.title,t.task_kind,t.details,t.project_id,t.updated_at,
+      `SELECT t.id,t.title,t.task_kind,t.details,t.project_id,t.subject,t.updated_at,
          feedback_link.document_id AS feedback_document_id,
          COALESCE(p.slug,t.project_id) AS project_slug
        FROM editorial_tasks t
@@ -23146,9 +23146,11 @@ async function adminNotifications(
       kind: item.task_kind === "feedback" ? "feedback-request" : "task-request",
       title: `${taskKindLabel(item.task_kind)}：${item.title}`,
       detail: item.details?.split("\n")[0] || "依頼内容を確認してください。",
-      href: !scope.memberAccess && item.task_kind === "feedback" && item.feedback_document_id
-        ? `/admin/editor/?document=${encodeURIComponent(item.feedback_document_id)}`
-        : `/admin/task-detail/?task=${encodeURIComponent(item.id)}`,
+      href: item.subject === "member-profile-change"
+        ? "/admin/profile-requests/"
+        : !scope.memberAccess && item.task_kind === "feedback" && item.feedback_document_id
+          ? `/admin/editor/?document=${encodeURIComponent(item.feedback_document_id)}`
+          : `/admin/task-detail/?task=${encodeURIComponent(item.id)}`,
       updatedAt: item.updated_at,
     })),
     ...(applicationRows.results ?? []).map((item) => ({
