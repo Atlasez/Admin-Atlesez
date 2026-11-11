@@ -5770,6 +5770,35 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
     background: var(--editor-status-warning-border);
   }
 
+  /* コメント・フィードバックの状態チップにも同じ暗色テーマを適用する。 */
+  [data-pref-bg="dark"] .editor-workspace .review-panel .thread-status.is-pending,
+  [data-pref-bg="dark"] .editor-workspace .feedback-request-status.is-open,
+  [data-pref-bg="dark"] .editor-workspace .state-in-review,
+  [data-pref-bg="dark"] .editor-workspace .state-on-hold {
+    background: var(--editor-status-warning-background);
+    border-color: var(--editor-status-warning-border);
+    color: var(--editor-status-warning-text);
+  }
+  [data-pref-bg="dark"] .editor-workspace .review-panel .thread-status.is-acknowledged,
+  [data-pref-bg="dark"] .editor-workspace .feedback-request-status.is-doing,
+  [data-pref-bg="dark"] .editor-workspace .state-published {
+    background: var(--editor-status-info-background);
+    border-color: var(--editor-status-info-border);
+    color: var(--editor-status-info-text);
+  }
+  [data-pref-bg="dark"] .editor-workspace .review-panel .thread-status.is-resolved,
+  [data-pref-bg="dark"] .editor-workspace .feedback-request-status.is-done,
+  [data-pref-bg="dark"] .editor-workspace .state-approved {
+    background: var(--editor-status-success-background);
+    border-color: var(--editor-status-success-border);
+    color: var(--editor-status-success-text);
+  }
+  [data-pref-bg="dark"] .editor-workspace .state-draft {
+    background: var(--background-secondary);
+    border-color: var(--border-default);
+    color: var(--text-secondary);
+  }
+
   /* 保存前警告・選択範囲・返信欄など、編集操作に付随する補助UI */
   [data-pref-bg="dark"] .editor-workspace .unsaved-warning,
   [data-pref-bg="dark"] .editor-workspace .selection-action,
