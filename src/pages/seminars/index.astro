@@ -1,0 +1,34 @@
+---
+import SeminarLayout from "../../layouts/SeminarLayout.astro";
+import { recruitmentLabels } from "../../lib/seminar-fields";
+---
+<SeminarLayout title="ゼミプラットフォーム" page="catalog">
+  <section class="seminar-hero">
+    <p class="seminar-eyebrow">Atlasez</p>
+    <h1>ゼミプラットフォーム</h1>
+    <p>興味のあるテーマを持ち寄り、仲間と学ぶ。自主ゼミを見つけたり、企画したり、学んだことを活動の記録として残したりできる場所です。</p>
+    <div class="seminar-actions">
+      <a class="seminar-button" href="#catalog">ゼミを探す</a>
+      <a class="seminar-button secondary" href="/seminars/propose/">ゼミ企画フォーム</a>
+      <a class="seminar-button secondary" href="/seminars/join/">ゼミ参加フォーム</a>
+    </div>
+  </section>
+  <section id="catalog" aria-labelledby="catalog-heading">
+    <div class="seminar-section-head">
+      <h2 id="catalog-heading">ゼミ一覧</h2>
+      <p data-count role="status"></p>
+    </div>
+    <div class="seminar-filter">
+      <label>ゼミを検索 <input type="search" data-query placeholder="ゼミ名・番号・テーマ・教材など" /></label>
+      <label>募集状況
+        <select data-recruitment>
+          <option value="">すべて</option>
+          {Object.entries(recruitmentLabels).map(([value, label]) => <option value={value}>{label}</option>)}
+        </select>
+      </label>
+    </div>
+    <div data-page-content aria-busy="true">
+      <p>ゼミ一覧を読み込み中です。</p>
+    </div>
+  </section>
+</SeminarLayout>

@@ -1,0 +1,11 @@
+---
+import SeminarLayout from "../../layouts/SeminarLayout.astro";
+import SeminarApplicationForm from "../../components/SeminarApplicationForm.astro";
+---
+<SeminarLayout title="ゼミ企画フォーム" page="propose">
+  <header class="seminar-page-head">
+    <h1>ゼミ企画フォーム</h1>
+    <p>自主ゼミを新しく企画する方や、すでに実施したゼミを記録したい方はこちらから申請してください。</p>
+  </header>
+  <SeminarApplicationForm kind="propose" />
+</SeminarLayout>

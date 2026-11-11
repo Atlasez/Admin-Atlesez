@@ -1,0 +1,405 @@
+:root {
+  color-scheme: light;
+  --paper: #f8f8f2;
+  --surface: #fffef9;
+  --ink: #182b24;
+  --muted: #4d6259;
+  --accent: #175744;
+  --accent-soft: #e2eee4;
+  --line: #ccd8cf;
+  font-family: "Inter", "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  line-height: 1.65;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+[hidden] {
+  display: none !important;
+}
+h1,
+h2,
+h3,
+p,
+dl {
+  margin: 0;
+}
+h1,
+h2,
+h3 {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+h1 {
+  font-size: clamp(1.85rem, 5vw, 3.6rem);
+  letter-spacing: -0.035em;
+}
+h2 {
+  font-size: clamp(1.2rem, 2.5vw, 1.6rem);
+}
+h3 {
+  font-size: 1.06rem;
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 0.2em;
+}
+a:hover {
+  text-decoration-thickness: 0.13em;
+}
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #287b5d;
+  outline-offset: 3px;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.seminar-shell {
+  width: min(70rem, 100% - 3rem);
+  margin-inline: auto;
+}
+main {
+  min-height: 65vh;
+  padding-bottom: 4rem;
+}
+.seminar-skip {
+  position: fixed;
+  left: 1rem;
+  top: -10rem;
+  background: var(--surface);
+  padding: 0.75rem;
+  z-index: 1;
+}
+.seminar-skip:focus {
+  top: 1rem;
+}
+.seminar-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.seminar-header-inner,
+.seminar-header nav,
+.seminar-footer > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.35rem;
+}
+.seminar-header-inner {
+  justify-content: space-between;
+  padding-block: 0.9rem;
+}
+.seminar-header a {
+  text-decoration: none;
+}
+.seminar-header a:hover,
+.seminar-header a[aria-current] {
+  text-decoration: underline;
+}
+.seminar-header nav {
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+.seminar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--ink);
+  font-weight: 750;
+}
+.seminar-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  color: white;
+  background: var(--accent);
+}
+.seminar-account {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.seminar-hero {
+  margin-block: 2rem 2.8rem;
+  padding: clamp(1.4rem, 5vw, 3.6rem);
+  background: #e8efe5;
+  border: 1px solid var(--line);
+  border-left: 0.35rem solid var(--accent);
+}
+.seminar-eyebrow {
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 750;
+  margin-bottom: 0.55rem;
+}
+.seminar-hero h1 + p,
+.seminar-page-head h1 + p {
+  max-width: 46rem;
+  margin-top: 0.7rem;
+  color: var(--muted);
+}
+.seminar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  align-items: center;
+  margin-top: 1.15rem;
+}
+.seminar-button {
+  display: inline-block;
+  background: var(--accent);
+  color: white;
+  border: 1px solid var(--accent);
+  border-radius: 0.2rem;
+  padding: 0.53rem 0.95rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.seminar-button:hover {
+  text-decoration: underline;
+}
+.seminar-button.secondary {
+  background: var(--surface);
+  color: var(--accent);
+}
+.seminar-button.danger {
+  background: var(--surface);
+  color: #8e302a;
+  border-color: #ae665f;
+}
+.seminar-section-head,
+.seminar-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+.seminar-section-head {
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--line);
+}
+.seminar-section-head p,
+.seminar-muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.seminar-filter {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+  margin-block: 1rem 1.25rem;
+}
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.91rem;
+  font-weight: 650;
+}
+input:not([type="radio"]),
+select,
+textarea {
+  min-width: 0;
+  width: 100%;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid #9fb1a7;
+  border-radius: 0.2rem;
+  padding: 0.53rem 0.65rem;
+}
+input[type="file"] {
+  font-size: 0.85rem;
+}
+textarea {
+  resize: vertical;
+}
+.seminar-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+.seminar-card,
+.seminar-panel,
+.seminar-form fieldset {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 1.1rem;
+  min-width: 0;
+}
+.seminar-card {
+  min-height: 9rem;
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+}
+.seminar-card:hover {
+  border-color: var(--accent);
+}
+.seminar-card a {
+  color: var(--ink);
+}
+.seminar-card p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.seminar-number {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.seminar-tag {
+  padding: 0.12rem 0.5rem;
+  background: #edf0ec;
+  color: #4a5b54;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.seminar-tag.open {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.seminar-page-head {
+  margin-block: 2rem 1.4rem;
+}
+.seminar-back {
+  margin-top: 1.4rem;
+}
+.seminar-block {
+  margin-block: 1.4rem;
+}
+.seminar-panel > * + * {
+  margin-top: 0.55rem;
+}
+.seminar-stack {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.7rem;
+}
+.seminar-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 1.35rem;
+  padding-block: 0.7rem;
+}
+.seminar-details > div {
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.seminar-details dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.seminar-details dd,
+.seminar-prewrap {
+  margin: 0.2rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.seminar-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 54rem;
+}
+.seminar-form fieldset {
+  margin: 0;
+}
+.seminar-form fieldset > * + *,
+.seminar-form-grid {
+  margin-top: 0.65rem;
+}
+legend {
+  padding-inline: 0.35rem;
+  font-weight: 750;
+}
+.seminar-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+.seminar-full {
+  grid-column: 1 / -1;
+}
+.seminar-error {
+  color: #8e302a;
+}
+.seminar-footer {
+  border-top: 1px solid var(--line);
+  font-size: 0.86rem;
+}
+.seminar-footer > div {
+  padding-block: 1.3rem;
+}
+summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.seminar-vote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.65rem;
+  margin-top: 0.7rem;
+}
+.seminar-inline-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.6rem;
+}
+.seminar-inline-form label {
+  flex: 1 1 14rem;
+}
+.seminar-list {
+  margin: 0.55rem 0 0;
+  padding-left: 1.4rem;
+}
+
+@media (max-width: 800px) {
+  .seminar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .seminar-shell {
+    width: calc(100% - 1.5rem);
+  }
+  .seminar-grid,
+  .seminar-filter,
+  .seminar-details,
+  .seminar-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .seminar-header nav {
+    gap: 0.4rem 0.9rem;
+  }
+  .seminar-hero {
+    margin-top: 1rem;
+  }
+}

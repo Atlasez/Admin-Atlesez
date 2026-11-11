@@ -1,0 +1,51 @@
+---
+import "../styles/seminars.css";
+interface Props {
+  title: string;
+  page: string;
+}
+const { title, page } = Astro.props;
+const privatePage = ["member", "workspace", "operations", "join", "propose", "detail"].includes(page);
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {privatePage && <meta name="robots" content="noindex" />}
+    <title>{page === "catalog" ? title : `${title} | ゼミプラットフォーム`}</title>
+  </head>
+  <body data-seminar-page={page}>
+    <a class="seminar-skip" href="#main">本文へ移動</a>
+    <header class="seminar-header">
+      <div class="seminar-shell seminar-header-inner">
+        <a class="seminar-brand" href="/seminars/">
+          <span class="seminar-brand-mark" aria-hidden="true">ゼ</span>
+          ゼミプラットフォーム
+        </a>
+        <nav aria-label="ゼミプラットフォーム">
+          <a href="/seminars/" aria-current={page === "catalog" ? "page" : undefined}>ゼミ一覧</a>
+          <a href="/seminars/propose/" aria-current={page === "propose" ? "page" : undefined}>企画する</a>
+          <a href="/seminars/member/" aria-current={page === "member" ? "page" : undefined}>参加者ページ</a>
+          <a href="/seminars/operations/" data-seminar-operator hidden>運営ページ</a>
+          <a href={`/auth/google/login?returnTo=${encodeURIComponent(Astro.url.pathname)}`} data-seminar-login>ログイン</a>
+          <span class="seminar-account" data-seminar-account hidden>ログイン中</span>
+        </nav>
+      </div>
+    </header>
+    <main id="main" class="seminar-shell">
+      <slot />
+    </main>
+    <footer class="seminar-footer">
+      <div class="seminar-shell">
+        <a href="https://atlasez.org/">Atlasez</a>
+        <a href="/privacy-policy/">個人情報保護方針</a>
+        <a href="mailto:atlasez.contact@gmail.com">お問い合わせ</a>
+      </div>
+    </footer>
+    <noscript><p class="seminar-shell">一覧の表示や申請にはJavaScriptを有効にしてください。</p></noscript>
+    <script>
+      import "../scripts/seminars/index";
+    </script>
+  </body>
+</html>

@@ -11,7 +11,9 @@ class Statement {
     readonly db: DatabaseSync,
   ) {}
   bind(...values: unknown[]) {
-    this.values = values as SQLInputValue[];
+    this.values = values.map((value) =>
+      value instanceof ArrayBuffer ? new Uint8Array(value) : value,
+    ) as SQLInputValue[];
     return this;
   }
   async first<T>() {
