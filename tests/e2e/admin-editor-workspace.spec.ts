@@ -733,9 +733,7 @@ test("個別記事を開いたときは未選択用の開始パネルを表示�
   await expect(page.locator("[data-editor-empty]")).toBeHidden();
 });
 
-test("個別記事の読み込み失敗時も公開記事の登録パネルを表示しない", async ({
-  page,
-}) => {
+test("個別記事の読み込み失敗時も未選択画面を誤表示しない", async ({ page }) => {
   await mockAdminApi(page);
   await page.route(editorDocumentListRoute, async (route) => {
     await route.fulfill({
@@ -746,7 +744,7 @@ test("個別記事の読み込み失敗時も公開記事の登録パネルを�
   });
   await page.goto("./admin/editor/?document=doc-1");
   await expect(page.locator("[data-editor-empty]")).toBeHidden();
-  await expect(page.locator("[data-import-source]")).toBeHidden();
+  await expect(page.locator("[data-import-source]")).toHaveCount(0);
   await expect(page.locator("[data-admin-load-error]")).toBeVisible();
 });
 

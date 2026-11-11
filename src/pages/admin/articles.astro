@@ -55,30 +55,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       <button type="button" data-workflow-action="revise"><strong>加筆・修正</strong></button>
       <button type="button" data-workflow-action="review"><strong>フィードバック</strong></button>
     </nav>
-    <details class="catalog-overview" data-catalog-overview aria-label="学習サイト公開記事との連携">
-      <summary class="catalog-overview__summary">
-        <span class="catalog-overview__compact" data-catalog-compact-summary data-state="loading" aria-live="polite">公開記事を照合しています…</span>
-        <span class="catalog-overview__chevron" aria-hidden="true"></span>
-      </summary>
-      <div class="catalog-overview__content">
-        <div class="catalog-overview__heading">
-          <div>
-            <h2 id="catalog-overview-heading">連携状況の詳細</h2>
-            <p data-catalog-summary data-state="loading" aria-live="polite">公開記事カタログを確認しています…</p>
-          </div>
-          <div class="catalog-overview__tools">
-            <button type="button" class="article-action" data-run-catalog-diagnostics>連携状態を診断</button>
-            <button type="button" class="article-action" data-register-unregistered hidden>運営原稿を一括作成</button>
-          </div>
-        </div>
-        <div class="catalog-statuses" data-catalog-counts aria-label="公開記事の運営原稿との連携状況"></div>
-      </div>
-    </details>
-    <details class="catalog-diagnostics" data-catalog-diagnostics hidden>
-      <summary>公開記事カタログの診断結果</summary>
-      <p data-catalog-diagnostics-summary>診断を実行してください。</p>
-      <ul data-catalog-diagnostics-issues></ul>
-    </details>
     <section class="filters" id="article-list" aria-label="原稿一覧の絞り込み">
       <div class="filters__primary">
         <label class="filter-control filter-control-search">
@@ -127,17 +103,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
               </select>
             </label>
             <label class="filter-control">
-              <span>運営原稿との連携</span>
-              <select data-linkage>
-                <option value="all">すべて</option>
-                <option value="managed">公開記事と連携済み</option>
-                <option value="needs-registration">原稿あり・公開記事ID未連携</option>
-                <option value="unmanaged">運営原稿未登録</option>
-                <option value="conflict">重複・紐付け要確認</option>
-                <option value="unknown">連携状態を判定できない</option>
-              </select>
-            </label>
-            <label class="filter-control">
               <span>テスト原稿</span>
               <select data-test>
                 <option value="exclude">除く</option>
@@ -176,7 +141,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       </div>
       <div class="subject-browser__items" data-subject-browser></div>
     </nav>
-    <p class="catalog-feedback" data-catalog-feedback role="status" aria-live="polite"></p>
     <section class="list loading-state" data-list data-admin-load-surface aria-busy="true">原稿一覧を取得しています…</section>
     <p class="article-scope-note" data-scope-note data-state="loading" role="status" aria-live="polite">担当範囲を確認しています…</p>
     <AdminRetryNotice />
@@ -226,10 +190,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .article-pagination[hidden] { display: none; }
   .article-pagination > span { color: var(--text-secondary); font-size: .76rem; }
   .article-scope-note { color: var(--text-secondary); font-size: .76rem; margin: .65rem auto 0; min-height: 1.2rem; text-align: center; }
-  .article-scope-note[data-state="loading"],
-  .catalog-note[data-state="loading"] { text-align: center; }
-  .article-scope-note[data-state="error"],
-  .catalog-note[data-state="error"] { color: var(--danger); }
+  .article-scope-note[data-state="loading"] { text-align: center; }
+  .article-scope-note[data-state="error"] { color: var(--danger); }
   .article-scope-note[data-state="error"]::before { content: none; }
   .article-scope-note::before { color: var(--accent-primary); content: "●"; font-size: .6rem; margin-right: .4rem; vertical-align: .08em; }
   .article-pagination button { min-height: 2.25rem; }
@@ -323,41 +285,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     color: var(--text-secondary);
     font-size: 0.82rem;
   }
-  .catalog-note {
-    color: var(--text-secondary);
-    font-size: 0.78rem;
-    margin: 0 auto 0.55rem;
-    max-width: 60rem;
-    text-align: center;
-  }
-  .catalog-toolbar {
-    align-items: center;
-    display: flex;
-    gap: 0.45rem;
-    margin: 0.45rem auto 0.6rem;
-    max-width: 60rem;
-  }
-  .catalog-toolbar .catalog-note {
-    flex: 1 1 auto;
-    margin: 0;
-    max-width: none;
-    text-align: left;
-  }
-  .catalog-toolbar > button { flex: 0 0 auto; max-width: 100%; }
-  .catalog-diagnostics {
-    background: var(--background-secondary);
-    border: 1px solid var(--border-default);
-    border-left: 3px solid var(--accent-primary);
-    margin: 0 auto 1rem;
-    max-width: 60rem;
-    padding: 0.7rem 0.85rem;
-  }
-  .catalog-diagnostics summary { cursor: pointer; font-weight: 800; }
-  .catalog-diagnostics p { color: var(--text-secondary); font-size: 0.8rem; margin: 0.65rem 0 0; }
-  .catalog-diagnostics ul { display: grid; gap: 0.35rem; margin: 0.65rem 0 0; padding-left: 1.2rem; }
-  .catalog-diagnostics li { font-size: 0.78rem; line-height: 1.5; }
-  .catalog-diagnostics li strong { color: var(--accent-primary); }
-  .catalog-diagnostics.is-error { border-left-color: #b24b38; }
   .subject-browser {
     border-bottom: 1px solid var(--border-default);
     margin: 0 auto .55rem;
@@ -392,22 +319,10 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .subject-browser__item--all { border-style: dashed; }
   .subject-browser__item--empty[aria-pressed="true"] { color: var(--text-primary); }
   @media (max-width: 600px) {
-    .catalog-toolbar { align-items: stretch; flex-wrap: wrap; }
-    .catalog-toolbar .catalog-note { flex-basis: 100%; }
-    .catalog-toolbar > button { flex: 1 1 auto; }
     .subject-browser__heading { align-items: start; }
     .subject-browser__heading p { line-height: 1.45; }
     .subject-browser__heading p { max-width: 12rem; text-align: right; }
   }
-  .catalog-feedback {
-    color: var(--accent-primary);
-    font-size: 0.78rem;
-    margin: 0 auto 0.55rem;
-    max-width: 60rem;
-    min-height: 1.2em;
-    white-space: pre-line;
-  }
-  .catalog-feedback.is-error { color: #b24b38; }
   .list {
     display: grid;
     grid-auto-flow: row;
@@ -492,12 +407,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     background: #e7f1fb;
     color: #185c86;
   }
-  .unregistered {
-    background: #fff6dc;
-    border-color: #d9a429;
-    color: #714f00;
-  }
-  .catalog-action {
+  .proposal-action {
     align-items: center;
     background: var(--background-secondary);
     border: 1px solid var(--accent-primary);
@@ -511,7 +421,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     text-decoration: none;
     white-space: nowrap;
   }
-  .catalog-action:hover {
+  .proposal-action:hover {
     background: var(--accent-primary);
     color: #fff;
   }
@@ -587,12 +497,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .article a:hover {
     border-color: var(--accent-primary);
     background: var(--background-secondary);
-  }
-  .article-unregistered {
-    border-left: 3px solid #d9a429;
-  }
-  .article-unregistered:hover {
-    border-left-color: var(--accent-primary);
   }
   @media (max-width: 600px) {
     .admin-page {
@@ -772,117 +676,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   }
 </style>
 <style is:global>
-  .catalog-overview {
-    background: var(--background-secondary);
-    border: 1px solid var(--border-default);
-    border-radius: 0.9rem;
-    margin: 0 auto 1.1rem;
-    max-width: 60rem;
-    overflow: hidden;
-  }
-  .catalog-overview__summary {
-    align-items: center;
-    cursor: pointer;
-    display: flex;
-    gap: 0.75rem;
-    min-height: 2.7rem;
-    padding: 0.55rem 0.8rem;
-    list-style: none;
-  }
-  .catalog-overview__summary::-webkit-details-marker { display: none; }
-  .catalog-overview__summary:focus-visible {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: -3px;
-  }
-  .catalog-overview__title {
-    color: var(--text-primary);
-    flex: 0 0 auto;
-    font-size: 0.78rem;
-    font-weight: 850;
-  }
-  .catalog-overview__compact {
-    color: var(--text-secondary);
-    flex: 1 1 auto;
-    font-size: 0.72rem;
-    min-width: 0;
-  }
-  .catalog-overview__compact[data-state="error"] { color: var(--danger); }
-  .catalog-overview__chevron {
-    border-bottom: 1.5px solid var(--text-secondary);
-    border-right: 1.5px solid var(--text-secondary);
-    flex: 0 0 auto;
-    height: 0.42rem;
-    margin: -0.2rem 0.15rem 0 auto;
-    transform: rotate(45deg);
-    transition: transform 120ms ease;
-    width: 0.42rem;
-  }
-  .catalog-overview[open] > .catalog-overview__summary {
-    border-bottom: 1px solid var(--border-default);
-  }
-  .catalog-overview[open] .catalog-overview__chevron {
-    margin-top: 0.2rem;
-    transform: rotate(225deg);
-  }
-  .catalog-overview__content {
-    padding: 0.8rem 0.9rem 0.9rem;
-  }
-  .catalog-overview__heading {
-    align-items: center;
-    display: flex;
-    gap: 1rem;
-    justify-content: space-between;
-  }
-  .catalog-overview__heading h2 {
-    font-size: 0.92rem;
-    margin: 0;
-  }
-  .catalog-overview__heading p {
-    color: var(--text-secondary);
-    font-size: 0.72rem;
-    margin: 0.2rem 0 0;
-  }
-  .catalog-overview__heading p[data-state="error"] { color: var(--danger); }
-  .catalog-overview__tools {
-    align-items: center;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-    justify-content: end;
-  }
-  .catalog-statuses {
-    display: grid;
-    gap: 0.45rem;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    margin-top: 0.75rem;
-  }
-  .catalog-status-card {
-    background: var(--background-primary);
-    border: 1px solid var(--border-default);
-    border-radius: 0.65rem;
-    color: var(--text-primary);
-    cursor: pointer;
-    display: grid;
-    gap: 0.15rem;
-    min-width: 0;
-    padding: 0.55rem 0.65rem;
-    text-align: left;
-  }
-  .catalog-status-card:hover,
-  .catalog-status-card:focus-visible,
-  .catalog-status-card[aria-pressed="true"] {
-    border-color: var(--accent-primary);
-    outline: none;
-  }
-  .catalog-status-card[aria-pressed="true"] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 22%, transparent); }
-  .catalog-status-card__label { font-size: 0.68rem; font-weight: 800; line-height: 1.35; }
-  .catalog-status-card strong { font-size: 1.18rem; line-height: 1.1; }
-  .catalog-status-card small { color: var(--text-secondary); font-size: 0.62rem; line-height: 1.35; }
-  .catalog-status-card--linked { border-top: 3px solid #3d9c68; }
-  .catalog-status-card--needs-registration,
-  .catalog-status-card--unmanaged { border-top: 3px solid #d7a132; }
-  .catalog-status-card--conflict,
-  .catalog-status-card--unknown { border-top: 3px solid #b95b4d; }
   .subject-browser {
     border-bottom: 0;
     margin: 0 auto 0.9rem;
@@ -1004,34 +797,13 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .article-status-group .badge { font-size: 0.7rem; }
   .badge.public-live { background: color-mix(in srgb, #368d5d 15%, var(--background-primary)); border-color: color-mix(in srgb, #368d5d 45%, var(--border-default)); color: var(--text-primary); }
   .badge.public-scheduled { background: color-mix(in srgb, #d49a26 15%, var(--background-primary)); border-color: color-mix(in srgb, #d49a26 50%, var(--border-default)); color: var(--text-primary); }
-  .badge.public-draft,
-  .badge.linkage-none { background: var(--background-secondary); color: var(--text-secondary); }
-  .badge.linked { background: color-mix(in srgb, #368d5d 15%, var(--background-primary)); border-color: color-mix(in srgb, #368d5d 45%, var(--border-default)); color: var(--text-primary); }
-  .badge.linkage-attention,
-  .badge.linkage-missing { background: color-mix(in srgb, #d49a26 16%, var(--background-primary)); border-color: color-mix(in srgb, #d49a26 50%, var(--border-default)); color: var(--text-primary); }
-  .badge.linkage-conflict,
-  .badge.linkage-unknown { background: color-mix(in srgb, #b95b4d 14%, var(--background-primary)); border-color: color-mix(in srgb, #b95b4d 45%, var(--border-default)); color: var(--text-primary); }
+  .badge.public-draft { background: var(--background-secondary); color: var(--text-secondary); }
   .article-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: end; }
-  .article-actions > .catalog-action { white-space: normal; }
   @media (max-width: 900px) {
     .filters__primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .filter-control-search { grid-column: span 2; }
-    .catalog-statuses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 600px) {
-    .catalog-overview__summary { align-items: flex-start; flex-wrap: wrap; gap: 0.2rem 0.55rem; padding: 0.55rem 0.65rem; }
-    .catalog-overview__title { font-size: 0.72rem; }
-    .catalog-overview__compact { flex-basis: calc(100% - 1.2rem); font-size: 0.66rem; }
-    .catalog-overview__chevron { margin-top: 0.2rem; }
-    .catalog-overview[open] .catalog-overview__chevron { margin-top: 0.45rem; }
-    .catalog-overview__content { padding: 0.65rem; }
-    .catalog-overview__heading { align-items: stretch; flex-direction: column; }
-    .catalog-overview__tools { justify-content: stretch; }
-    .catalog-overview__tools button { flex: 1 1 auto; }
-    .catalog-statuses { gap: 0.35rem; }
-    .catalog-status-card { padding: 0.45rem 0.5rem; }
-    .catalog-status-card__label { font-size: 0.63rem; }
-    .catalog-status-card small { font-size: 0.58rem; }
     .subject-browser__heading { align-items: start; }
     .subject-browser__heading p { max-width: 11rem; text-align: right; }
     .filters { padding: 0.75rem; }
@@ -1050,22 +822,11 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .workflow-actions button { outline: 0; outline-offset: 0; }
   .workflow-actions a:focus-visible,
   .workflow-actions button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-  .catalog-overview { background: transparent; border: 0; border-radius: 0; margin: 0 auto 0.7rem; max-width: none; overflow: visible; }
-  .catalog-overview__summary { border-bottom: 1px solid var(--border-default); gap: 0.6rem; min-height: 0; padding: 0 0 0.55rem; }
-  .catalog-overview__compact { color: var(--text-secondary); flex: 1 1 auto; font-size: 0.8rem; font-weight: 500; min-width: 0; }
-  .catalog-overview__compact[data-state="error"] { color: var(--danger); }
-  .catalog-overview__chevron { margin-left: auto; }
-  .catalog-overview__content { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: 0.65rem; margin-top: 0.55rem; padding: 0.8rem 0.9rem 0.9rem; }
-  .catalog-overview[open] > .catalog-overview__summary { border-bottom: 1px solid var(--border-default); }
-  .catalog-diagnostics,
-  .catalog-feedback,
   .subject-browser,
   .filters,
   .list,
   .article-pagination,
   .article-scope-note { max-width: none; width: 100%; }
-  .catalog-diagnostics { margin: 0 auto 0.7rem; }
-  .catalog-feedback { margin: 0 auto 0.35rem; text-align: left; }
   .subject-browser {
     background: var(--background-secondary);
     border: 1px solid var(--border-default);
@@ -1150,7 +911,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   }
   .filters__primary .advanced-filters .filter-control { display: grid; }
   .filters__primary .advanced-filters .filter-control > span { color: var(--text-secondary); font-size: 0.66rem; font-weight: 800; }
-  .subject-browser + .catalog-feedback { margin-top: -0.3rem; }
   .list {
     background: var(--background-secondary);
     border: 1px solid var(--border-default);
@@ -1196,7 +956,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .article:last-child { border-bottom: 0; }
   .article:hover { background: color-mix(in srgb, var(--accent-primary) 4%, var(--background-secondary)); box-shadow: none; }
   .article:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: -2px; }
-  .article-unregistered { border-left: 0; }
   .article-main { align-items: center; column-gap: 1rem; display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(18rem, 1.3fr); min-width: 0; }
   .article-identity { grid-column: 1; grid-row: 1; min-width: 0; }
   .article-identity h2 { color: var(--text-primary); font-size: 0.8rem; font-weight: 700; line-height: 1.35; }
@@ -1206,21 +965,14 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .article-status-group__label { color: var(--text-secondary); font-size: 0.64rem; font-weight: 700; }
   .article-status-group .badge { background: transparent; border: 0; border-radius: 0; font-size: 0.66rem; font-weight: 700; padding: 0; }
   .article-status-group .badge.public-live,
-  .article-status-group .badge.linked,
   .article-status-group .badge.approved { color: color-mix(in srgb, #368d5d 78%, var(--text-primary)); }
   .article-status-group .badge.public-scheduled,
-  .article-status-group .badge.linkage-attention,
-  .article-status-group .badge.linkage-missing,
-  .article-status-group .badge.in-review { color: color-mix(in srgb, #d49a26 82%, var(--text-primary)); }
-  .article-status-group .badge.linkage-conflict,
-  .article-status-group .badge.linkage-unknown,
   .article-status-group .badge.on-hold { color: color-mix(in srgb, #b95b4d 82%, var(--text-primary)); }
   .article-status-group .badge.public-draft,
-  .article-status-group .badge.linkage-none,
   .article-status-group .badge.draft { color: var(--text-secondary); }
   .article-presence { font-size: 0.64rem; grid-column: 2; grid-row: 2; margin: 0.1rem 0 0; }
   .article-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 0.35rem; grid-column: 2; grid-row: 1; justify-content: end; }
-  .article-actions > .catalog-action { font-size: 0.66rem; padding: 0.3rem 0.45rem; }
+  .article-actions > .proposal-action { font-size: 0.66rem; padding: 0.3rem 0.45rem; }
   .article-actions .article-action { font-size: 0.66rem; padding: 0.28rem 0.4rem; }
   .article-group__more {
     background: transparent;
@@ -1254,10 +1006,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     .article-presence { grid-column: 1; grid-row: auto; }
   }
   @media (max-width: 600px) {
-    .catalog-overview__summary { align-items: center; flex-wrap: nowrap; padding-bottom: 0.5rem; }
-    .catalog-overview__compact { flex-basis: auto; font-size: 0.7rem; line-height: 1.45; }
-    .catalog-overview__chevron { margin-top: 0; }
-    .catalog-overview__content { padding: 0.65rem; }
     .filters { padding: 0.45rem; }
     .filters__primary { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
     .filter-control-search,
@@ -1280,14 +1028,14 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
   import { readAdminApiJson } from "../../lib/admin-api";
-  import { canRegisterArticleInSubject, isBulkArticleRegistrationCandidate, isTestArticleTitle } from "../../lib/admin-article-registration";
+  import { isTestArticleTitle } from "../../lib/article-test-classification";
   type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;scheduled_publish_at?:string|null;archived_at?:string|null;archive_expires_at?:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
-  type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;linkage:string;test:string;workflow:string;archive:string};
+  type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;test:string;workflow:string;archive:string};
   type ArticleScope={email:string;subjects?:string[];coordinatorSubjects?:string[];allSubjects?:boolean;isManager?:boolean;isProjectLeader?:boolean};
   type ArticlePagination={limit:number;nextCursor:string|null;hasMore:boolean};
-  type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string;managementState?:string;documentId?:string;duplicateDocumentIds?:string[]};
-  type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown;state?:unknown;editorial_document_id?:unknown;duplicate_document_ids?:unknown};
-  type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"} | {kind:"needs-registration";publicArticle:PublicArticle;documentId?:string;management:"managed"} | {kind:"conflict";publicArticle:PublicArticle;management:"conflict"} | {kind:"unknown";publicArticle:PublicArticle;management:"unknown"};
+  type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string};
+  type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown};
+  type CatalogRow={article:Article;publicArticle?:PublicArticle};
   const initializeArticleIndex = () => {
     const root = document.querySelector<HTMLElement>("[data-article-index]");
     if (!root || root.dataset.ready === "true") return;
@@ -1298,22 +1046,12 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const category = root.querySelector<HTMLSelectElement>("[data-category]")!;
     const status = root.querySelector<HTMLSelectElement>("[data-status]")!;
     const publication = root.querySelector<HTMLSelectElement>("[data-public]")!;
-    const linkage = root.querySelector<HTMLSelectElement>("[data-linkage]")!;
     const test = root.querySelector<HTMLSelectElement>("[data-test]")!;
     const workflow = root.querySelector<HTMLSelectElement>("[data-workflow-filter]")!;
     const archive = root.querySelector<HTMLSelectElement>("[data-archive]")!;
     const count = root.querySelector<HTMLOutputElement>("[data-count]")!;
-    const catalogSummary = root.querySelector<HTMLElement>("[data-catalog-summary]")!;
-    const catalogCompactSummary = root.querySelector<HTMLElement>("[data-catalog-compact-summary]")!;
-    const catalogCounts = root.querySelector<HTMLElement>("[data-catalog-counts]")!;
     const filterSummary = root.querySelector<HTMLElement>("[data-filter-summary]")!;
     const scopeNote = root.querySelector<HTMLElement>("[data-scope-note]")!;
-    const catalogFeedback = root.querySelector<HTMLElement>("[data-catalog-feedback]")!;
-    const catalogDiagnosticsButton = root.querySelector<HTMLButtonElement>("[data-run-catalog-diagnostics]")!;
-    const registerUnregisteredButton = root.querySelector<HTMLButtonElement>("[data-register-unregistered]")!;
-    const catalogDiagnostics = root.querySelector<HTMLDetailsElement>("[data-catalog-diagnostics]")!;
-    const catalogDiagnosticsSummary = root.querySelector<HTMLElement>("[data-catalog-diagnostics-summary]")!;
-    const catalogDiagnosticsIssues = root.querySelector<HTMLUListElement>("[data-catalog-diagnostics-issues]")!;
     const resetFiltersButton = root.querySelector<HTMLButtonElement>("[data-reset-filters]")!;
     const subjectBrowser = root.querySelector<HTMLElement>("[data-subject-browser]")!;
     const subjectBrowserSummary = root.querySelector<HTMLElement>("[data-subject-browser-summary]");
@@ -1327,19 +1065,15 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     let retry: ReturnType<typeof createAdminLoadRetry> | null = null;
     const catalogElement = root.querySelector<HTMLScriptElement>("[data-public-articles]");
     let publicArticles = catalogElement ? JSON.parse(catalogElement.textContent ?? "[]") as PublicArticle[] : [];
-    let catalogSource: "api" | "unavailable" = "unavailable";
     let catalogReady = false;
-    const registeredPublicArticleIds = new Map<string, string | undefined>();
     let items: Article[] = [];
-    let bulkRegistrationInFlight = false;
     let scopeEmail = "";
-    let articleScope: ArticleScope | null = null;
     let nextCursor: string | null = null;
     let hasMore = false;
     let loadedPageCount = 0;
     const expandedArticleGroups = new Set<string>();
     const filterStorageKey = "atlasez-admin-article-filters";
-    const defaultFilterState: ArticleFilterState = { query: "", subject: "all", category: "all", status: "all", publication: "all", linkage: "all", test: "exclude", workflow: "all", archive: "active" };
+    const defaultFilterState: ArticleFilterState = { query: "", subject: "all", category: "all", status: "all", publication: "all", test: "exclude", workflow: "all", archive: "active" };
 
     const requestedMode = new URLSearchParams(location.search).get("mode");
     const readStoredFilters = (): Partial<ArticleFilterState> => {
@@ -1363,7 +1097,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     assignSelectValue(category, storedFilters.category, defaultFilterState.category);
     assignSelectValue(status, storedFilters.status, defaultFilterState.status);
     assignSelectValue(publication, storedFilters.publication, defaultFilterState.publication);
-    assignSelectValue(linkage, storedFilters.linkage, defaultFilterState.linkage);
     assignSelectValue(test, storedFilters.test, defaultFilterState.test);
     assignSelectValue(workflow, requestedMode === "review" || requestedMode === "revise" || requestedMode === "request" ? requestedMode : storedFilters.workflow, defaultFilterState.workflow);
     assignSelectValue(archive, storedFilters.archive, defaultFilterState.archive);
@@ -1408,7 +1141,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         category: category.value,
         status: status.value,
         publication: publication.value,
-        linkage: linkage.value,
         test: test.value,
         workflow: workflow.value,
         archive: archive.value,
@@ -1420,7 +1152,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       }
     };
     const applySubjectScope = (scope: ArticleScope) => {
-      articleScope = scope;
       scopeNote.dataset.state = "ready";
       const directSubjects = Array.isArray(scope.subjects) ? scope.subjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
       const coordinatorSubjects = Array.isArray(scope.coordinatorSubjects) ? scope.coordinatorSubjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
@@ -1460,51 +1191,18 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const updateWorkflowButtons = () => root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.workflowAction === currentWorkflow())));
     const publicArticleKey = (article: PublicArticle) => `${article.subject}/${article.category}/${article.slug}`;
     const catalogRows = (): CatalogRow[] => {
-      const rows: CatalogRow[] = items.map((article) => {
+      return items.map((article) => {
         const pathMatch = publicArticles.find((source) => publicArticleKey(source) === `${article.subject}/${article.category}/${article.slug}`);
         const publicArticle = pathMatch && (!article.source_article_id || article.source_article_id === pathMatch.articleId) ? pathMatch : undefined;
-        return { kind: "editorial", article, publicArticle, management: "managed" };
+        return { article, publicArticle };
       });
-      // The document list is useful before the remote catalog responds. Do not
-      // show build-time catalog entries until the current API result is known.
-      if (!catalogReady) return rows;
-      const managedKeys = new Set(rows.flatMap((row) => row.publicArticle ? [publicArticleKey(row.publicArticle)] : []));
-      const scopeAllowsSubject = (value: string) => {
-        if (!articleScope) return false;
-        if (articleScope.allSubjects || articleScope.isManager || articleScope.isProjectLeader || (articleScope.subjects === undefined && articleScope.coordinatorSubjects === undefined)) return true;
-        const allowed = new Set([...(articleScope.subjects ?? []), ...(articleScope.coordinatorSubjects ?? [])]);
-        return allowed.has(value);
-      };
-      for (const publicArticle of publicArticles.filter((article) => scopeAllowsSubject(article.subject))) {
-        const key = publicArticleKey(publicArticle);
-        if (managedKeys.has(key)) continue;
-        if (registeredPublicArticleIds.has(key) || publicArticle.managementState === "managed") rows.push({ kind: "registered", publicArticle, documentId: registeredPublicArticleIds.get(key) ?? publicArticle.documentId, management: "managed" });
-        else if (publicArticle.managementState === "needs-registration") rows.push({ kind: "needs-registration", publicArticle, documentId: publicArticle.documentId, management: "managed" });
-        else if (publicArticle.managementState === "duplicate" || publicArticle.managementState === "identity-conflict") rows.push({ kind: "conflict", publicArticle, management: "conflict" });
-        else if (publicArticle.managementState === "unmanaged") rows.push({ kind: "unregistered", publicArticle, management: "unregistered" });
-        else rows.push({ kind: "unknown", publicArticle, management: "unknown" });
-      }
-      return rows;
     };
-    const rowTitle = (row: CatalogRow) => row.kind === "editorial" ? row.article.title : row.publicArticle.title;
-    const rowSubject = (row: CatalogRow) => row.kind === "editorial" ? row.article.subject : row.publicArticle.subject;
-    const rowCategory = (row: CatalogRow) => row.kind === "editorial" ? row.article.category : row.publicArticle.category;
-    const rowUpdatedAt = (row: CatalogRow) => row.kind === "editorial" ? row.article.updated_at : row.publicArticle.updatedAt;
-    const normalizeLinkageState = (state?: string) => state === "duplicate" || state === "identity-conflict" ? "conflict" : ["managed", "needs-registration", "unmanaged"].includes(state ?? "") ? state! : "unknown";
-    const rowLinkageState = (row: CatalogRow) => {
-      if (row.kind === "editorial") return row.publicArticle ? registeredPublicArticleIds.has(publicArticleKey(row.publicArticle)) ? "managed" : normalizeLinkageState(row.publicArticle.managementState) : row.article.published_at ? "unknown" : "not-applicable";
-      if (row.kind === "registered") return "managed";
-      if (row.kind === "needs-registration") return "needs-registration";
-      if (row.kind === "unregistered") return "unmanaged";
-      if (row.kind === "conflict") return "conflict";
-      return "unknown";
-    };
+    const rowTitle = (row: CatalogRow) => row.article.title;
+    const rowSubject = (row: CatalogRow) => row.article.subject;
+    const rowCategory = (row: CatalogRow) => row.article.category;
+    const rowUpdatedAt = (row: CatalogRow) => row.article.updated_at;
     const subjectDisplayName = (slug: string) => subjectNameBySlug.get(slug) ?? slug.replaceAll("-", " ");
     const categoryDisplayName = (slug: string) => categoryNameBySlug.get(slug) ?? slug.replaceAll("-", " ");
-    const canRegisterPublicArticle = (article: PublicArticle) => canRegisterArticleInSubject(articleScope, article.subject);
-    const bulkRegistrationCandidates = () => catalogRows().flatMap((row) =>
-      row.kind === "unregistered" && isBulkArticleRegistrationCandidate(row.publicArticle, canRegisterPublicArticle(row.publicArticle)) ? [row.publicArticle] : [],
-    );
     const renderSubjectBrowser = (matchingAllSubjects: CatalogRow[]) => {
       const counts = new Map<string, CatalogRow[]>();
       for (const row of matchingAllSubjects) counts.set(rowSubject(row), [...(counts.get(rowSubject(row)) ?? []), row]);
@@ -1534,56 +1232,18 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       const mode = currentWorkflow();
       const normalizedQuery = query.value.toLowerCase();
       const rows = catalogRows();
-      catalogSummary.dataset.state = catalogReady ? catalogSource === "api" ? "ready" : "error" : "loading";
-      catalogSummary.textContent = catalogReady
-        ? catalogSource === "api"
-          ? `学習サイトで公開中の記事 ${publicArticles.length}件を全分野から照合しています。`
-          : "公開記事カタログを確認できませんでした。原稿一覧は表示しています。"
-        : "公開記事カタログを確認しています…";
-      catalogCompactSummary.dataset.state = catalogSummary.dataset.state;
-      catalogCompactSummary.textContent = !catalogReady
-        ? "公開記事を照合しています…"
-        : catalogSource !== "api"
-          ? "公開記事カタログを確認できません"
-          : "";
-      if (!catalogReady || catalogSource !== "api") {
-        catalogCounts.replaceChildren();
-      } else {
-        const totals = { managed: 0, "needs-registration": 0, unmanaged: 0, conflict: 0, unknown: 0 };
-        for (const publicArticle of publicArticles) {
-          const state = registeredPublicArticleIds.has(publicArticleKey(publicArticle)) ? "managed" : publicArticle.managementState;
-          if (state === "managed") totals.managed += 1;
-          else if (state === "needs-registration") totals["needs-registration"] += 1;
-          else if (state === "unmanaged") totals.unmanaged += 1;
-          else if (state === "duplicate" || state === "identity-conflict") totals.conflict += 1;
-          else totals.unknown += 1;
-        }
-        const needsAttention = totals["needs-registration"] + totals.conflict + totals.unknown;
-        catalogCompactSummary.textContent = `公開記事 ${publicArticles.length}件 ・ 運営原稿あり ${totals.managed}件 ・ 運営原稿未登録 ${totals.unmanaged}件 ・ 紐付け要確認 ${needsAttention}件`;
-        const metrics = [
-          { value: "managed", label: "公開記事と連携済み", note: "運営原稿あり", count: totals.managed, tone: "linked" },
-          { value: "needs-registration", label: "原稿あり・未連携", note: "公開記事IDの確認が必要", count: totals["needs-registration"], tone: "needs-registration" },
-          { value: "unmanaged", label: "運営原稿未登録", note: "公開記事から原稿を作成できます", count: totals.unmanaged, tone: "unmanaged" },
-          { value: "conflict", label: "重複・紐付け要確認", note: "対応する原稿を確認してください", count: totals.conflict, tone: "conflict" },
-        ];
-        if (totals.unknown) metrics.push({ value: "unknown", label: "連携状態を判定できない", note: "カタログ診断が必要です", count: totals.unknown, tone: "unknown" });
-        catalogCounts.innerHTML = metrics.map((metric) => `<button type="button" class="catalog-status-card catalog-status-card--${metric.tone}" data-catalog-filter="${metric.value}" aria-pressed="${String(linkage.value === metric.value)}"><span class="catalog-status-card__label">${metric.label}</span><strong>${metric.count}件</strong><small>${metric.note}</small></button>`).join("");
-      }
       const matchesFilters = (row: CatalogRow, ignoreSelectedSubject = false) => {
-        const isUnregistered = row.kind === "unregistered" || row.kind === "conflict";
-        const article = row.kind === "editorial" ? row.article : null;
-        if (isUnregistered && mode !== "all") return false;
-        if (article && archive.value === "active" && isArchived(article)) return false;
-        if (article && archive.value === "archived" && !isArchived(article)) return false;
-        if (article && mode === "review" && article.status === "approved") return false;
-        if (article && mode === "request" && !([article.created_by, article.updated_by].includes(scopeEmail) && article.status !== "approved" && !article.published_at)) return false;
+        const article = row.article;
+        if (archive.value === "active" && isArchived(article)) return false;
+        if (archive.value === "archived" && !isArchived(article)) return false;
+        if (mode === "review" && article.status === "approved") return false;
+        if (mode === "request" && !([article.created_by, article.updated_by].includes(scopeEmail) && article.status !== "approved" && !article.published_at)) return false;
         if (!ignoreSelectedSubject && subject.value !== "all" && rowSubject(row) !== subject.value) return false;
         if (category.value !== "all" && rowCategory(row) !== category.value) return false;
-        if (status.value !== "all" && (!article || article.status !== status.value)) return false;
-        if (linkage.value !== "all" && rowLinkageState(row) !== linkage.value) return false;
-        if (publication.value === "published" && (isUnregistered ? true : !article?.published_at)) return false;
-        if (publication.value === "scheduled" && (isUnregistered || Boolean(article?.published_at) || !article?.scheduled_publish_at)) return false;
-        if (publication.value === "unpublished" && (isUnregistered || Boolean(article?.published_at) || Boolean(article?.scheduled_publish_at))) return false;
+        if (status.value !== "all" && article.status !== status.value) return false;
+        if (publication.value === "published" && !(row.publicArticle || article.published_at)) return false;
+        if (publication.value === "scheduled" && (row.publicArticle || article.published_at || !article.scheduled_publish_at)) return false;
+        if (publication.value === "unpublished" && (row.publicArticle || article.published_at || article.scheduled_publish_at)) return false;
         const testMatch = isTestArticleTitle(rowTitle(row));
         if (test.value === "only" && !testMatch) return false;
         if (test.value === "exclude" && testMatch) return false;
@@ -1592,32 +1252,25 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       const filtered = rows.filter((row) => matchesFilters(row));
       const matchingAllSubjects = rows.filter((row) => matchesFilters(row, true));
       const sorted = [...filtered].sort((left, right) => {
-        const leftArticle = left.kind === "editorial" ? left.article : null;
-        const rightArticle = right.kind === "editorial" ? right.article : null;
-        const leftPriority = leftArticle && (mode === "revise" || mode === "request") && [leftArticle.created_by, leftArticle.updated_by].includes(scopeEmail) ? 0 : leftArticle && mode === "review" && assignedToScope(leftArticle) ? 0 : left.kind === "unregistered" ? 2 : 1;
-        const rightPriority = rightArticle && (mode === "revise" || mode === "request") && [rightArticle.created_by, rightArticle.updated_by].includes(scopeEmail) ? 0 : rightArticle && mode === "review" && assignedToScope(rightArticle) ? 0 : right.kind === "unregistered" ? 2 : 1;
+        const leftArticle = left.article;
+        const rightArticle = right.article;
+        const leftPriority = (mode === "revise" || mode === "request") && [leftArticle.created_by, leftArticle.updated_by].includes(scopeEmail) ? 0 : mode === "review" && assignedToScope(leftArticle) ? 0 : 1;
+        const rightPriority = (mode === "revise" || mode === "request") && [rightArticle.created_by, rightArticle.updated_by].includes(scopeEmail) ? 0 : mode === "review" && assignedToScope(rightArticle) ? 0 : 1;
         return leftPriority - rightPriority || new Date(rowUpdatedAt(right)).getTime() - new Date(rowUpdatedAt(left)).getTime();
       });
-      // 公開記事由来の原稿だけは source_article_id または公開パスでまとめる。
-      // 未登録の公開記事も同じ一覧に補い、公開記事の管理漏れを見える化する。
-      const uniqueRows = (candidates: CatalogRow[]) => [...new Map(candidates.map((row) => [row.kind === "editorial" ? row.article.source_article_id || row.article.id : `public:${row.publicArticle.articleId}`, row])).values()];
+      const uniqueRows = (candidates: CatalogRow[]) => [...new Map(candidates.map((row) => [row.article.source_article_id || row.article.id, row])).values()];
       const shown = uniqueRows(sorted);
       const matchingAllSubjectsShown = uniqueRows(matchingAllSubjects);
-      const registerableCount = bulkRegistrationCandidates().length;
-      registerUnregisteredButton.hidden = !catalogReady || registerableCount === 0;
-      registerUnregisteredButton.disabled = bulkRegistrationInFlight;
-      registerUnregisteredButton.textContent = bulkRegistrationInFlight ? "一括作成中…" : `未登録の運営原稿を一括作成（${registerableCount}件）`;
       count.textContent = `${shown.length}件`;
       const activeScope = subject.value === "all" ? "全分野" : subjectDisplayName(subject.value);
       const activeCategory = category.value === "all" ? "" : ` › ${categoryDisplayName(category.value)}`;
       const activeStatus = status.value === "all" ? "" : ` ・ 編集状況：${labels[status.value as keyof typeof labels] ?? status.value}`;
       const activePublication = publication.value === "all" ? "" : ` ・ 学習サイト：${publication.selectedOptions[0]?.textContent ?? publication.value}`;
-      const activeLinkage = linkage.value === "all" ? "" : ` ・ 運営連携：${linkage.selectedOptions[0]?.textContent ?? linkage.value}`;
       const activeTest = test.value === "exclude" ? "" : ` ・ テスト原稿：${test.selectedOptions[0]?.textContent ?? test.value}`;
       const activeWorkflow = mode === "all" ? "" : ` ・ 作業対象：${workflow.selectedOptions[0]?.textContent ?? workflow.value}`;
       const activeArchive = archive.value === "active" ? "" : ` ・ ${archive.selectedOptions[0]?.textContent ?? archive.value}`;
       const activeQuery = query.value.trim() ? ` ・ キーワード：「${query.value.trim()}」` : "";
-      filterSummary.textContent = `${activeScope}${activeCategory}${activeStatus}${activePublication}${activeLinkage}${activeTest}${activeWorkflow}${activeArchive}${activeQuery}`;
+      filterSummary.textContent = `${activeScope}${activeCategory}${activeStatus}${activePublication}${activeTest}${activeWorkflow}${activeArchive}${activeQuery}`;
       renderSubjectBrowser(matchingAllSubjectsShown);
       const formatDate = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(value));
       const formatSchedule = (value: string) => {
@@ -1625,53 +1278,25 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         if (!Number.isFinite(instant.getTime())) return "日時未設定";
         return new Intl.DateTimeFormat("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Tokyo" }).format(instant);
       };
-      const linkageLabels: Record<string, { label: string; tone: string }> = {
-        managed: { label: "公開記事と連携済み", tone: "linked" },
-        "needs-registration": { label: "原稿あり・公開記事ID未連携", tone: "linkage-attention" },
-        unmanaged: { label: "運営原稿未登録", tone: "linkage-missing" },
-        conflict: { label: "重複・紐付け要確認", tone: "linkage-conflict" },
-        unknown: { label: "連携状態を判定できない", tone: "linkage-unknown" },
-        "not-applicable": { label: "公開前", tone: "linkage-none" },
-      };
       const renderRow = (row: CatalogRow) => {
-        const article = row.kind === "editorial" ? row.article : null;
+        const article = row.article;
         const title = rowTitle(row);
         const editedAt = formatDate(rowUpdatedAt(row));
         const publicState = row.publicArticle
           ? '<span class="badge public-live">公開中</span>'
-          : article
-            ? article.published_at
-              ? '<span class="badge public-live">公開中</span>'
-              : article.scheduled_publish_at
-                ? `<span class="badge public-scheduled">公開予約・${esc(formatSchedule(article.scheduled_publish_at))}</span>`
-                : '<span class="badge public-draft">未公開</span>'
-            : '<span class="badge public-live">公開中</span>';
-        const linkageState = linkageLabels[rowLinkageState(row)] ?? linkageLabels.unknown;
-        const editorialState = article
-          ? `<span class="article-status-group"><span class="article-status-group__label">編集</span><span class="badge ${article.status}">${labels[article.status]}</span></span>`
-          : "";
-        const updatedLabel = article ? "最終更新" : "公開更新";
-        let action = "";
-        if (row.kind === "unregistered") {
-          action = canRegisterPublicArticle(row.publicArticle)
-            ? `<a class="catalog-action" href="/admin/editor/?sourceArticle=${encodeURIComponent(row.publicArticle.articleId)}&from=articles" data-register-link data-article-id="${esc(row.publicArticle.articleId)}" data-catalog-subject="${esc(row.publicArticle.subject)}" data-catalog-category="${esc(row.publicArticle.category)}" data-catalog-slug="${esc(row.publicArticle.slug)}">運営原稿を作成</a>`
-            : '<span class="badge" title="公開記事から運営原稿を作成するには分野の編集権限が必要です">登録には編集権限が必要</span>';
-        } else if (row.kind === "registered") {
-          action = row.documentId
-            ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(row.documentId)}&mode=update&from=articles">更新案を作成</a>`
-            : '<span class="badge">運営原稿を準備中</span>';
-        } else if (row.kind === "needs-registration" && row.documentId) {
-          action = `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(row.documentId)}&from=articles">運営原稿を確認</a>`;
-        } else if (row.kind === "conflict") {
-          const relatedDocumentId = row.publicArticle.duplicateDocumentIds?.[0] ?? row.publicArticle.documentId;
-          if (relatedDocumentId) action = `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(relatedDocumentId)}&from=articles">紐付け先を確認</a>`;
-        }
+          : article.published_at
+            ? '<span class="badge public-live">公開中</span>'
+            : article.scheduled_publish_at
+              ? `<span class="badge public-scheduled">公開予約・${esc(formatSchedule(article.scheduled_publish_at))}</span>`
+              : '<span class="badge public-draft">未公開</span>';
+        const editorialState = `<span class="article-status-group"><span class="article-status-group__label">編集</span><span class="badge ${article.status}">${labels[article.status]}</span></span>`;
+        const updatedLabel = "最終更新";
         const archiveBadge = article && isArchived(article) ? '<span class="badge archived">アーカイブ済み</span>' : "";
         const testBadge = isTestArticleTitle(title) ? '<span class="badge">テスト原稿</span>' : "";
-        const updateInProgress = article ? Boolean(article.published_at && hasUnpublishedPublicationChanges(article)) : false;
+        const updateInProgress = Boolean(article.published_at && hasUnpublishedPublicationChanges(article));
         const updateActionLabel = updateInProgress ? "更新案作成中" : "更新案を作成";
-        const updateAction = article?.published_at
-          ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(article.id)}&mode=update&from=articles" aria-label="${esc(title || "無題の記事")}の${updateActionLabel}" data-update-proposal-state="${updateInProgress ? "in-progress" : "available"}">${updateActionLabel}</a>`
+        const updateAction = article.published_at
+          ? `<a class="proposal-action" href="/admin/editor/?document=${encodeURIComponent(article.id)}&mode=update&from=articles" aria-label="${esc(title || "無題の記事")}の${updateActionLabel}" data-update-proposal-state="${updateInProgress ? "in-progress" : "available"}">${updateActionLabel}</a>`
           : "";
         const archiveAction = article && article.status === "draft" && !article.published_at
           ? isArchived(article)
@@ -1680,19 +1305,16 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
               : `<button type="button" class="article-action" data-archive-action="unarchive" data-archive-document-id="${esc(article.id)}">復元</button>`
             : `<button type="button" class="article-action" data-archive-action="archive" data-archive-document-id="${esc(article.id)}">アーカイブ</button>`
           : "";
-        const editingSummary = article ? activeEditorSummary(article) : "";
-        const editingBadge = article && activeEditorsFor(article).length
+        const editingSummary = activeEditorSummary(article);
+        const editingBadge = activeEditorsFor(article).length
           ? `<span class="badge editing" aria-label="${activeEditorsFor(article).length}人が編集中">● ${activeEditorsFor(article).length}人が編集中</span>`
           : "";
-        const statusMarkup = `<div class="article-statuses">${editorialState}<span class="article-status-group"><span class="article-status-group__label">学習サイト</span>${publicState}</span><span class="article-status-group"><span class="article-status-group__label">運営連携</span><span class="badge ${linkageState.tone}">${linkageState.label}</span></span>${editingBadge}${archiveBadge}${testBadge}</div>`;
-        const presenceMarkup = article && editingSummary
+        const statusMarkup = `<div class="article-statuses">${editorialState}<span class="article-status-group"><span class="article-status-group__label">学習サイト</span>${publicState}</span>${editingBadge}${archiveBadge}${testBadge}</div>`;
+        const presenceMarkup = editingSummary
           ? `<span class="article-presence" data-active-editors="${esc(article.id)}"><span class="presence-dot" aria-hidden="true"></span>${esc(editingSummary)}</span>`
           : "";
-        const cardClasses = `article${row.kind === "unregistered" || row.kind === "needs-registration" || row.kind === "conflict" || row.kind === "unknown" ? " article-unregistered" : ""}`;
-        const clickAttributes = article
-          ? ` role="link" tabindex="0" data-document-id="${esc(article.id)}" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}"`
-          : "";
-        return `<article class="${cardClasses}"${clickAttributes} aria-label="${esc(title)}。${esc(linkageState.label)}"><div class="article-main"><div class="article-identity"><h2>${esc(title || "無題の原稿")}</h2><p class="article-meta"><span class="article-meta__updated">${updatedLabel} ${editedAt}</span></p></div>${statusMarkup}${presenceMarkup}</div><div class="article-actions">${action}${archiveAction}${updateAction}</div></article>`;
+        const clickAttributes = ` role="link" tabindex="0" data-document-id="${esc(article.id)}" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}"`;
+        return `<article class="article"${clickAttributes} aria-label="${esc(title)}"><div class="article-main"><div class="article-identity"><h2>${esc(title || "無題の原稿")}</h2><p class="article-meta"><span class="article-meta__updated">${updatedLabel} ${editedAt}</span></p></div>${statusMarkup}${presenceMarkup}</div><div class="article-actions">${archiveAction}${updateAction}</div></article>`;
       };
       if (shown.length) {
         const groups = new Map<string, { subject: string; category: string; rows: CatalogRow[] }>();
@@ -1737,16 +1359,10 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const slug = typeof entry.slug === "string" ? entry.slug : "";
         const title = typeof entry.title === "string" ? entry.title : "";
         if (locale !== "ja" || publicStatus !== "published" || !articleId || !subject || !category || !slug || !title) return [];
-        const updatedAt = typeof entry.public_updated_at === "string" ? entry.public_updated_at : typeof entry.editorial_updated_at === "string" ? entry.editorial_updated_at : new Date().toISOString();
-        const managementState = typeof entry.state === "string" ? entry.state : undefined;
-        const documentId = typeof entry.editorial_document_id === "string" ? entry.editorial_document_id : undefined;
-        const duplicateDocumentIds = Array.isArray(entry.duplicate_document_ids) ? entry.duplicate_document_ids.filter((id): id is string => typeof id === "string") : [];
-        return [{ articleId, subject, category, slug, title, updatedAt, managementState, documentId, ...(duplicateDocumentIds.length ? { duplicateDocumentIds } : {}) }];
+        return [{ articleId, subject, category, slug, title }];
       });
     };
     const loadCatalog = async (abortSignal?: AbortSignal) => {
-      catalogSummary.dataset.state = "loading";
-      catalogSummary.textContent = "公開記事カタログを確認しています…";
       try {
         const timeoutSignal = AbortSignal.timeout(10000);
         const signal = abortSignal ? AbortSignal.any([abortSignal, timeoutSignal]) : timeoutSignal;
@@ -1757,19 +1373,11 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const normalized = normalizeCatalog(data.catalog);
         if (!normalized) throw new Error("公開記事カタログの形式を確認できませんでした。");
         publicArticles = normalized;
-        catalogSource = "api";
-        catalogSummary.dataset.state = "ready";
-        catalogSummary.textContent = `公開記事カタログを確認しました（${publicArticles.length}件）。原稿一覧と照合しています…`;
       } catch (error) {
         if (abortSignal?.aborted) throw error;
-        // APIに接続できない場合は、ビルド時の古いカタログを混ぜない。
-        // 原稿一覧の状態と公開サイトの状態が食い違うため、未確認の公開記事を
-        // 運営原稿として表示するよりも、カタログを空にして診断を促す。
+        // API障害時は古い公開カタログを混ぜず、原稿側の公開状態を表示する。
         publicArticles = [];
-        catalogSource = "unavailable";
-        catalogSummary.dataset.state = "error";
-        catalogSummary.textContent = "公開記事カタログを確認できませんでした。";
-        setCatalogFeedback(`公開記事カタログAPIに接続できないため、公開記事カタログを表示できません。${error instanceof Error ? `（${error.message}）` : ""}`);
+        console.warn("published article catalog unavailable", error);
       } finally {
         catalogReady = true;
       }
@@ -1848,10 +1456,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
             subject.removeAttribute("aria-busy");
             scopeNote.dataset.state = "error";
             scopeNote.textContent = "担当範囲を確認できませんでした。原稿一覧を再試行してください。";
-            if (!catalogReady) {
-              catalogSummary.dataset.state = "error";
-              catalogSummary.textContent = "原稿一覧を取得できないため、公開記事との対応状態を確認できません。";
-            }
           }
           retry?.fail(error);
         } finally {
@@ -1863,147 +1467,12 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       return wrapped;
     };
     retry = createAdminLoadRetry(root, () => load(), "原稿一覧を読み込めませんでした。");
-    const setCatalogFeedback = (message: string, isError = false) => {
-      catalogFeedback.textContent = message;
-      catalogFeedback.classList.toggle("is-error", isError);
-    };
-    const runCatalogDiagnostics = async () => {
-      if (catalogDiagnosticsButton.disabled) return;
-      catalogDiagnosticsButton.disabled = true;
-      catalogDiagnosticsButton.textContent = "診断中…";
-      catalogDiagnostics.hidden = false;
-      catalogDiagnostics.open = true;
-      catalogDiagnostics.classList.remove("is-error");
-      catalogDiagnosticsSummary.textContent = "公開記事と運営原稿の対応を確認しています…";
-      catalogDiagnosticsIssues.replaceChildren();
-      try {
-        const response = await fetch("/api/admin/editor/catalog/diagnostics", { credentials: "same-origin", cache: "no-store" });
-        const contentType = response.headers.get("content-type") ?? "";
-        const data = contentType.includes("application/json")
-          ? await response.json() as { checked_articles?: number; issue_count?: number; healthy?: boolean; issues?: Array<{ code?: string; severity?: string; title?: string; identity_key?: string; message?: string }> }
-          : {};
-        if (!response.ok) throw new Error(`カタログ診断に失敗しました（${response.status}）。`);
-        const checked = Number(data.checked_articles ?? 0);
-        const issueCount = Number(data.issue_count ?? 0);
-        catalogDiagnosticsSummary.textContent = data.healthy
-          ? `${checked}件を確認しました。重複・未登録・同一性の問題はありません。`
-          : `${checked}件を確認し、${issueCount}件の確認事項を検出しました。登録や更新の前に内容を確認してください。`;
-        const issues = Array.isArray(data.issues) ? data.issues : [];
-        for (const issue of issues.slice(0, 50)) {
-          const item = document.createElement("li");
-          const title = issue.title || issue.identity_key || "対象記事";
-          item.innerHTML = `<strong>${esc(issue.severity === "error" ? "要停止" : "確認")}</strong> ${esc(title)}：${esc(issue.message || issue.code || "診断項目")}`;
-          catalogDiagnosticsIssues.append(item);
-        }
-        if (issues.length > 50) {
-          const item = document.createElement("li");
-          item.textContent = `その他${issues.length - 50}件（表示上限50件）`;
-          catalogDiagnosticsIssues.append(item);
-        }
-      } catch (error) {
-        catalogDiagnostics.classList.add("is-error");
-        catalogDiagnosticsSummary.textContent = error instanceof Error ? error.message : "カタログ診断に失敗しました。";
-      } finally {
-        catalogDiagnosticsButton.disabled = false;
-        catalogDiagnosticsButton.textContent = "カタログを診断";
-      }
-    };
-    const readApiResponse = async <T extends { error?: string }>(response: Response): Promise<T> => {
-      const contentType = response.headers.get("content-type") ?? "";
-      if (contentType.includes("application/json")) return await response.json() as T;
-      const text = await response.text();
-      return { error: text || undefined } as T;
-    };
-    const registerUnregisteredArticles = async () => {
-      const pending = bulkRegistrationCandidates();
-      if (!pending.length || bulkRegistrationInFlight) return;
-      bulkRegistrationInFlight = true;
-      render();
-      setCatalogFeedback("");
-      const totals = { registered: 0, alreadyManaged: 0, conflict: 0, failed: 0 };
-      const errors: string[] = [];
-      try {
-        for (let offset = 0; offset < pending.length; offset += 20) {
-          const batch = pending.slice(offset, offset + 20);
-          const response = await fetch("/api/admin/editor/catalog/register-bulk", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            credentials: "same-origin",
-            body: JSON.stringify({ articles: batch.map(({ subject, category, slug }) => ({ locale: "ja", subject, category, slug })) }),
-          });
-          const data = await readApiResponse<{ error?: string; results?: Array<{ identityKey?: string; status?: "registered" | "already-managed" | "conflict" | "failed"; documentId?: string; error?: string }> }>(response);
-          if (!response.ok || !Array.isArray(data.results)) throw new Error(data.error ?? `一括登録に失敗しました（${response.status}）。`);
-          for (const result of data.results) {
-            const identity = (result.identityKey ?? "").split("/").slice(1).join("/");
-            const article = batch.find((item) => `${item.subject}/${item.category}/${item.slug}` === identity);
-            if (result.status === "registered") {
-              totals.registered += 1;
-              if (article) registeredPublicArticleIds.set(publicArticleKey(article), result.documentId);
-            } else if (result.status === "already-managed") {
-              totals.alreadyManaged += 1;
-              if (article) registeredPublicArticleIds.set(publicArticleKey(article), result.documentId);
-            } else if (result.status === "conflict") {
-              totals.conflict += 1;
-              errors.push(`${article?.title ?? identity}：${result.error ?? "既存原稿との紐付けを確認してください。"}`);
-            } else {
-              totals.failed += 1;
-              errors.push(`${article?.title ?? identity}：${result.error ?? "登録に失敗しました。"}`);
-            }
-          }
-        }
-        render();
-        const summary = `一括処理：新規登録${totals.registered}件、登録済み${totals.alreadyManaged}件、競合${totals.conflict}件、失敗${totals.failed}件。通知・メール・タスク・コメント・公開処理は行いません。`;
-        setCatalogFeedback([summary, ...errors].join("\n"), totals.failed > 0 || totals.conflict > 0);
-      } catch (error) {
-        setCatalogFeedback(error instanceof Error ? error.message : "一括登録に失敗しました。", true);
-      } finally {
-        bulkRegistrationInFlight = false;
-        render();
-      }
-    };
-    registerUnregisteredButton.addEventListener("click", () => { void registerUnregisteredArticles(); });
-    const registerPublicArticle = async (link: HTMLAnchorElement) => {
-      const articleId = link.dataset.articleId;
-      const source = publicArticles.find((article) => article.articleId === articleId);
-      if (!source || link.dataset.registering === "true") return;
-      link.dataset.registering = "true";
-      link.setAttribute("aria-busy", "true");
-      link.classList.add("is-loading");
-      link.textContent = "登録中…";
-      setCatalogFeedback("");
-      try {
-        const response = await fetch("/api/admin/editor/catalog/register", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ locale: "ja", subject: source.subject, category: source.category, slug: source.slug }),
-        });
-        const data = await readApiResponse<{ ok?: boolean; registered?: boolean; documentId?: string; identityKey?: string; error?: string }>(response);
-        if (!response.ok || data.ok !== true) throw new Error(data.error ?? "公開記事を運営管理へ登録できませんでした。");
-        registeredPublicArticleIds.set(publicArticleKey(source), data.documentId);
-        setCatalogFeedback(data.registered === false ? `「${source.title}」の運営原稿はすでに登録されています。外部公開やPRは開始していません。` : `「${source.title}」の運営原稿を作成しました。外部公開やPRは開始していません。`);
-        // Registration already returns the authoritative document id. Update
-        // the local catalog immediately instead of reloading the editorial
-        // list and GitHub catalog after every item; repeated reloads can
-        // exhaust the Worker CPU budget during bulk registration.
-        render();
-      } catch (error) {
-        setCatalogFeedback(error instanceof Error ? error.message : "公開記事を運営管理へ登録できませんでした。", true);
-        link.textContent = "運営原稿を作成";
-      } finally {
-        delete link.dataset.registering;
-        link.removeAttribute("aria-busy");
-        link.classList.remove("is-loading");
-      }
-    };
-    catalogDiagnosticsButton.addEventListener("click", () => { void runCatalogDiagnostics(); });
     resetFiltersButton.addEventListener("click", () => {
       query.value = defaultFilterState.query;
       assignSelectValue(subject, defaultFilterState.subject, defaultFilterState.subject);
       assignSelectValue(category, defaultFilterState.category, defaultFilterState.category);
       assignSelectValue(status, defaultFilterState.status, defaultFilterState.status);
       assignSelectValue(publication, defaultFilterState.publication, defaultFilterState.publication);
-      assignSelectValue(linkage, defaultFilterState.linkage, defaultFilterState.linkage);
       assignSelectValue(test, defaultFilterState.test, defaultFilterState.test);
       assignSelectValue(workflow, defaultFilterState.workflow, defaultFilterState.workflow);
       assignSelectValue(archive, defaultFilterState.archive, defaultFilterState.archive);
@@ -2029,20 +1498,11 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       if (!button) return;
       selectSubjectFromBrowser(button.dataset.subjectQuick ?? "all");
     });
-    catalogCounts.addEventListener("click", (event) => {
-      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-catalog-filter]");
-      const value = button?.dataset.catalogFilter;
-      if (!value || ![...linkage.options].some((option) => option.value === value)) return;
-      linkage.value = linkage.value === value ? "all" : value;
-      saveFilterState();
-      render();
-      root.querySelector("#article-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
     subjectBrowserAll.addEventListener("click", () => selectSubjectFromBrowser("all"));
     loadingFallbackTimer = window.setTimeout(() => { if (list.textContent?.includes("取得しています")) list.textContent = "原稿一覧を取得できませんでした。ページを再読み込みしてください。"; }, 6_000);
     subject.addEventListener("change", () => { updateCategoryOptions(); render(); });
     query.addEventListener("input", render);
-    [category, status, publication, linkage, test, workflow].forEach((element) => element.addEventListener("change", render));
+    [category, status, publication, test, workflow].forEach((element) => element.addEventListener("change", render));
     archive.addEventListener("change", () => { render(); void load(false, { silent: true }); });
     loadMoreButton.addEventListener("click", () => { if (!hasMore || loadMoreButton.disabled) return; loadMoreButton.disabled = true; paginationStatus.textContent = "次の原稿を読み込んでいます…"; void load(true); });
     list.addEventListener("click", async (event) => {
@@ -2086,12 +1546,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     }));
     updateCategoryOptions();
     void load();
-    list.addEventListener("click", (event) => {
-      const link = (event.target as HTMLElement).closest<HTMLAnchorElement>("a[data-register-link]");
-      if (!link) return;
-      event.preventDefault();
-      void registerPublicArticle(link);
-    });
     const handlePageShow = () => { void load(false, { silent: true, preserveLoadedPages: true }); };
     const refreshPresence = () => { if (document.visibilityState === "visible") void load(false, { silent: true, preserveLoadedPages: true }); };
     const presenceTimer = window.setInterval(refreshPresence, 15_000);

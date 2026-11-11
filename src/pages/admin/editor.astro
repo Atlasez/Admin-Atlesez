@@ -149,13 +149,6 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
         <div class="empty-state" data-editor-empty>
           <div class="editor-start-actions">
             <button type="button" class="primary-action" data-new-document>新規原稿を作成</button>
-            <div class="source-picker" aria-label="公開済み記事を編集">
-              <strong>学習サイトに公開済みの記事を運営管理へ登録</strong>
-              <span>公開中の記事を編集用原稿として紐付けます。登録だけでは記事は再公開されません。</span>
-              <label>分野<select data-source-subject><option value="">分野を選択…</option></select></label>
-              <label>記事<select data-source-article disabled><option value="">先に分野を選択…</option></select></label>
-              <button type="button" class="quiet-action" data-import-source>公開記事を運営管理へ登録</button>
-            </div>
           </div>
         </div>
 
@@ -406,7 +399,7 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
     (() => {
       const revealEmptyEditor = () => {
         const query = new URLSearchParams(window.location.search);
-        if (query.has("new") || query.has("document") || query.has("sourceArticle")) return;
+        if (query.has("new") || query.has("document")) return;
         document.querySelector("[data-editor-workspace]")?.removeAttribute("data-editor-starting");
       };
       if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", revealEmptyEditor, { once: true });
@@ -449,7 +442,6 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
   .withdraw-action:hover { background: #fff0ee; }
   .quiet-action { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
   .quiet-action:hover { background: color-mix(in srgb, var(--accent), transparent 92%); border-color: var(--accent); color: var(--accent); }
-  .source-picker { color: var(--muted); display: grid; font-size: .76rem; font-weight: 800; gap: .5rem; margin-top: .3rem; }.source-picker > label { display: grid; gap: .25rem; }.source-picker select { width: 100%; }.source-picker select:disabled { background: #eef2f5; color: #7f8c98; cursor: not-allowed; }
   select, input, textarea { background: var(--surface); border: 1px solid var(--border); border-radius: .45rem; color: var(--text); font: inherit; }
   select, input { box-sizing: border-box; min-height: 2.35rem; padding: .35rem .55rem; width: 100%; }
   .document-list { display: grid; gap: .45rem; margin-top: .35rem; max-height: 15rem; overflow: auto; padding-right: .1rem; }
@@ -466,7 +458,6 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
      右側へ押し出され、見出しと説明文にも重なって表示される。 */
   .editor-workspace .empty-state { align-items: stretch; color: var(--muted); display: flex; flex-direction: column; justify-content: center; margin: 5rem auto; max-width: 38rem; text-align: center; }
   .editor-workspace .empty-state[hidden] { display: none !important; }
-  .editor-start-actions{display:grid;gap:1rem;margin:1.4rem auto 0;max-width:32rem;text-align:left;width:100%}.editor-start-actions>.primary-action{justify-self:center}.editor-start-actions .source-picker{background:var(--surface-alt);border:1px solid var(--border);border-radius:.65rem;margin:0;padding:1rem}.editor-start-actions .source-picker strong{color:var(--text);font-size:.9rem}.editor-start-actions .source-picker>span{font-size:.76rem;font-weight:500;line-height:1.5}.editor-start-actions .source-picker .quiet-action{justify-self:start}
   .document-form { display:grid; flex:1 1 auto; gap:1rem; min-height:0; }.document-form[hidden]{display:none!important}
   .directive-completion-hint, .latex-completion-hint { color:var(--muted); font-size:.72rem; line-height:1.5; margin:0; }.directive-completion-hint code, .latex-completion-hint code { background:var(--surface-alt); border:1px solid var(--border); border-radius:.25rem; padding:.05rem .2rem; }.directive-completion-hint kbd, .latex-completion-hint kbd { background:var(--surface-alt); border:1px solid var(--border); border-radius:.25rem; font:inherit; margin-left:.18rem; padding:.05rem .25rem; }
   .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls>span:not(.pane-layout-control){color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-control{display:inline-flex}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:1.9rem;padding:.2rem .5rem}.pane-layout-control>button:first-child{border-radius:.35rem 0 0 .35rem}.pane-layout-control>.pane-popout-toggle{border-left-color:var(--border);border-radius:0 .35rem .35rem 0;font-size:.9rem;line-height:1;min-width:1.7rem;padding:.2rem .35rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected,.pane-layout-controls button[aria-pressed="true"],.pane-layout-control.is-popped-out>button{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}.pane-layout-control>.pane-popout-toggle:hover{background:var(--accent);color:var(--surface)}
@@ -1350,8 +1341,9 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
   } from "../../lib/article-references.mjs";
 
   type Subject = { slug: string; name: string; status: "published" | "preparing"; categories: { slug: string; name: string; order: number }[] };
-  type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string; status: "draft" | "in-review" | "published"; catalogState?: "managed" | "unmanaged" | "needs-registration" | "duplicate" | "identity-conflict" | "editorial-only"; editorialDocumentId?: string | null };
-  type PublicCatalogEntry = { locale?: unknown; subject?: unknown; category?: unknown; slug?: unknown; source_article_id?: unknown; title?: unknown; summary?: unknown; concept_id?: unknown; public_status?: unknown; state?: unknown; editorial_document_id?: unknown };
+  type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string; status: "draft" | "in-review" | "published" };
+  type DraftSeed = { title?: string; subject?: string; category?: string; slug?: string; summary?: string; conceptId?: string };
+  type PublicCatalogEntry = { locale?: unknown; subject?: unknown; category?: unknown; slug?: unknown; source_article_id?: unknown; title?: unknown; summary?: unknown; concept_id?: unknown; public_status?: unknown };
   type ConceptOption = { id: string; subject: string; category: string; name: string; nameEn: string };
   type EditorialAsset = { id: string; filename: string; mediaType: string; bytes: number; alt: string; latexName: string; createdAt: string; marker: string };
   type LockedRange = { start: number; end: number; text: string };
@@ -1378,7 +1370,7 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
     root.dataset.editorInitialized = "true";
     const routeQuery = new URLSearchParams(window.location.search);
     const outlineId = routeQuery.get("outlineId")?.trim() ?? "";
-    const isEditorEntry = routeQuery.has("new") || routeQuery.has("document") || routeQuery.has("sourceArticle");
+    const isEditorEntry = routeQuery.has("new") || routeQuery.has("document");
     const resetEditorEntryScroll = () => {
       if (!isEditorEntry) return;
       // The editor height changes after the document and preview are loaded. Chrome
@@ -1397,9 +1389,8 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
     let { subjects, articles: initialArticles, conceptOptions, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; conceptOptions: ConceptOption[]; commentTags: string[] };
     const staticArticles = initialArticles;
     let articles = initialArticles;
-    // The document list and selected document can render from the server response
-    // immediately. The public article catalog is still needed by the source-article
-    // picker and direct source-article links.
+    // The public article catalog enriches publication state and source identity
+    // checks; it is loaded independently from the editorial document list.
     let publicCatalogReady: Promise<void> = Promise.resolve();
     const externalStatementIds = [...new Set(articles.flatMap((article) => [...article.body.matchAll(/\{#([A-Za-z][A-Za-z0-9_-]*)\}/g)].map((match) => match[1].toLowerCase())))];
     const form = root.querySelector<HTMLFormElement>("[data-document-form]")!;
@@ -1423,8 +1414,6 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
     const empty = root.querySelector<HTMLElement>("[data-editor-empty]")!;
     const list = root.querySelector<HTMLElement>("[data-document-list]")!;
     const documentCount = root.querySelector<HTMLElement>("[data-document-count]")!;
-    const sourcePicker = root.querySelector<HTMLSelectElement>("[data-source-article]")!;
-    const sourceSubject = root.querySelector<HTMLSelectElement>("[data-source-subject]")!;
     const subject = form.elements.namedItem("subject") as HTMLSelectElement;
     const category = form.elements.namedItem("category") as HTMLSelectElement;
     const title = form.elements.namedItem("title") as HTMLInputElement;
@@ -2907,7 +2896,6 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
         const title = typeof entry.title === "string" ? entry.title : "";
         if (locale !== "ja" || publicStatus !== "published" || !sourceArticleId || !subject || !category || !slug || !title) return [];
         const staticArticle = staticByIdentity.get(`${subject}/${category}/${slug}`);
-        const state = ["managed", "unmanaged", "needs-registration", "duplicate", "identity-conflict", "editorial-only"].includes(String(entry.state)) ? String(entry.state) as SourceArticle["catalogState"] : "unmanaged";
         return [{
           articleId: sourceArticleId,
           title,
@@ -2918,8 +2906,6 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
           conceptId: typeof entry.concept_id === "string" ? entry.concept_id : staticArticle?.conceptId ?? "",
           body: staticArticle?.body ?? "",
           status: "published",
-          catalogState: state,
-          editorialDocumentId: typeof entry.editorial_document_id === "string" ? entry.editorial_document_id : null,
         }];
       });
     };
@@ -3107,27 +3093,6 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
       populateEditorSubjects();
       fillCategories();
       fillConceptOptions();
-      populateSourceSubjects();
-      fillSourceArticles();
-    };
-    const populateSourceSubjects = () => {
-      const available = subjects.filter((item) => assignedSubjects.length ? assignedSubjects.includes(item.slug) : isManager);
-      sourceSubject.innerHTML = '<option value="">分野を選択…</option>' + available.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
-      sourceSubject.disabled = !available.length;
-    };
-    const fillSourceArticles = () => {
-      const subjectData = subjects.find((item) => item.slug === sourceSubject.value);
-      if (!subjectData) {
-        sourcePicker.disabled = true;
-        sourcePicker.innerHTML = '<option value="">先に分野を選択…</option>';
-        return;
-      }
-      const groups = subjectData.categories.map((categoryData) => ({
-        ...categoryData,
-        articles: articles.filter((article) => article.status === "published" && article.subject === subjectData.slug && article.category === categoryData.slug),
-      })).filter((group) => group.articles.length);
-      sourcePicker.disabled = false;
-      sourcePicker.innerHTML = '<option value="">記事を選択…</option>' + groups.map((group) => `<optgroup label="${esc(group.name)}">${group.articles.map((article) => `<option value="${esc(article.articleId)}">${esc(article.title)}</option>`).join("")}</optgroup>`).join("");
     };
     const inline = (value: string) => esc(value).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     const previewMarkdown = (value: string) => {
@@ -4603,28 +4568,27 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
       setDocumentVersionSwitcher(item, loadedVersionLinks);
       heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; setPublicationState(item); monitorPublicationRun(item); updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage, hasUnpublishedPublicationChanges(item)); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); updatePublicationActions(item); completeWritingButton.hidden = true; publicationReviewButton.hidden = true; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id); if (item.id) void loadPublicationReview(item.id, item).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開審査状態を読み込めませんでした。"; });
     };
-    const emptyDocument = (source?: SourceArticle) => {
+    const emptyDocument = (seed?: DraftSeed) => {
       activeDocumentId = "";
-      slugEdited = Boolean(source?.slug);
+      slugEdited = Boolean(seed?.slug);
       const available = availableEditorSubjects();
-      const selected = source ? available.find((item) => item.slug === source.subject) ?? available[0] : available[0];
+      const selected = seed ? available.find((item) => item.slug === seed.subject) ?? available[0] : available[0];
       if (!selected) return;
-      const categoryValue = source?.category ?? selected.categories[0]?.slug ?? "";
+      const categoryValue = seed?.category ?? selected.categories[0]?.slug ?? "";
       const now = new Date().toISOString();
       const generatedDraftSlug = `new-article-${crypto.randomUUID().slice(0, 8)}`;
-      const defaultSlug = (source?.slug ?? generatedDraftSlug).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || generatedDraftSlug;
-      const defaultId = source?.conceptId ?? `${conceptPrefix(source?.subject ?? selected.slug)}.${categoryValue || "general"}.${defaultSlug}`;
-      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: defaultSlug, title: source?.title ?? "", summary: source?.summary ?? "", concept_id: defaultId, concept_name: null, concept_name_en: null, concept_is_new: false, body: source?.body ?? "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
-      defaultConceptId = source?.conceptId ? "" : defaultId;
+      const defaultSlug = (seed?.slug ?? generatedDraftSlug).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || generatedDraftSlug;
+      const defaultId = seed?.conceptId ?? `${conceptPrefix(seed?.subject ?? selected.slug)}.${categoryValue || "general"}.${defaultSlug}`;
+      setDocument({ id: "", source_article_id: null, subject: seed?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: defaultSlug, title: seed?.title ?? "", summary: seed?.summary ?? "", concept_id: defaultId, concept_name: null, concept_name_en: null, concept_is_new: false, body: "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
+      defaultConceptId = seed?.conceptId ? "" : defaultId;
       conceptId.value = defaultId;
       fillConceptOptions(defaultId);
       syncMetadataSummary();
       metadata.open = true;
-      (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId || "";
-      heading.textContent = source ? `${source.title}（運営管理へ登録）` : "新規原稿";
+      (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = "";
+      heading.textContent = "新規原稿";
     };
     const renderDocuments = () => { const unique = [...new Map(documents.map((item) => [item.id, item])).values()]; documentCount.textContent = unique.length ? `${unique.length}件` : ""; list.innerHTML = unique.length ? unique.map((item) => { const learningSitePublished = !item.published_at && item.document_kind !== "update-proposal" && learningSiteHasPublishedSource(item.source_article_id); const proposalLabel = item.document_kind === "update-proposal" ? '<span class="document-card-publication document-card-publication-proposal">更新案</span>' : ""; const publicationLabel = item.published_at ? '<span class="document-card-publication">公開済み・運営管理中</span>' : learningSitePublished ? '<span class="document-card-publication document-card-publication-source">学習サイト公開済み</span>' : '<span class="document-card-publication">未公開</span>'; const publicationDescription = item.document_kind === "update-proposal" ? "公開記事の更新案" : item.published_at ? "公開済み・運営管理中" : learningSitePublished ? "学習サイト公開済み" : "未公開"; return `<button class="document-card" type="button" data-document-id="${item.id}" aria-label="${esc(item.subject)} / ${esc(item.category)}・${statusLabel[item.status]}・${publicationDescription}の記事を開く"><small>${esc(item.subject)} / ${esc(item.category)}</small><span class="state state-${item.status}">${statusLabel[item.status]}</span>${proposalLabel}${publicationLabel}</button>`; }).join("") : '<p class="comment-empty">まだ保存された記事はありません。</p>'; };
-    const documentForSourceArticle = (article: SourceArticle) => documents.find((item) => item.document_kind === "update-proposal" && item.base_document_id && documents.some((base) => base.id === item.base_document_id && base.source_article_id === article.articleId)) ?? documents.find((item) => item.source_article_id === article.articleId && item.document_kind !== "update-proposal") ?? documents.find((item) => item.subject === article.subject && item.category === article.category && item.slug === article.slug && item.document_kind !== "update-proposal");
     const loadEditorialTaxonomy = async () => {
       try {
         const response = await fetch("/api/admin/editor/taxonomy?project=atlas", { credentials: "same-origin", cache: "no-store" });
@@ -4663,12 +4627,12 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
 
       // Render the editor list from the first response without waiting for the
       // public catalog (which can be considerably slower on a cold edge). The
-      // catalog and dynamic taxonomy refresh article-source and form options.
+      // catalog and dynamic taxonomy refresh publication states and form options.
       publicCatalogReady = Promise.all([loadPublicCatalog(), loadEditorialTaxonomy()]).then(() => {
-        populateEditorSubjects(); fillCategories(category.value, true); populateSourceSubjects(); fillSourceArticles();
+        populateEditorSubjects(); fillCategories(category.value, true);
       });
       void publicCatalogReady.catch(() => undefined);
-      populateEditorSubjects(); fillCategories(category.value, true); populateSourceSubjects(); fillSourceArticles(); renderDocuments();
+      populateEditorSubjects(); fillCategories(category.value, true); renderDocuments();
       void loadPublicationIntegration();
       editorLoadRetry?.success();
     };
@@ -4882,7 +4846,6 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
       setUnsavedChanges(true);
     });
     conceptId.addEventListener("invalid", () => { conceptIdAdvanced.open = true; conceptIdPreview.textContent = "概念を選択するか、概念IDを入力してください"; });
-    sourceSubject.addEventListener("change", fillSourceArticles);
     sidebarCollapseButton.addEventListener("click", () => setSidebarCollapsed(!root.classList.contains("sidebar-collapsed"), true));
     status.addEventListener("change", () => {
       state.textContent = statusLabel[status.value as keyof typeof statusLabel];
@@ -5312,7 +5275,6 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
       emptyDocument();
       saveMessage.value = "新規原稿を開始しました。入力すると自動保存されます。";
     });
-    root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "運営管理へ登録する公開記事を選んでください。"; return; } const existing = documents.find((item) => item.source_article_id === source.articleId) ?? documents.find((item) => item.subject === source.subject && item.category === source.category && item.slug === source.slug); if (existing) { void openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。新しい原稿は作成していません。"; return; } emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。入力すると自動保存されます。保存だけでは自動公開されません。"; });
     list.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-document-id]"); if (button) { const id=button.dataset.documentId??""; void openDocument(id).then(()=>loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); } });
     form.addEventListener("submit", (event) => { event.preventDefault(); });
     root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value, selections: selectedCommentRanges, tags: selectedCommentTags }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; selectedCommentTags = []; root.querySelectorAll<HTMLButtonElement>(".review-pane-content > .comment-tags [data-comment-tag]").forEach((button) => button.setAttribute("aria-pressed", "false")); activeReplyId = null; selectedCommentRanges = []; appendSelectionMode = false; renderSelectedRanges(); setCommentSelection(null); await reloadComments(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
@@ -5428,8 +5390,8 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
     // 旧バージョンの折りたたみ状態を復元しない。編集画面に左バーは存在しない。
     root.classList.remove("sidebar-collapsed");
     document.addEventListener("astro:before-swap", () => { disconnectCollaboration(); releaseAllAssetPreviews(); }, { once: true });
-    const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const sourceArticleId = query.get("sourceArticle"); const isNewDocument = query.get("new") === "1"; const updateModeRequested = query.get("mode") === "update";
-    if ((reviewDocumentId || sourceArticleId || isNewDocument) && !window.location.hash) {
+    const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const isNewDocument = query.get("new") === "1"; const updateModeRequested = query.get("mode") === "update";
+    if ((reviewDocumentId || isNewDocument) && !window.location.hash) {
       initialScrollRestoreUntil = performance.now() + 15_000;
       [0, 50, 250, 750, 1_500, 3_000, 4_500, 8_000, 12_000].forEach((delay) => window.setTimeout(restoreInitialEditorScroll, delay));
       const activateStickyToolbar = () => { initialScrollRestoreCancelled = true; root.setAttribute("data-sticky-toolbar", ""); };
@@ -5438,26 +5400,18 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
       root.setAttribute("data-sticky-toolbar", "");
     }
     // 記事未選択時は空状態を即時表示する。初期データ取得が遅い場合でも
-    // パネル全体を不可視にせず、新規作成・公開記事登録へすぐ進めるようにする。
-    if (!reviewDocumentId && !sourceArticleId && !isNewDocument) root.removeAttribute("data-editor-starting");
+    // パネル全体を不可視にせず、新規作成へすぐ進めるようにする。
+    if (!reviewDocumentId && !isNewDocument) root.removeAttribute("data-editor-starting");
     initializeSelects();
     const loadEditorEntry = async () => {
       // 編集対象を指定した入口では、原稿一覧の取得に失敗しても未選択時の
-      // 開始パネルを表示しない。表示すると、対象記事の読み込み失敗を
-      // 「公開記事を運営管理へ登録する」画面と誤認させてしまう。
-      if (reviewDocumentId || sourceArticleId || isNewDocument) empty.hidden = true;
+      // 開始パネルを表示しない。
+      if (reviewDocumentId || isNewDocument) empty.hidden = true;
       await loadDocuments();
       if (reviewDocumentId) {
         await openDocument(reviewDocumentId);
         await loadRevisions(reviewDocumentId);
         if (updateModeRequested) beginUpdateProposal();
-      } else if (sourceArticleId) {
-        await publicCatalogReady;
-        const source = articles.find((item) => item.articleId === sourceArticleId);
-        if (!source) throw new Error("指定された公開記事を見つけられませんでした。");
-        const existing = documentForSourceArticle(source);
-        if (existing) { await openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。"; }
-        else { emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。入力すると自動保存されます。保存だけでは自動公開されません。"; }
       } else if (isNewDocument) {
         // 動的に追加された分野・カテゴリをselectへ反映してから、
         // URLに初期値がある場合は適用する。
@@ -5470,7 +5424,7 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
         const seededConceptId = query.get("conceptId")?.trim() ?? "";
         const hasSeed = Boolean(seededSubject || seededCategory || seededTitle || seededSlug || seededSummary || seededConceptId);
         if (hasSeed) {
-          const seed: SourceArticle = { articleId: "", title: seededTitle, subject: seededSubject, category: seededCategory, slug: seededSlug, summary: seededSummary, conceptId: seededConceptId, body: "", status: "draft" };
+          const seed: DraftSeed = { title: seededTitle, subject: seededSubject, category: seededCategory, slug: seededSlug, summary: seededSummary, conceptId: seededConceptId };
           emptyDocument(seed);
           saveMessage.value = "新規原稿を開始しました。本文を入力すると自動保存されます。";
         } else emptyDocument();
@@ -5779,13 +5733,9 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
   }
 
   /* CodeMirror が使えない場合にも表示されるフォールバック本文欄。 */
-  [data-pref-bg="dark"] .editor-workspace .body-editor-surface:not([data-codemirror-ready="true"]) [data-body],
-  [data-pref-bg="dark"] .editor-workspace .source-picker select:disabled {
+  [data-pref-bg="dark"] .editor-workspace .body-editor-surface:not([data-codemirror-ready="true"]) [data-body] {
     background: var(--background-inset);
     color: var(--text-primary);
-  }
-  [data-pref-bg="dark"] .editor-workspace .source-picker select:disabled {
-    color: var(--text-muted);
   }
 
   /* ツールバーの公開状態・CI状態 */

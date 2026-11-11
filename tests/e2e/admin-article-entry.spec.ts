@@ -384,8 +384,8 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(card.locator(".article-status-group")).toContainText([
       "編集",
       "学習サイト",
-      "運営連携",
     ]);
+    await expect(card).not.toContainText("運営連携");
     await expect(card).toContainText("公開中");
     await expect(card).toContainText("更新案作成中");
     await page.screenshot({
@@ -736,9 +736,10 @@ test.describe("A/D 原稿一覧の作業導線", () => {
 
     await page.goto("admin/articles/?verify=retry");
     await expect(page.locator("[data-admin-load-error]")).toBeVisible();
-    await expect(page.locator("[data-catalog-summary]")).not.toContainText(
+    await expect(page.locator("[data-list]")).not.toContainText(
       "確認しています",
     );
+    await expect(page.locator("[data-catalog-overview]")).toHaveCount(0);
     await expect(page.locator("[data-scope-note]")).toHaveAttribute(
       "data-state",
       "error",
