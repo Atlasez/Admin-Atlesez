@@ -1,6 +1,5 @@
 import { initApplicationForm, renderCatalog, renderDetail } from "./catalog";
 import { renderDashboard, renderWorkspace } from "./member";
-import { renderOperations } from "./operations";
 import { api, errorMessage, html, loginUrl } from "./shared";
 
 type Session = { signedIn: boolean; email?: string; canReview?: boolean };
@@ -39,7 +38,6 @@ async function renderPage() {
     if (location.hash)
       document.getElementById(location.hash.slice(1))?.scrollIntoView();
   }
-  if (page === "operations") return renderOperations(content);
 }
 
 void session.catch(() => {

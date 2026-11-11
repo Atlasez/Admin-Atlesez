@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import worker from "../../src/admin-worker";
+import { SEMINAR_REVIEW_PATH } from "../../src/lib/admin-routes";
 import { dispatchApplicationEmails } from "../../src/lib/application-email-delivery";
 import { seminarFields } from "../../src/lib/seminar-fields";
 import { createAdminTestEnvironment } from "../helpers/admin-test-environment";
@@ -71,7 +72,10 @@ function fixture() {
 }
 
 describe("seminar platform", () => {
-  it("returns a new Google account to the selected seminar form", async () => {
+  it.each([
+    ["/seminars/join/?number=32", applicant, false],
+    [SEMINAR_REVIEW_PATH, operator, true],
+  ])("returns Google accounts to %s", async (returnTo, email, canReview) => {
     const { env } = fixture();
     const oauthEnv = {
       ...env,
@@ -88,14 +92,13 @@ describe("seminar platform", () => {
           String(input) === "https://openidconnect.googleapis.com/v1/userinfo"
         )
           return Response.json({
-            email: applicant,
+            email,
             email_verified: true,
             sub: "new-seminar-user",
           });
         return new Response(null, { status: 500 });
       }),
     );
-    const returnTo = "/seminars/join/?number=32";
     const login = await worker.fetch(
       new Request(
         `${url}/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`,
@@ -128,9 +131,26 @@ describe("seminar platform", () => {
     );
     expect(await session.json()).toMatchObject({
       signedIn: true,
-      email: applicant,
-      canReview: false,
+      email,
+      canReview,
     });
+  });
+
+  it("redirects the former operations URL and serves the admin page only to project reviewers", async () => {
+    const { anonymous, request } = fixture();
+    const legacy = await anonymous("/seminars/operations/");
+    expect(legacy.status).toBe(302);
+    expect(legacy.headers.get("location")).toBe(SEMINAR_REVIEW_PATH);
+    const signedOut = await anonymous(SEMINAR_REVIEW_PATH);
+    expect(signedOut.status).toBe(302);
+    expect(signedOut.headers.get("location")).toBe(
+      `/auth/google/login?returnTo=${encodeURIComponent(SEMINAR_REVIEW_PATH)}`,
+    );
+    expect(
+      (await request(`${SEMINAR_REVIEW_PATH}?project=atlas`, outsider)).status,
+    ).toBe(403);
+    expect((await request(SEMINAR_REVIEW_PATH, inactive)).status).toBe(403);
+    expect((await request(SEMINAR_REVIEW_PATH, operator)).status).toBe(200);
   });
 
   it("lists the imported directory publicly without enabling unassigned hosts", async () => {

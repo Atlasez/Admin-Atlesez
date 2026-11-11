@@ -1,4 +1,5 @@
 ---
+import { SEMINAR_REVIEW_PATH } from "../../lib/admin-routes";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 ---
 <AdminLayout title="ゼミプラットフォーム" description="ゼミプラットフォームの運営ワークスペース">
@@ -10,7 +11,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       <a href="/admin/portal/" aria-label="Atlasezメンバー用サイトへ戻る">メンバー用サイトに戻る</a>
     </header>
     <p class="seminar-service-links">
-      <a href="/seminars/operations/">企画申請を審査する</a>
+      <a href={SEMINAR_REVIEW_PATH} data-project-manager-only data-admin-site="semi-platform" hidden>企画申請を審査する</a>
       <a href="/seminars/">一般用ページを開く</a>
       <a href="/seminars/member/">参加者ページを開く</a>
     </p>

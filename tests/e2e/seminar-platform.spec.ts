@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { SEMINAR_REVIEW_PATH } from "../../src/lib/admin-routes";
 import { seminarFields } from "../../src/lib/seminar-fields";
 
 const seminar = {
@@ -77,6 +78,18 @@ test("Googleログインへの導線は選択したゼミを保持する", async
 
 test("企画の送信と運営承認をサイト内で行う", async ({ page }) => {
   let status = "pending";
+  await page.route("**/api/admin/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/admin/auth-status")
+      return route.fulfill({
+        json: {
+          email: "operator@atlasez.test",
+          isManager: false,
+          managerProjects: ["seminar-platform"],
+        },
+      });
+    return route.fulfill({ json: { notifications: [], profile: {} } });
+  });
   await page.route("**/api/seminars/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/seminars/session")
@@ -129,7 +142,28 @@ test("企画の送信と運営承認をサイト内で行う", async ({ page }) 
     page.getByRole("heading", { name: "企画を受け付けました" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "運営ページ", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${SEMINAR_REVIEW_PATH}$`));
+  await page.getByRole("button", { name: "メニュー", exact: true }).click();
+  const adminMenu = page.getByRole("navigation", {
+    name: "運営用サイトメニュー",
+  });
+  await expect(
+    adminMenu.getByRole("link", { name: "ゼミ企画審査", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   await expect(page.getByText(/リーマン面ゼミ ・ 審査待ち/)).toBeVisible();
+  await expect(page.getByText("企画申請を読み込んでいます。")).toBeHidden();
   await page.getByRole("button", { name: "承認する" }).click();
+  await expect(page.getByText(/リーマン面ゼミ ・ 承認済み/)).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "状態", exact: true })
+    .selectOption("pending");
+  await expect(
+    page.getByText("この状態の企画申請はありません。"),
+  ).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "パンくず" })
+    .getByRole("link", { name: "ゼミプラットフォーム" })
+    .click();
+  await page.getByRole("link", { name: "企画申請を審査する" }).click();
   await expect(page.getByText(/リーマン面ゼミ ・ 承認済み/)).toBeVisible();
 });

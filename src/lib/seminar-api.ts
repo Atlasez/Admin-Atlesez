@@ -1,3 +1,4 @@
+import { SEMINAR_REVIEW_PATH } from "./admin-routes";
 import {
   seminarJson,
   seminarError,
@@ -144,7 +145,7 @@ async function submitProposal(
       )
       .bind(
         "ゼミプラットフォーム｜新しい企画申請",
-        `新しいゼミ企画の確認をお願いします。\n${access.origin}/seminars/operations/`,
+        `新しいゼミ企画の確認をお願いします。\n${access.origin}${SEMINAR_REVIEW_PATH}`,
         now,
         now,
         now,

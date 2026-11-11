@@ -1,4 +1,5 @@
 ---
+import { SEMINAR_REVIEW_PATH } from "../lib/admin-routes";
 import BaseHead from "../components/BaseHead.astro";
 import SettingsMenu from "../components/SettingsMenu.astro";
 import "../styles/seminars.css";
@@ -13,7 +14,7 @@ const nav = [
   { label: "企画する", href: "/seminars/propose/", page: "propose" },
   { label: "参加申請", href: "/seminars/join/", page: "join" },
   { label: "参加者ページ", href: "/seminars/member/", page: "member" },
-  { label: "運営ページ", href: "/seminars/operations/", page: "operations" },
+  { label: "運営ページ", href: SEMINAR_REVIEW_PATH, page: "operations" },
 ];
 const login = `/auth/google/login?returnTo=${encodeURIComponent(Astro.url.pathname)}`;
 ---
