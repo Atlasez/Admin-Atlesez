@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { afterEach, beforeEach, vi } from "vitest";
 import worker from "../../src/admin-worker";
+import type { D1PreparedStatement } from "../../src/lib/admin-database";
 
 class Statement {
   values: SQLInputValue[] = [];
@@ -66,15 +67,15 @@ export function createAdminTestEnvironment() {
     APPLICATION_OPERATIONS_EMAILS: "operator@atlasez.test",
     REPORTS: {
       prepare: (query: string) => new Statement(query, db),
-      batch: async (statements: Statement[]) => {
+      batch: async <T>(statements: D1PreparedStatement[]) => {
         db.exec("BEGIN");
         try {
           const results = [];
           for (const statement of statements)
             results.push(
-              /^\s*SELECT\b/i.test(statement.query)
-                ? await statement.all()
-                : await statement.run(),
+              /^\s*SELECT\b/i.test((statement as Statement).query)
+                ? await statement.all<T>()
+                : { results: [], ...(await statement.run()) },
             );
           db.exec("COMMIT");
           return results;
