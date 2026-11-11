@@ -1771,6 +1771,53 @@ test("E-6d: 処理中の公開状態カードをダーク／ライト両テー�
   expect(colors.light.text).toBe("rgb(36, 82, 124)");
 });
 
+test("E-6e: コメントとフィードバックの状態チップを暗色テーマに合わせる", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const colors = await page.evaluate(() => {
+    const workspace = document.querySelector<HTMLElement>(".editor-workspace");
+    if (!workspace) throw new Error("編集画面がありません。");
+
+    const fixture = document.createElement("div");
+    fixture.className = "review-panel";
+    fixture.innerHTML = [
+      '<span class="thread-status is-pending">未確認</span>',
+      '<span class="thread-status is-acknowledged">確認済み</span>',
+      '<span class="thread-status is-resolved">解決済み</span>',
+      '<span class="feedback-request-status is-open">未対応</span>',
+      '<span class="feedback-request-status is-doing">対応中</span>',
+      '<span class="feedback-request-status is-done">完了</span>',
+    ].join("");
+    workspace.append(fixture);
+    document.documentElement.dataset.prefBg = "dark";
+
+    const read = (selector: string) => {
+      const element = fixture.querySelector<HTMLElement>(selector);
+      if (!element) throw new Error(`状態チップがありません: ${selector}`);
+      const style = getComputedStyle(element);
+      return { background: style.backgroundColor, text: style.color };
+    };
+    return {
+      pending: read(".thread-status.is-pending"),
+      acknowledged: read(".thread-status.is-acknowledged"),
+      resolved: read(".thread-status.is-resolved"),
+      open: read(".feedback-request-status.is-open"),
+      doing: read(".feedback-request-status.is-doing"),
+      done: read(".feedback-request-status.is-done"),
+    };
+  });
+
+  expect(colors.pending.background).toBe("rgb(74, 58, 27)");
+  expect(colors.acknowledged.background).toBe("rgb(32, 39, 44)");
+  expect(colors.resolved.background).toBe("rgb(32, 42, 36)");
+  expect(colors.open.background).toBe(colors.pending.background);
+  expect(colors.doing.background).toBe(colors.acknowledged.background);
+  expect(colors.done.background).toBe(colors.resolved.background);
+});
+
 test("E-7: 未保存の変更があると戻る・離脱を警告する", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
