@@ -48,16 +48,18 @@ jobs:
         run: npm run verify:build-info
       - name: 内部リンク検証
         run: node scripts/check-links.mjs dist "$BASE_PATH"
-      - name: Playwrightブラウザ導入
-        run: |
-          # ubuntu-24.04には不要なGoogle Chrome apt sourceが登録されており、
-          # 配布元の一時的なハッシュ不一致でPlaywright導入全体が失敗することがある。
-          sudo find /etc/apt/sources.list.d -maxdepth 1 -type f -exec grep -Il 'dl.google.com' {} \; -delete
-          npx playwright install --with-deps chromium
       - name: E2E・アクセシビリティ検査 (Playwright + axe)
-        run: npx playwright test
+        timeout-minutes: 12
         env:
           E2E_BASE_URL: http://localhost:4321
+        run: |
+          # Ubuntuミラーに依存せず、ロックファイルと同じ版のブラウザーを使う。
+          playwright_version="$(node -p 'require("@playwright/test/package.json").version')"
+          docker run --rm --init --ipc=host --user "$(id -u):$(id -g)" \
+            -e CI=true -e HOME=/tmp -e BASE_PATH -e E2E_BASE_URL \
+            -v "$GITHUB_WORKSPACE:/work" -w /work \
+            "mcr.microsoft.com/playwright:v${playwright_version}-noble" \
+            npx playwright test
       - name: Lighthouse CI（品質検査）
         run: |
           npm install -g @lhci/cli

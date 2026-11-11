@@ -1,0 +1,441 @@
+[data-seminar-page] [hidden] {
+  display: none !important;
+}
+
+[data-seminar-page] :where(h1, h2, h3, p, dl) {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.seminar-header {
+  border-top: 3px solid var(--accent-primary);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--background-primary);
+}
+
+.seminar-header-inner,
+.seminar-header-tools,
+.seminar-header nav ul {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.seminar-header-inner {
+  padding-block: var(--space-1);
+}
+
+.seminar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: calc(1.2rem * var(--text-scale));
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.seminar-header nav ul {
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.seminar-header nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  padding-inline: var(--space-2);
+  border-bottom: 2px solid transparent;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.seminar-header nav a:is(:hover, [aria-current="page"]) {
+  border-bottom-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.seminar-header-tools {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.seminar-header-tools > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+}
+
+.seminar-shell {
+  max-width: 70rem;
+  min-height: 60vh;
+  padding-block: var(--space-5) var(--space-6);
+}
+
+.seminar-lead {
+  padding-block: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.seminar-lead h1 {
+  font-size: calc(2rem * var(--text-scale));
+}
+
+.seminar-lead h1 + p {
+  max-width: 40rem;
+  margin-top: var(--space-3);
+  font-size: calc(1.06rem * var(--text-scale));
+}
+
+.seminar-actions,
+.seminar-row,
+.seminar-vote,
+.seminar-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.seminar-actions {
+  align-items: center;
+  margin-top: var(--space-4);
+}
+
+.seminar-row,
+.seminar-section-head {
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.seminar-directory {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(17rem, 0.7fr);
+  grid-template-areas: "heading filter" "results filter";
+  column-gap: clamp(2.5rem, 6vw, 5rem);
+  align-items: start;
+  padding-block: var(--space-6);
+  scroll-margin-top: var(--space-3);
+}
+
+.seminar-directory > .seminar-section-head {
+  grid-area: heading;
+}
+
+.seminar-directory-results {
+  grid-area: results;
+}
+
+.seminar-filter {
+  grid-area: filter;
+}
+
+.seminar-section-head {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.seminar-section-head,
+.seminar-block > h2,
+.seminar-form legend {
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--accent-primary);
+}
+
+.seminar-section-head h3 {
+  font-size: calc(1.3rem * var(--text-scale));
+  font-weight: 650;
+}
+
+.seminar-filter label {
+  margin-top: var(--space-3);
+}
+
+.seminar-directory-results > p,
+.seminar-stack > p {
+  padding-block: var(--space-3);
+}
+
+.seminar-section-head p,
+.seminar-muted,
+.seminar-meta,
+.seminar-number,
+.seminar-state {
+  color: var(--text-secondary);
+  font-size: calc(0.88rem * var(--text-scale));
+}
+
+.seminar-number {
+  font-variant-numeric: tabular-nums;
+}
+
+.seminar-state {
+  white-space: nowrap;
+}
+
+.seminar-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.seminar-entry {
+  min-width: 0;
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.seminar-entry > * + * {
+  margin-top: var(--space-2);
+}
+
+.seminar-entry > .seminar-meta {
+  margin-top: var(--space-1);
+}
+
+.seminar-page-head {
+  margin-bottom: var(--space-5);
+}
+
+.seminar-page-head > * + * {
+  margin-top: var(--space-2);
+}
+
+.seminar-back {
+  margin-bottom: var(--space-3);
+  font-size: calc(0.9rem * var(--text-scale));
+}
+
+.seminar-block + .seminar-block,
+.seminar-columns + .seminar-block,
+.seminar-block + .seminar-columns {
+  margin-top: var(--space-5);
+}
+
+.seminar-columns,
+.seminar-details,
+.seminar-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.seminar-columns {
+  gap: var(--space-5) clamp(2.5rem, 6vw, 5rem);
+}
+
+.seminar-details,
+.seminar-form-grid {
+  gap: var(--space-3) var(--space-4);
+}
+
+.seminar-details > div {
+  min-width: 0;
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.seminar-details dt {
+  color: var(--text-secondary);
+  font-size: calc(0.88rem * var(--text-scale));
+}
+
+.seminar-details dd,
+.seminar-prewrap {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.seminar-full {
+  grid-column: 1 / -1;
+}
+
+.seminar-form {
+  display: grid;
+  gap: var(--space-5);
+  max-width: var(--reading-width);
+}
+
+.seminar-form fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3) 0 0;
+  border: 0;
+}
+
+.seminar-form legend {
+  width: 100%;
+  padding-inline: 0;
+  font-size: calc(1.15rem * var(--text-scale));
+  font-weight: 650;
+}
+
+.seminar-form fieldset > * + * {
+  margin-top: var(--space-3);
+}
+
+.seminar-shell label {
+  display: grid;
+  gap: var(--space-1);
+  font-size: calc(0.9rem * var(--text-scale));
+  font-weight: 650;
+}
+
+.seminar-shell :is(input:not([type="radio"]), select, textarea) {
+  min-width: 0;
+  min-height: var(--touch-target);
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  background: var(--background-primary);
+  font: inherit;
+  font-weight: 400;
+}
+
+.seminar-shell input::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+.seminar-shell textarea {
+  resize: vertical;
+}
+
+.seminar-shell .button {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.seminar-shell button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.seminar-shell button.seminar-danger {
+  border-color: var(--danger);
+  background: var(--background-primary);
+  color: var(--danger);
+}
+
+.seminar-shell button.seminar-danger:hover {
+  background: var(--background-secondary);
+}
+
+.seminar-error {
+  color: var(--danger);
+}
+
+.seminar-shell summary {
+  min-height: var(--touch-target);
+  align-content: center;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.seminar-vote,
+.seminar-inline-form {
+  align-items: end;
+  margin-top: var(--space-3);
+}
+
+.seminar-inline-form label {
+  flex: 1 1 14rem;
+}
+
+.seminar-list {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.4rem;
+}
+
+.seminar-footer {
+  padding-block: var(--space-5);
+  border-top: 1px solid var(--border-default);
+  font-size: calc(0.9rem * var(--text-scale));
+}
+
+.seminar-footer-inner {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.seminar-footer-brand {
+  font-size: calc(1.1rem * var(--text-scale));
+  font-weight: 700;
+}
+
+.seminar-footer-brand a {
+  color: var(--text-primary);
+}
+
+.seminar-footer nav {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+@media (max-width: 767px) {
+  .seminar-header-inner {
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .seminar-header nav {
+    width: 100%;
+  }
+
+  .seminar-header nav ul {
+    gap: 0;
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+
+  .seminar-header nav a {
+    padding-inline: var(--space-1);
+  }
+
+  .seminar-header-tools {
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .seminar-lead {
+    padding-block: var(--space-4) var(--space-5);
+  }
+
+  .seminar-lead h1 {
+    font-size: calc(1.55rem * var(--text-scale));
+  }
+
+  .seminar-directory {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "heading" "filter" "results";
+    padding-block: var(--space-5);
+  }
+
+  .seminar-filter {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    gap: var(--space-2);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  .seminar-filter > .seminar-section-head {
+    display: none;
+  }
+
+  .seminar-columns,
+  .seminar-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .seminar-details,
+  .seminar-footer-inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
