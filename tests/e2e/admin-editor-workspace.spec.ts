@@ -1024,6 +1024,67 @@ test("フィードバック済みは公開審査の承認前に状態選択で�
   );
 });
 
+test("公開審査段階がない原稿では運営管理者にも代理承認を表示しない", async ({
+  page,
+}) => {
+  await mockAdminApi(page, undefined, { ...documentItem, status: "in-review" });
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/publication-review",
+    async (route) =>
+      route.fulfill({
+        json: {
+          stage: null,
+          canCompleteWriting: true,
+          canDecide: false,
+          managerOverride: true,
+          feedbackTaskTotal: 1,
+          feedbackTaskDone: 0,
+          feedbackComplete: false,
+        },
+      }),
+  );
+
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(page.locator("[data-publication-review]")).toBeHidden();
+  await expect(page.locator("[data-complete-writing]")).toBeDisabled();
+});
+
+test("公開審査の競合エラーを審査ダイアログ内に表示する", async ({ page }) => {
+  await mockAdminApi(page, undefined, { ...documentItem, status: "in-review" });
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/publication-review",
+    async (route) => {
+      const isGet = route.request().method() === "GET";
+      await route.fulfill({
+        status: isGet ? 200 : 409,
+        json: isGet
+          ? {
+              stage: "project-leader",
+              canCompleteWriting: false,
+              canDecide: true,
+              managerOverride: true,
+              feedbackTaskTotal: 1,
+              feedbackTaskDone: 1,
+              feedbackComplete: true,
+            }
+          : { error: "この原稿は公開審査中ではありません。" },
+      });
+    },
+  );
+
+  await page.goto("./admin/editor/?document=doc-1");
+  await page.locator("[data-publication-review]").click();
+  const dialog = page.locator("[data-publication-review-dialog]");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "承認する" }).click();
+
+  await expect(dialog.locator("[data-publication-review-message]")).toHaveText(
+    "この原稿は公開審査中ではありません。",
+  );
+  await expect(dialog).toBeVisible();
+});
+
 test("公開Runの失敗原因・CIログ・再試行導線を表示する", async ({ page }) => {
   await page.setViewportSize({ width: 1367, height: 768 });
   const failedDocument = {

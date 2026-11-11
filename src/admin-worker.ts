@@ -20998,9 +20998,13 @@ async function getPublicationReviewState(
     feedbackTaskDone: feedbackTasks.done,
     feedbackComplete,
     canDecide:
-      Boolean(scope.isManager) ||
-      (document.publication_review_stage === "subject-coordinator" && canCoordinateSubject(scope, document.subject)) ||
-      (document.publication_review_stage === "project-leader" && Boolean(scope.isProjectLeader)),
+      document.status === "in-review" &&
+      Boolean(document.publication_review_stage) &&
+      (Boolean(scope.isManager) ||
+        (document.publication_review_stage === "subject-coordinator" &&
+          canCoordinateSubject(scope, document.subject)) ||
+        (document.publication_review_stage === "project-leader" &&
+          Boolean(scope.isProjectLeader))),
     managerOverride: Boolean(scope.isManager),
     coordinatorCount: coordinators.length,
     leaderCount: leaders.length,
@@ -21115,7 +21119,8 @@ async function decidePublicationReview(
     .first<EditorialDocument>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   const stage = document.publication_review_stage;
-  if (!stage) return json({ error: "この原稿は公開審査中ではありません。" }, 409);
+  if (document.status !== "in-review" || !stage)
+    return json({ error: "この原稿は公開審査中ではありません。" }, 409);
   const managerOverride = scope.isManager;
   const authorized = managerOverride || (stage === "subject-coordinator"
     ? canCoordinateSubject(scope, document.subject)

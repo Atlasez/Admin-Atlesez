@@ -2926,6 +2926,8 @@ describe("admin worker editor APIs", () => {
       feedbackTaskDone: 1,
       feedbackComplete: false,
       canCompleteWriting: true,
+      canDecide: false,
+      managerOverride: true,
     });
   });
 
