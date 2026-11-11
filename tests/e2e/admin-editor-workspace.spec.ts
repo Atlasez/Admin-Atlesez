@@ -1714,10 +1714,61 @@ test("E-6c: ダークモード解除時に公開連携の状態UIをライト配
       };
     });
 
-  expect(colors.dark.background).toBe("rgb(29, 58, 42)");
-  expect(colors.dark.text).toBe("rgb(200, 240, 213)");
+  expect(colors.dark.background).toBe("rgb(32, 42, 36)");
+  expect(colors.dark.text).toBe("rgb(197, 239, 211)");
   expect(colors.light.background).not.toBe(colors.dark.background);
   expect(colors.light.text).toBe("rgb(36, 100, 58)");
+});
+
+test("E-6d: 処理中の公開状態カードをダーク／ライト両テーマで読みやすくする", async ({
+  page,
+}) => {
+  const queuedDocument = {
+    ...documentItem,
+    publication_run: {
+      id: "run-queued",
+      state: "queued",
+      action: "publish" as const,
+      attempt: 1,
+      error_code: null,
+      error_message: null,
+      failure_kind: null,
+      check_name: null,
+      check_url: null,
+      diagnostic_url: null,
+      failure_detail: null,
+      failure_step: null,
+      failure_file: null,
+      failure_line: null,
+      failure_column: null,
+      started_at: "2026-11-12T00:00:00.000Z",
+      updated_at: "2026-11-12T00:00:00.000Z",
+      last_check_at: "2026-11-12T00:00:00.000Z",
+    },
+  };
+  await mockAdminApi(page, undefined, queuedDocument);
+  await page.goto("./admin/editor/?document=doc-1");
+  await page.locator("[data-publication-run]").waitFor({ state: "visible" });
+
+  const colors = await page
+    .locator("[data-publication-run]")
+    .evaluate((element) => {
+      const status = element as HTMLElement;
+      document.documentElement.setAttribute("data-pref-bg", "dark");
+      const dark = getComputedStyle(status);
+      const darkColors = { background: dark.backgroundColor, text: dark.color };
+      document.documentElement.removeAttribute("data-pref-bg");
+      const light = getComputedStyle(status);
+      return {
+        dark: darkColors,
+        light: { background: light.backgroundColor, text: light.color },
+      };
+    });
+
+  expect(colors.dark.background).toBe("rgb(32, 39, 44)");
+  expect(colors.dark.text).toBe("rgb(199, 231, 247)");
+  expect(colors.light.background).not.toBe(colors.dark.background);
+  expect(colors.light.text).toBe("rgb(36, 82, 124)");
 });
 
 test("E-7: 未保存の変更があると戻る・離脱を警告する", async ({ page }) => {
