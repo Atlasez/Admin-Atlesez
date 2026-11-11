@@ -52,13 +52,23 @@ export async function renderCatalog(content: HTMLElement) {
     );
     if (count) count.textContent = `${matches.length}件`;
     content.innerHTML = matches.length
-      ? `<ul class="seminar-grid">${matches
+      ? `<ul class="seminar-results">${matches
           .map(
             ({ item }) => `
-          <li class="seminar-card">
-            <div class="seminar-row"><span class="seminar-tag ${item.recruitment}">${recruitmentLabels[item.recruitment]}</span><span class="seminar-number">No. ${seminarNumber(item.number)}</span></div>
-            <h3><a href="${urlFor("detail", item.number)}">${html(item.title)}</a></h3>
-            <p>${html([item.details.theme, item.details.format].filter(Boolean).join(" ・ "))}</p>
+          <li class="seminar-entry">
+            <div class="seminar-row">
+              <h3><a href="${urlFor("detail", item.number)}">${html(item.title)}</a></h3>
+              <span class="seminar-state">${recruitmentLabels[item.recruitment]}</span>
+            </div>
+            <p class="seminar-meta"><span class="seminar-number">番号 ${seminarNumber(item.number)}</span>${html(
+              [
+                item.details.theme === item.title ? "" : item.details.theme,
+                item.details.format,
+              ]
+                .filter(Boolean)
+                .map((value) => ` ・ ${value}`)
+                .join(""),
+            )}</p>
           </li>`,
           )
           .join("")}</ul>`
@@ -81,18 +91,18 @@ export async function renderDetail(content: HTMLElement) {
     : "";
   content.innerHTML = `
     <header class="seminar-page-head">
-      <p class="seminar-eyebrow">No. ${seminarNumber(item.number)}</p>
       <h1>${html(item.title)}</h1>
-      <div class="seminar-actions"><span class="seminar-tag ${item.recruitment}">${recruitmentLabels[item.recruitment]}</span><span>${phaseLabels[item.phase]}</span></div>
+      <p class="seminar-meta">ゼミ番号 ${seminarNumber(item.number)} ・ ${recruitmentLabels[item.recruitment]} ・ ${phaseLabels[item.phase]}</p>
       ${
         item.acceptingApplications
-          ? `<div class="seminar-actions"><a class="seminar-button" href="${urlFor("join", item.number)}">このゼミに参加申請する</a></div>`
-          : `<p>${item.recruitment === "open" && source ? "このゼミは主催者のアカウント設定後に参加申請できます。" : "現在、参加申請の受付は終了または停止しています。"}</p>`
+          ? `<div class="seminar-actions"><a class="button" href="${urlFor("join", item.number)}">このゼミに参加申請する</a></div>`
+          : `<p>${item.recruitment === "open" && source ? "主催者の登録後に参加申請を受け付けます。" : "参加申請は受け付けていません。"}</p>`
       }
     </header>
-    <section class="seminar-panel" aria-label="ゼミの詳細">
+    <section class="seminar-block" aria-labelledby="detail-heading">
+      <h2 id="detail-heading">ゼミの詳細</h2>
       ${publicDetails(item)}
-      ${source ? `<p><a href="${html(source)}">旧サイト掲載情報を見る</a></p>` : ""}
+      ${source ? `<div class="seminar-actions"><a href="${html(source)}">旧サイトの掲載情報</a></div>` : ""}
     </section>`;
 }
 
@@ -108,7 +118,7 @@ export async function initApplicationForm(
   const email = document.querySelector<HTMLElement>("[data-form-email]");
   if (!auth || !form || !success || !email) return;
   if (!session.signedIn) {
-    auth.innerHTML = `<p>フォームを送信するにはGoogleでログインしてください。申請後は参加者ページで状況を確認できます。</p><a class="seminar-button" href="${html(loginUrl())}">Googleでログイン</a>`;
+    auth.innerHTML = `<p>申請にはGoogleアカウントが必要です。</p><a class="button" href="${html(loginUrl())}">Googleでログイン</a>`;
     return;
   }
   if (page === "join") {
@@ -120,14 +130,14 @@ export async function initApplicationForm(
     if (!select) return;
     for (const item of seminars.filter((item) => item.acceptingApplications)) {
       const option = new Option(
-        `No. ${seminarNumber(item.number)} ${item.title}`,
+        `番号 ${seminarNumber(item.number)} ${item.title}`,
         String(item.number),
       );
       select.add(option);
     }
     if (select.options.length <= 1) {
       auth.innerHTML =
-        '<p>現在、参加申請を受け付けているゼミはありません。</p><a href="/seminars/#catalog">ゼミ一覧に戻る</a>';
+        '<p>参加を受け付けているゼミはありません。</p><a href="/seminars/#catalog">ゼミ一覧に戻る</a>';
       return;
     }
     if (number) {

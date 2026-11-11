@@ -8,7 +8,7 @@ const groups = [
   { label: "開催・募集情報", fields: seminarFields.slice(11) },
 ];
 ---
-<div data-form-auth class="seminar-panel">
+<div data-form-auth class="seminar-entry">
   <p role="status">ログイン状態を確認中です。</p>
 </div>
 <form data-application-form class="seminar-form" hidden>
@@ -22,7 +22,7 @@ const groups = [
   )}
   <fieldset>
     <legend>{isProposal ? "企画者情報" : "申請者情報"}</legend>
-    <p>連絡先はログイン中のメールアドレス（<span data-form-email></span>）です。</p>
+    <p>連絡先 <span data-form-email></span></p>
     <div class="seminar-form-grid">
       {profileFields.map((field) => (
         <label>
@@ -36,7 +36,7 @@ const groups = [
     <>
       <fieldset>
         <legend>企画の基本情報</legend>
-        <p>この欄から「開催・募集情報」までの内容は、承認後に一般公開されます。個人の連絡先や非公開の会場情報は入力しないでください。</p>
+        <p>承認後に公開します。個人の連絡先や非公開の会場情報は入力しないでください。</p>
         <label>ゼミ名（必須） <input required name="title" maxlength="160" /></label>
         <div class="seminar-form-grid">
           <label>募集状況（必須）
@@ -71,20 +71,20 @@ const groups = [
     <fieldset>
       <legend>主催者への連絡</legend>
       <label>伝えたいこと・質問 <textarea name="hostNote" maxlength="2000" rows="4"></textarea></label>
-      <p>主催者には氏名などの申請者情報と連絡先を共有します。</p>
+      <p>申請者情報と連絡先は主催者に伝わります。</p>
     </fieldset>
   )}
   <fieldset>
     <legend>運営への連絡</legend>
-    <label>伝えたいこと・質問（非公開） <textarea name="operationsNote" maxlength="2000" rows="4"></textarea></label>
+    <label>連絡事項（非公開） <textarea name="operationsNote" maxlength="2000" rows="4"></textarea></label>
   </fieldset>
   <p><a href="/privacy-policy/">個人情報保護方針</a>をご確認のうえ送信してください。</p>
   <div class="seminar-actions">
-    <button class="seminar-button" type="submit">{isProposal ? "企画を送信する" : "参加を申請する"}</button>
+    <button class="button" type="submit">{isProposal ? "企画を送信する" : "参加を申請する"}</button>
     <p role="status" data-form-message></p>
   </div>
 </form>
-<div data-form-success class="seminar-panel" hidden>
+<div data-form-success class="seminar-entry" hidden>
   <h2>{isProposal ? "企画を受け付けました" : "参加申請を受け付けました"}</h2>
   <p>{isProposal ? "運営の承認後に公開されます。" : "主催者の承認後にゼミに参加できます。"}</p>
   <a href="/seminars/member/">参加者ページで確認する</a>

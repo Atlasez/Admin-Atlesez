@@ -18,6 +18,7 @@ import {
   selects,
   statusLabels,
   workspaceLink,
+  urlFor,
   type CatalogItem,
   type Proposal,
   type RequestStatus,
@@ -113,7 +114,7 @@ function activityCard(
   ]
     .filter(Boolean)
     .join(" ・ ");
-  return `<article class="seminar-panel" id="activity-${html(row.id)}">
+  return `<article class="seminar-entry" id="activity-${html(row.id)}">
     <h3>${html(row.title)}</h3>
     ${!workspace ? `<p class="seminar-muted">${workspaceLink({ number: row.number, title: row.seminar_title }, `#activity-${row.id}`)}</p>` : ""}
     ${meta ? `<p class="seminar-muted">${html(meta)}</p>` : ""}
@@ -126,7 +127,7 @@ function activityCard(
         <option value="">選択してください</option>
         ${row.options.map((name, i) => `<option value="${i}" ${row.choice === i ? "selected" : ""}>${html(name)}</option>`).join("")}
       </select></label>
-      <button class="seminar-button" type="submit">回答を保存</button><p role="status" data-form-message></p>
+      <button class="button" type="submit">回答を保存</button><p role="status" data-form-message></p>
     </form>`
         : ""
     }
@@ -138,7 +139,7 @@ function activityCard(
         row.phase !== "ended") ||
         (voting && isHost))
         ? `<form class="seminar-actions" data-activity="${html(row.id)}">
-        <button class="seminar-button secondary" type="submit">${poll ? "回答を締め切る" : "完了にする"}</button><p role="status" data-form-message></p>
+        <button class="button button-secondary" type="submit">${poll ? "回答を締め切る" : "完了にする"}</button><p role="status" data-form-message></p>
       </form>`
         : ""
     }
@@ -179,7 +180,7 @@ export async function renderDashboard(content: HTMLElement) {
   const cards = (rows: Activity[]) =>
     rows.map((row) => activityCard(row, { workspace: false, now })).join("");
   const membershipCard = (item: Membership) =>
-    `<article class="seminar-panel"><h3>${workspaceLink(item)}</h3><p class="seminar-muted">No. ${seminarNumber(item.number)} ・ ${phaseLabels[item.phase]}${item.isHost ? " ・ 主催" : ""}</p></article>`;
+    `<article class="seminar-entry"><h3>${workspaceLink(item)}</h3><p class="seminar-muted">番号 ${seminarNumber(item.number)} ・ ${phaseLabels[item.phase]}${item.isHost ? " ・ 主催" : ""}</p></article>`;
   const statuses = [
     ...proposals.map((item) => ({
       ...item,
@@ -201,38 +202,24 @@ export async function renderDashboard(content: HTMLElement) {
       current.map(membershipCard).join(""),
       "参加中のゼミはありません。",
     ),
-    section(
-      "upcoming",
-      "次回予定",
-      cards(upcoming),
-      "予定は登録されていません。",
-    ),
-    section(
-      "preparation",
-      "準備・担当",
-      cards(tasks),
-      "対応が必要な準備・担当はありません。",
-    ),
-    section(
-      "polls",
-      "回答待ちの日程調整",
-      cards(polls),
-      "未回答の日程調整はありません。",
-    ),
-    section(
-      "notices",
-      "重要な連絡",
-      cards(notices),
-      "重要な連絡はありません。",
-    ),
+    `<div class="seminar-columns">
+      <div>
+        ${section("upcoming", "次回予定", cards(upcoming), "予定はありません。")}
+        ${section("preparation", "準備・担当", cards(tasks), "対応が必要な項目はありません。")}
+      </div>
+      <div>
+        ${section("polls", "回答待ちの日程調整", cards(polls), "未回答の日程調整はありません。")}
+        ${section("notices", "重要な連絡", cards(notices), "重要な連絡はありません。")}
+      </div>
+    </div>`,
     section(
       "submissions",
       "参加申請・企画の状況",
       statuses
         .map(
           (item) => `
-      <article class="seminar-panel"><div class="seminar-row"><h3>${item.kind === "参加申請" || item.status === "approved" ? detailLink(item) : html(item.title)}</h3>
-      <span class="seminar-tag">${item.kind} ・ ${statusLabels[item.status]}</span></div>
+      <article class="seminar-entry"><div class="seminar-row"><h3>${item.kind === "参加申請" || item.status === "approved" ? detailLink(item) : html(item.title)}</h3>
+      <span class="seminar-state">${item.kind} ・ ${statusLabels[item.status]}</span></div>
       <p class="seminar-muted">申請日 ${dateLabel(item.date)}</p>${item.note ? `<p class="seminar-prewrap">${html(item.note)}</p>` : ""}</article>`,
         )
         .join(""),
@@ -260,12 +247,12 @@ function hostControls(data: Workspace) {
     ${section(
       "settings",
       "募集・実施状況",
-      `<form class="seminar-panel" data-action="settings">
+      `<form class="seminar-entry" data-action="settings">
       <div class="seminar-form-grid">
         <label>募集状況 <select name="recruitment">${selects(recruitmentLabels, seminar.recruitment)}</select></label>
         <label>実施状況 <select name="phase">${selects(phaseLabels, seminar.phase)}</select></label>
       </div>
-      <div class="seminar-actions"><button class="seminar-button secondary" type="submit">状況を保存</button><p role="status" data-form-message></p></div>
+      <div class="seminar-actions"><button class="button button-secondary" type="submit">状況を保存</button><p role="status" data-form-message></p></div>
     </form>`,
       "",
     )}
@@ -275,7 +262,7 @@ function hostControls(data: Workspace) {
       applications
         .map(
           (row) => `
-      <details class="seminar-panel" ${row.status === "pending" ? "open" : ""}>
+      <details class="seminar-entry" ${row.status === "pending" ? "open" : ""}>
         <summary>${html(row.profile.name)} ・ ${statusLabels[row.status]}</summary>
         <p class="seminar-muted">申請日 ${dateLabel(row.created_at)}</p>
         ${privateProfile(row.profile, row.email)}
@@ -291,16 +278,16 @@ function hostControls(data: Workspace) {
         ? section(
             "create",
             "活動を追加",
-            `<form class="seminar-panel" data-action="activities">
+            `<form class="seminar-entry" data-action="activities">
       <div class="seminar-form-grid">
         <label>種類 <select name="kind">${selects(kinds, "event")}</select></label>
-        <label>タイトル（必須） <input required name="title" maxlength="160" /></label>
+        <label>件名（必須） <input required name="title" maxlength="160" /></label>
         <label data-activity-date><span data-date-label>開催日時（日本時間・必須）</span><input type="datetime-local" name="when" required /></label>
         <label data-activity-assignee hidden>担当 <select name="assignee"><option value="">全員</option>${assignees}</select></label>
         <label class="seminar-full" data-activity-options hidden>候補（2〜12件・1行に1件） <textarea name="options" maxlength="2000" rows="4"></textarea></label>
         <label class="seminar-full">詳細 <textarea name="description" maxlength="3000" rows="3"></textarea></label>
       </div>
-      <div class="seminar-actions"><button class="seminar-button" type="submit">活動を追加する</button><p role="status" data-form-message></p></div>
+      <div class="seminar-actions"><button class="button" type="submit">活動を追加する</button><p role="status" data-form-message></p></div>
     </form>`,
             "",
           )
@@ -316,24 +303,24 @@ function materialSection(data: Workspace) {
     `
     ${
       seminar.phase !== "ended"
-        ? `<form class="seminar-panel" data-upload>
+        ? `<form class="seminar-entry" data-upload>
       <label>資料ファイル（1 MB以下） <input type="file" name="file" required /></label>
-      <div class="seminar-actions"><button class="seminar-button" type="submit">アップロード</button><p role="status" data-form-message></p></div>
+      <div class="seminar-actions"><button class="button" type="submit">アップロード</button><p role="status" data-form-message></p></div>
     </form>`
         : ""
     }
     ${
       materials
         .map(
-          (file) => `<article class="seminar-panel">
+          (file) => `<article class="seminar-entry">
       <div class="seminar-row"><h3><a href="/api/seminars/${seminar.number}/materials/${html(file.id)}" download>${html(file.filename)}</a></h3>
       <p class="seminar-muted">${Math.max(1, Math.ceil(file.bytes / 1000))} KB ・ ${dateLabel(file.created_at)}</p></div>
       ${
         file.canManage
           ? `<details><summary>資料を管理</summary><form class="seminar-inline-form" data-material="${html(file.id)}">
         <label>ファイル名 <input name="filename" value="${html(file.filename)}" maxlength="160" required /></label>
-        <button class="seminar-button secondary" value="rename" type="submit">名前を変更</button>
-        <button class="seminar-button danger" value="delete" type="submit" formnovalidate>削除</button>
+        <button class="button button-secondary" value="rename" type="submit">名前を変更</button>
+        <button class="button seminar-danger" value="delete" type="submit" formnovalidate>削除</button>
         <p role="status" data-form-message></p>
       </form></details>`
           : ""
@@ -365,13 +352,12 @@ export async function renderWorkspace(content: HTMLElement) {
   document.title = `${seminar.title}の活動 | ゼミプラットフォーム`;
   content.innerHTML = `
     <header class="seminar-page-head">
-      <p class="seminar-eyebrow">No. ${seminarNumber(number)} ・ ${isHost ? "主催者" : "参加者"}</p>
       <h1>${html(seminar.title)}</h1>
-      <p>${detailLink({ number, title: "公開ページを見る" })}</p>
+      <p class="seminar-meta">ゼミ番号 ${seminarNumber(number)} ・ ${isHost ? "主催者" : "参加者"}</p>
+      <p><a href="${urlFor("detail", number)}">公開ページを見る</a></p>
       <p data-workspace-status role="status" tabindex="-1"></p>
     </header>
     ${isHost ? hostControls(data) : ""}
-    ${materialSection(data)}
     ${Object.entries(kinds)
       .map(([kind, label]) =>
         section(
@@ -384,6 +370,7 @@ export async function renderWorkspace(content: HTMLElement) {
         ),
       )
       .join("")}
+    ${materialSection(data)}
     ${section("history", "過去の活動", cards(activities.filter(inHistory)), "過去の活動はありません。")}`;
 
   const refresh = async () => {

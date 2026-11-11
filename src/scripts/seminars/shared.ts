@@ -110,7 +110,7 @@ export const section = (
   `<section class="seminar-block" id="${id}" aria-labelledby="${id}-heading"><h2 id="${id}-heading">${title}</h2><div class="seminar-stack">${content || empty(fallback)}</div></section>`;
 
 export const detailLink = (item: Pick<CatalogItem, "number" | "title">) =>
-  `<a href="${urlFor("detail", item.number)}">${html(item.title)}</a> <span class="seminar-number">No. ${seminarNumber(item.number)}</span>`;
+  `<a href="${urlFor("detail", item.number)}">${html(item.title)}</a> <span class="seminar-number">番号 ${seminarNumber(item.number)}</span>`;
 
 export const workspaceLink = (
   item: Pick<CatalogItem, "number" | "title">,
@@ -172,7 +172,7 @@ export function bindForm(
 export const decisions = () => `
   <label>申請者へのメッセージ <textarea name="note" maxlength="2000" rows="2"></textarea></label>
   <div class="seminar-actions">
-    <button class="seminar-button" type="submit" value="approved">承認する</button>
-    <button class="seminar-button danger" type="submit" value="rejected">見送る</button>
+    <button class="button" type="submit" value="approved">承認する</button>
+    <button class="button seminar-danger" type="submit" value="rejected">見送る</button>
     <p role="status" data-form-message></p>
   </div>`;

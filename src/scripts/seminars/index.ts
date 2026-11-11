@@ -30,7 +30,7 @@ async function renderPage() {
   if (page === "catalog") return renderCatalog(content);
   if (page === "detail") return renderDetail(content);
   if (!(await session).signedIn) {
-    content.innerHTML = `<div class="seminar-panel"><p>このページを表示するにはログインしてください。</p><a class="seminar-button" href="${html(loginUrl())}">Googleでログイン</a></div>`;
+    content.innerHTML = `<div class="seminar-entry"><p>閲覧するにはログインしてください。</p><a class="button" href="${html(loginUrl())}">Googleでログイン</a></div>`;
     return;
   }
   if (page === "member") return renderDashboard(content);

@@ -1,49 +1,72 @@
 ---
+import BaseHead from "../components/BaseHead.astro";
+import SettingsMenu from "../components/SettingsMenu.astro";
 import "../styles/seminars.css";
+
 interface Props {
   title: string;
   page: string;
 }
 const { title, page } = Astro.props;
-const privatePage = ["member", "workspace", "operations", "join", "propose", "detail"].includes(page);
+const nav = [
+  { label: "ゼミ一覧", href: "/seminars/", page: "catalog" },
+  { label: "企画する", href: "/seminars/propose/", page: "propose" },
+  { label: "参加申請", href: "/seminars/join/", page: "join" },
+  { label: "参加者ページ", href: "/seminars/member/", page: "member" },
+  { label: "運営ページ", href: "/seminars/operations/", page: "operations" },
+];
+const login = `/auth/google/login?returnTo=${encodeURIComponent(Astro.url.pathname)}`;
 ---
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-site="org">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    {privatePage && <meta name="robots" content="noindex" />}
-    <title>{page === "catalog" ? title : `${title} | ゼミプラットフォーム`}</title>
+    <BaseHead
+      title={page === "catalog" ? `${title} | Atlasez` : `${title} | ゼミプラットフォーム`}
+      description="Atlasezの自主ゼミの一覧と、企画・参加申請。"
+      noindex={page !== "catalog"}
+      enableArticleEnhancements={false}
+    />
   </head>
   <body data-seminar-page={page}>
-    <a class="seminar-skip" href="#main">本文へ移動</a>
+    <a class="skip-link" href="#main">本文へ移動</a>
     <header class="seminar-header">
-      <div class="seminar-shell seminar-header-inner">
-        <a class="seminar-brand" href="/seminars/">
-          <span class="seminar-brand-mark" aria-hidden="true">ゼ</span>
-          ゼミプラットフォーム
+      <div class="container seminar-header-inner">
+        <a class="seminar-brand" href="https://atlasez.org/">
+          <img src="/images/atlasez-logo.png" alt="" width="44" height="44" />
+          <span>Atlasez</span>
         </a>
         <nav aria-label="ゼミプラットフォーム">
-          <a href="/seminars/" aria-current={page === "catalog" ? "page" : undefined}>ゼミ一覧</a>
-          <a href="/seminars/propose/" aria-current={page === "propose" ? "page" : undefined}>企画する</a>
-          <a href="/seminars/member/" aria-current={page === "member" ? "page" : undefined}>参加者ページ</a>
-          <a href="/seminars/operations/" data-seminar-operator hidden>運営ページ</a>
-          <a href={`/auth/google/login?returnTo=${encodeURIComponent(Astro.url.pathname)}`} data-seminar-login>ログイン</a>
-          <span class="seminar-account" data-seminar-account hidden>ログイン中</span>
+          <ul>
+            {nav.map((item) => (
+              <li data-seminar-operator={item.page === "operations" ? "" : undefined} hidden={item.page === "operations"}>
+                <a href={item.href} aria-current={page === item.page ? "page" : undefined}>{item.label}</a>
+              </li>
+            ))}
+          </ul>
         </nav>
+        <div class="seminar-header-tools">
+          <a href={login} data-seminar-login>ログイン</a>
+          <span class="seminar-muted" data-seminar-account hidden>ログイン中</span>
+          <SettingsMenu locale="ja" showLanguage={false} />
+        </div>
       </div>
     </header>
-    <main id="main" class="seminar-shell">
+    <main id="main" class="container seminar-shell">
       <slot />
+      <noscript><p>ゼミ一覧や申請を利用するには、ブラウザーでJavaScriptを有効にしてください。</p></noscript>
     </main>
     <footer class="seminar-footer">
-      <div class="seminar-shell">
-        <a href="https://atlasez.org/">Atlasez</a>
-        <a href="/privacy-policy/">個人情報保護方針</a>
-        <a href="mailto:atlasez.contact@gmail.com">お問い合わせ</a>
+      <div class="container seminar-footer-inner">
+        <div>
+          <p class="seminar-footer-brand"><a href="https://atlasez.org/">Atlasez</a></p>
+          <a href="mailto:atlasez.contact@gmail.com">atlasez.contact@gmail.com</a>
+        </div>
+        <nav aria-label="関連情報">
+          <a href="https://atlasez.org/about/">Atlasezとは</a>
+          <a href="/privacy-policy/">個人情報保護方針</a>
+        </nav>
       </div>
     </footer>
-    <noscript><p class="seminar-shell">一覧の表示や申請にはJavaScriptを有効にしてください。</p></noscript>
     <script>
       import "../scripts/seminars/index";
     </script>

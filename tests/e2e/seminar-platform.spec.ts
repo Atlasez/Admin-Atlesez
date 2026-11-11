@@ -122,7 +122,7 @@ test("企画の送信と運営承認をサイト内で行う", async ({ page }) 
   await page.getByLabel("氏名（必須）", { exact: true }).fill("企画者");
   await page.getByLabel("ゼミ名（必須）", { exact: true }).fill(seminar.title);
   for (const field of seminarFields.filter((item) => !("optional" in item))) {
-    await page.locator(`[name="${field.key}"]`).fill("可");
+    await page.getByLabel(`${field.label}（必須）`, { exact: true }).fill("可");
   }
   await page.getByRole("button", { name: "企画を送信する" }).click();
   await expect(
