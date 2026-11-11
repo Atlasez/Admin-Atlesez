@@ -21564,11 +21564,52 @@ const legacySeminarReviewPage = (pathname: string) =>
 
 const seminarPage = (pathname: string) =>
   /^\/seminars(?:\/(?:detail|propose|join|member|workspace))?\/?$/.test(pathname);
+const publicSeminarPage = (pathname: string) =>
+  /^\/seminars(?:\/(?:detail|propose|join))?\/?$/.test(pathname);
+
+const safePublicSeminarReturnTarget = (candidate: string) => {
+  let target: URL;
+  try {
+    target = new URL(candidate);
+  } catch {
+    return null;
+  }
+  if (
+    target.origin !== "https://atlasez.org" ||
+    target.username ||
+    target.password ||
+    target.hash
+  )
+    return null;
+
+  if (
+    target.pathname === "/seminars/" ||
+    target.pathname === "/seminars/propose/"
+  )
+    return target.search ? null : target.href;
+
+  if (
+    target.pathname !== "/seminars/join/" &&
+    target.pathname !== "/seminars/detail/"
+  )
+    return null;
+  if (!target.search) return target.href;
+  const numbers = target.searchParams.getAll("number");
+  if (
+    [...target.searchParams.keys()].some((key) => key !== "number") ||
+    numbers.length !== 1 ||
+    !/^\d{1,10}$/.test(numbers[0])
+  )
+    return null;
+  return `${target.origin}${target.pathname}?number=${numbers[0]}`;
+};
 
 /** Safe OAuth return target for every authenticated user area. */
 const userReturnPath = (value: string | null) => {
   if (!value) return "/apply/";
   const candidate = value.trim();
+  if (/^https?:\/\//i.test(candidate))
+    return safePublicSeminarReturnTarget(candidate) ?? "/apply/";
   if (
     !candidate.startsWith("/") ||
     candidate.startsWith("//") ||
@@ -23609,6 +23650,13 @@ async function handleAdminRequest(
   if (request.method === "GET" || request.method === "HEAD") {
     if (legacySeminarReviewPage(url.pathname))
       return new Response(null, { status: 302, headers: { location: SEMINAR_REVIEW_PATH } });
+    if (publicSeminarPage(url.pathname)) {
+      const pathname = url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`;
+      return Response.redirect(
+        new URL(`${pathname}${url.search}`, "https://atlasez.org").href,
+        302,
+      );
+    }
     if (seminarPage(url.pathname)) return fetchAdminAsset(request, env);
   }
   if (url.pathname === "/api/internal/github-publication-webhook")
