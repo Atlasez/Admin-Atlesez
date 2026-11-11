@@ -1,0 +1,55 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../../components/admin/AdminRetryNotice.astro";
+import { statusLabels } from "../../../scripts/seminars/shared";
+import "../../../styles/seminar-review.css";
+---
+
+<AdminLayout title="ゼミ企画審査" description="ゼミの企画申請、主催者登録、運営への連絡を確認します。">
+  <main class="seminar-review" data-seminar-review data-admin-load-surface>
+    <header class="seminar-review-heading">
+      <h1>ゼミ企画審査</h1>
+      <a href="/seminars/">公開ゼミ一覧</a>
+    </header>
+    <AdminRetryNotice />
+    <p data-admin-load-skeleton role="status">企画申請を読み込んでいます。</p>
+    <div data-review-content hidden>
+      <nav class="seminar-review-jump" aria-label="このページの項目">
+        <a href="#proposals">企画申請</a>
+        <a href="#legacy">旧ゼミの主催者登録</a>
+        <a href="#feedback">運営への連絡</a>
+      </nav>
+      <p data-operation-status role="status" tabindex="-1"></p>
+      <section class="seminar-review-section" id="proposals" aria-labelledby="proposals-heading">
+        <div class="seminar-review-toolbar">
+          <div>
+            <h2 id="proposals-heading">企画申請</h2>
+            <p class="seminar-muted" data-review-count></p>
+          </div>
+          <label>
+            状態
+            <select data-review-status>
+              <option value="">すべて</option>
+              {Object.entries(statusLabels).map(([value, label]) => <option value={value}>{label}</option>)}
+            </select>
+          </label>
+        </div>
+        <div data-review-proposals></div>
+      </section>
+      <section class="seminar-review-section" id="legacy" aria-labelledby="legacy-heading">
+        <h2 id="legacy-heading">旧ゼミの主催者登録</h2>
+        <div data-review-legacy></div>
+      </section>
+      <section class="seminar-review-section" id="feedback" aria-labelledby="feedback-heading">
+        <h2 id="feedback-heading">運営への連絡</h2>
+        <div data-review-feedback></div>
+      </section>
+    </div>
+  </main>
+</AdminLayout>
+
+<script>
+  import { initializeSeminarReview } from "../../../scripts/seminars/operations";
+  document.addEventListener("astro:page-load", initializeSeminarReview);
+  initializeSeminarReview();
+</script>

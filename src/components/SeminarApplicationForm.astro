@@ -1,0 +1,91 @@
+---
+import { phaseLabels, profileFields, recruitmentLabels, seminarFields } from "../lib/seminar-fields";
+interface Props { kind: "propose" | "join" }
+const { kind } = Astro.props;
+const isProposal = kind === "propose";
+const groups = [
+  { label: "学ぶ内容", fields: seminarFields.slice(0, 11) },
+  { label: "開催・募集情報", fields: seminarFields.slice(11) },
+];
+---
+<div data-form-auth class="seminar-entry">
+  <p role="status">ログイン状態を確認中です。</p>
+</div>
+<form data-application-form class="seminar-form" hidden>
+  {!isProposal && (
+    <fieldset>
+      <legend>参加を希望するゼミ</legend>
+      <label>ゼミ名・番号（必須） <select required name="number" data-seminar-options>
+        <option value="">選択してください</option>
+      </select></label>
+    </fieldset>
+  )}
+  <fieldset>
+    <legend>{isProposal ? "企画者情報" : "申請者情報"}</legend>
+    <p>連絡先 <span data-form-email></span></p>
+    <div class="seminar-form-grid">
+      {profileFields.map((field) => (
+        <label>
+          {field.label}{'required' in field ? "（必須）" : ""}
+          <input name={field.key} required={'required' in field} maxlength={field.limit} autocomplete={field.key === "name" ? "name" : undefined} />
+        </label>
+      ))}
+    </div>
+  </fieldset>
+  {isProposal ? (
+    <>
+      <fieldset>
+        <legend>企画の基本情報</legend>
+        <p>承認後に公開します。個人の連絡先や非公開の会場情報は入力しないでください。</p>
+        <label>ゼミ名（必須） <input required name="title" maxlength="160" /></label>
+        <div class="seminar-form-grid">
+          <label>募集状況（必須）
+            <select required name="recruitment">
+              {Object.entries(recruitmentLabels).map(([value, label]) => <option value={value}>{label}</option>)}
+            </select>
+          </label>
+          <label>実施状況（必須）
+            <select required name="phase">
+              {Object.entries(phaseLabels).filter(([value]) => value !== "unknown").map(([value, label]) => <option value={value}>{label}</option>)}
+            </select>
+          </label>
+        </div>
+      </fieldset>
+      {groups.map(({ label, fields }) => (
+        <fieldset>
+          <legend>{label}</legend>
+          <div class="seminar-form-grid">
+            {fields.map((field) => (
+              <label class:list={[field.limit > 500 && "seminar-full"]}>
+                {field.label}{!("optional" in field) ? "（必須）" : ""}
+                {field.limit > 500
+                  ? <textarea name={field.key} required={!("optional" in field)} maxlength={field.limit} rows="3"></textarea>
+                  : <input name={field.key} required={!("optional" in field)} maxlength={field.limit} />}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ))}
+    </>
+  ) : (
+    <fieldset>
+      <legend>主催者への連絡</legend>
+      <label>伝えたいこと・質問 <textarea name="hostNote" maxlength="2000" rows="4"></textarea></label>
+      <p>申請者情報と連絡先は主催者に伝わります。</p>
+    </fieldset>
+  )}
+  <fieldset>
+    <legend>運営への連絡</legend>
+    <label>連絡事項（非公開） <textarea name="operationsNote" maxlength="2000" rows="4"></textarea></label>
+  </fieldset>
+  <p><a href="/privacy-policy/">個人情報保護方針</a>をご確認のうえ送信してください。</p>
+  <div class="seminar-actions">
+    <button class="button" type="submit">{isProposal ? "企画を送信する" : "参加を申請する"}</button>
+    <p role="status" data-form-message></p>
+  </div>
+</form>
+<div data-form-success class="seminar-entry" hidden>
+  <h2>{isProposal ? "企画を受け付けました" : "参加申請を受け付けました"}</h2>
+  <p>{isProposal ? "運営の承認後に公開されます。" : "主催者の承認後にゼミに参加できます。"}</p>
+  <a href="/seminars/member/">参加者ページで確認する</a>
+</div>

@@ -1,3 +1,9 @@
+export const SEMINAR_REVIEW_PATH = "/admin/semi-platform/review/";
+
+export const isSeminarReviewPath = (pathname: string) =>
+  pathname === SEMINAR_REVIEW_PATH ||
+  pathname === SEMINAR_REVIEW_PATH.slice(0, -1);
+
 const adminPageNames = [
   "workspace",
   "member-profile",
@@ -88,4 +94,6 @@ const adminNestedPagePathSet = new Set([
 ]);
 
 export const isAdminPagePath = (pathname: string) =>
-  adminPagePathSet.has(pathname) || adminNestedPagePathSet.has(pathname);
+  adminPagePathSet.has(pathname) ||
+  adminNestedPagePathSet.has(pathname) ||
+  isSeminarReviewPath(pathname);

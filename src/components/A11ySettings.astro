@@ -17,8 +17,9 @@ interface Props {
   bare?: boolean;
   /** 運営ヘッダーのみ。要対応・操作検索・表示設定の透け感を共通で調整する。 */
   showGlass?: boolean;
+  showLanguage?: boolean;
 }
-const { locale = "ja", bare = false, showGlass = false } = Astro.props;
+const { locale = "ja", bare = false, showGlass = false, showLanguage = true } = Astro.props;
 const L =
   locale === "ja"
     ? {
@@ -148,25 +149,27 @@ const groups = [
 {
   bare ? (
     <form class="a11y-form" data-a11y-form>
-      <p class="a11y-lang">
-        <label class="a11y-lang-label" for="a11y-lang-bare">
-          {languageGroup.label}
-        </label>
-        <select id="a11y-lang-bare" name={languageGroup.key}>
-          {languageGroup.options.map((o) => (
-            <option
-              value={o.value}
-              data-language-native={o.native}
-              data-language-english={o.english}
-                      data-language-japanese={o.japanese}
-                      data-language-chinese={o.chinese}
-                      data-language-korean={o.korean}
-            >
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </p>
+      {showLanguage && (
+        <p class="a11y-lang">
+          <label class="a11y-lang-label" for="a11y-lang-bare">
+            {languageGroup.label}
+          </label>
+          <select id="a11y-lang-bare" name={languageGroup.key}>
+            {languageGroup.options.map((o) => (
+              <option
+                value={o.value}
+                data-language-native={o.native}
+                data-language-english={o.english}
+                data-language-japanese={o.japanese}
+                data-language-chinese={o.chinese}
+                data-language-korean={o.korean}
+              >
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </p>
+      )}
       {groups.map((g) => (
         <fieldset>
           <legend>{g.label}</legend>
@@ -218,25 +221,27 @@ const groups = [
     <details class="a11y-settings">
       <summary>{L.title}</summary>
       <form class="details-body" data-a11y-form>
-        <p class="a11y-lang">
-          <label class="a11y-lang-label" for="a11y-lang">
-            {languageGroup.label}
-          </label>
-          <select id="a11y-lang" name={languageGroup.key}>
-            {languageGroup.options.map((o) => (
-              <option
-                value={o.value}
-                data-language-native={o.native}
-              data-language-english={o.english}
-                      data-language-japanese={o.japanese}
-                      data-language-chinese={o.chinese}
-                      data-language-korean={o.korean}
-              >
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </p>
+        {showLanguage && (
+          <p class="a11y-lang">
+            <label class="a11y-lang-label" for="a11y-lang">
+              {languageGroup.label}
+            </label>
+            <select id="a11y-lang" name={languageGroup.key}>
+              {languageGroup.options.map((o) => (
+                <option
+                  value={o.value}
+                  data-language-native={o.native}
+                  data-language-english={o.english}
+                  data-language-japanese={o.japanese}
+                  data-language-chinese={o.chinese}
+                  data-language-korean={o.korean}
+                >
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </p>
+        )}
         {groups.map((g) => (
           <fieldset>
             <legend>{g.label}</legend>
@@ -592,8 +597,9 @@ const groups = [
         }
         const data = new FormData(form);
         const next: Record<string, string> = {};
-        // Public pages omit the slider; their other display settings must not erase it.
-        if (!glassRange && loadPrefs().glass) next.glass = loadPrefs().glass;
+        const stored = loadPrefs();
+        if (!glassRange && stored.glass) next.glass = stored.glass;
+        if (!data.has("lang") && stored.lang) next.lang = stored.lang;
         for (const [k, v] of data.entries()) {
           if (typeof v !== "string" || v === "default") continue;
           if (k === "glass") {

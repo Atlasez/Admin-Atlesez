@@ -26,6 +26,8 @@ import { memberTaskFilters } from "./lib/member-task-filters";
 import {
   globalAdminPrototypePaths,
   isAdminPagePath,
+  isSeminarReviewPath,
+  SEMINAR_REVIEW_PATH,
 } from "./lib/admin-routes";
 import { applicationAcceptanceEmail } from "./lib/application-acceptance-email";
 import {
@@ -42,6 +44,7 @@ import {
 } from "./lib/date-time";
 import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
 import { dispatchApplicationEmails } from "./lib/application-email-delivery";
+import { handleSeminarApi } from "./lib/seminar-api";
 import {
   deliverDiscordNotifications,
   deliverProgressDiscordNotification,
@@ -21556,6 +21559,12 @@ const userAreaForPath = (pathname: string): UserArea | null => {
   return null;
 };
 
+const legacySeminarReviewPage = (pathname: string) =>
+  /^\/seminars\/operations\/?$/.test(pathname);
+
+const seminarPage = (pathname: string) =>
+  /^\/seminars(?:\/(?:detail|propose|join|member|workspace))?\/?$/.test(pathname);
+
 /** Safe OAuth return target for every authenticated user area. */
 const userReturnPath = (value: string | null) => {
   if (!value) return "/apply/";
@@ -21586,6 +21595,8 @@ const userReturnPath = (value: string | null) => {
     return `/auth/native-app/complete?state=${encodeURIComponent(state)}&challenge=${encodeURIComponent(challenge)}&redirect_uri=${encodeURIComponent(redirectURI)}`;
   }
   if (parsed.pathname === "/") return "/";
+  if (legacySeminarReviewPage(parsed.pathname)) return SEMINAR_REVIEW_PATH;
+  if (seminarPage(parsed.pathname)) return parsed.pathname + parsed.search;
   if (isAdminPagePath(parsed.pathname)) return adminReturnPath(candidate);
   if (isApplicantPath(parsed.pathname)) return "/applicant/";
   if (isOnboardingPath(parsed.pathname))
@@ -22570,11 +22581,12 @@ async function completeGoogleLogin(
   const requestedArea = requestedPathname === "/auth/native-app/complete"
     ? "admin"
     : userAreaForPath(requestedPathname);
-  const stage = await getUserStageForEmail(account.canonical_email, env);
-  const location =
-    requestedArea && canAccess(stage.stage, requestedArea)
-      ? requestedReturnTo
-      : stageHome(stage.stage, stage.projectSlug);
+  let location = requestedReturnTo;
+  if (!seminarPage(requestedPathname) && !isSeminarReviewPath(requestedPathname)) {
+    const stage = await getUserStageForEmail(account.canonical_email, env);
+    if (!requestedArea || !canAccess(stage.stage, requestedArea))
+      location = stageHome(stage.stage, stage.projectSlug);
+  }
   const headers = new Headers({ location });
   headers.append(
     "set-cookie",
@@ -23584,6 +23596,21 @@ async function handleAdminRequest(
   ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === "/api/seminars" || url.pathname.startsWith("/api/seminars/"))
+    return handleSeminarApi(request, env.REPORTS, {
+      account: () => getAuthenticatedAtlasezAccount(request, env),
+      reviewer: async () => {
+        const access = await getProjectReviewerScope(request, env, "seminar-platform");
+        return isResponse(access) ? access : true;
+      },
+      primaryEmail: primaryAdminEmail(env),
+      origin: env.ADMIN_PUBLIC_ORIGIN ?? "https://admin.atlasez.org",
+    });
+  if (request.method === "GET" || request.method === "HEAD") {
+    if (legacySeminarReviewPage(url.pathname))
+      return new Response(null, { status: 302, headers: { location: SEMINAR_REVIEW_PATH } });
+    if (seminarPage(url.pathname)) return fetchAdminAsset(request, env);
+  }
   if (url.pathname === "/api/internal/github-publication-webhook")
     return receiveGithubPublicationWebhook(request, env, ctx);
   if (url.pathname === "/internal/article-reports")
@@ -24324,11 +24351,17 @@ async function handleAdminRequest(
       ? updateArticleReport(request, env, match[1])
       : json({ error: "PATCHのみ利用できます。" }, 405);
   // プロジェクト固有ページは所属・担当roleで判定し、記事管理権限を要求しない。
-  if (projectHomeForPath(url.pathname) || /^\/admin\/(?:manage|workspace|introductions|applications|member-intake|project-profile-requests|profile-requests)\/?$/.test(url.pathname)) {
+  const seminarReviewPage = isSeminarReviewPath(url.pathname);
+  if (seminarReviewPage || projectHomeForPath(url.pathname) || /^\/admin\/(?:manage|workspace|introductions|applications|member-intake|project-profile-requests|profile-requests)\/?$/.test(url.pathname)) {
     // Home paths define their project. A query must never grant a different home.
     const requestedProject = projectHomeForPath(url.pathname) ?? url.searchParams.get("project") ?? "atlas";
     let access: AdminScope | ProjectReviewerScope | OperationProject | Response;
-    if (/^\/admin\/profile-requests\/?$/.test(url.pathname))
+    if (seminarReviewPage) {
+      if (request.method !== "GET" && request.method !== "HEAD")
+        return json({ error: "GET、HEADのみ利用できます。" }, 405);
+      access = await getProjectReviewerScope(request, env, "seminar-platform");
+    }
+    else if (/^\/admin\/profile-requests\/?$/.test(url.pathname))
       access = await getSecretariatReviewerScope(request, env);
     else if (/^\/admin\/project-profile-requests\/?$/.test(url.pathname))
       access = await getProjectProfileReviewerScope(request, env, requestedProject);
@@ -24566,6 +24599,7 @@ export default {
           applyDueMemberProcedures(env.REPORTS),
           archiveStaleCompletedTasks(env),
           dispatchApplicationEmails(env),
+          dispatchApplicationEmails(env, { channel: "seminar" }),
           dispatchPendingDiscordProvisioning(env),
           syncDiscordRolesToAdmin(env),
           dispatchScheduledEditorialPublications(env),
