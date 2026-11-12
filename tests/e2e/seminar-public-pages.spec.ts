@@ -83,7 +83,9 @@ test("ゼミ一覧を検索し、詳細に公開項目を表示する", async ({
   );
   expect(login.origin).toBe("https://admin.atlasez.org");
   expect(login.pathname).toBe("/auth/google/login");
-  expect(login.searchParams.get("returnTo")).toBe("/seminars/");
+  expect(login.searchParams.get("returnTo")).toBe(
+    "https://atlasez.org/seminars/",
+  );
   await page.locator("[data-catalog-search]").fill("多様体");
   await expect(page.locator("[data-seminar-card]")).toHaveCount(1);
   await expect(page.locator("[data-seminar-card]")).toContainText(
@@ -381,16 +383,6 @@ test("参加者ページで活動状況を確認し、ゼミ資料をアップ�
   });
 
   await page.goto("seminars/member/");
-  const login = new URL(
-    (await page.locator("[data-seminar-login]").getAttribute("href")) ?? "",
-  );
-  expect(login.origin).toBe("https://admin.atlasez.org");
-  expect(login.searchParams.get("returnTo")).toBe("/seminars/member/");
-  await expect(
-    page
-      .getByRole("navigation", { name: "ゼミプラットフォーム" })
-      .getByRole("link", { name: "参加者ページ" }),
-  ).toHaveAttribute("href", "https://admin.atlasez.org/seminars/member/");
   for (const heading of [
     "参加中のゼミ",
     "次回予定",

@@ -63,11 +63,12 @@ export const urlFor = (page: string, number: number) =>
 
 export const loginUrl = () =>
   (() => {
-    const login = new URL("/auth/google/login", ADMIN_ORIGIN);
-    login.searchParams.set(
-      "returnTo",
+    const returnTo = new URL(
       `${location.pathname}${location.search}`,
+      "https://atlasez.org",
     );
+    const login = new URL("/auth/google/login", ADMIN_ORIGIN);
+    login.searchParams.set("returnTo", returnTo.toString());
     return login.toString();
   })();
 
