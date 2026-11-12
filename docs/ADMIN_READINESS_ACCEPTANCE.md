@@ -4,16 +4,18 @@
 
 ## 2026-11-12 最新確認
 
-- GitHub mainは `fc32dff2528d682dee56fadf797c630c9e54e8bd`。公開 `build-info.json` も同じSHAを返し、当該mainの `verify` と `Workers Builds: atlasez-admin` checkは成功している。
-- 固定Production Worker `atlasez-admin` はVersion `e1afb39a-72e5-42c1-b2cb-788685b6e64f` が100%配信。WranglerのVersion Sourceは `Unknown (version_upload)` で、Workers Builds runのcheckout SHAとの対応は未確認。Production provenanceはBLOCKED。
+- GitHub mainは `3e63e96e9e71ae870ed5600a7da8f35fc3f49091`。main CI [run 43146803323](https://github.com/Atlasez/Admin-Atlesez/actions/runs/43146803323) と読み取り専用ADMIN build検証 [run 43147483989](https://github.com/Atlasez/Admin-Atlesez/actions/runs/43147483989) は成功。
+- Workers Builds check for this exact main SHA completed successfully: Build ID `d022e6af-de08-49ae-bd20-7a08b34a291c`, fixed Worker `atlasez-admin`, Version `06e247ee-26ba-4442-aaf2-f85cba3d3681`. Read-only deployment sync [run 43147510991](https://github.com/Atlasez/Admin-Atlesez/actions/runs/43147510991) recorded that Version at 100% under Deployment `66e2f939-74b4-4fd6-af6a-1d72821add1c` at 2026-11-12 03:18:40 UTC; public `build-info.json` returned the same main SHA. Wrangler's Source label alone is `Unknown`, but the Build check, Version, 100% deployment, and build-info correlate.
 - 固定ADMIN D1 ledgerのread-only照会では `0134_seminar_platform.sql`、`0135_seminar_public_catalog.sql`、`0136_seminar_operations_project.sql` が記録済み。応募処理migrationは番号を `0137_application_intake_reconciliation.sql` に変更した。0137は未適用であり、適用・export・restoreは行っていない。
-- #546は最新mainを取り込んでPR HEAD `135685a91b88ac6b2437a1c52c5804c6589e9fe1`。隔離worktreeでdeploy-config、check（0 errors / 0 warnings / 9 hints）、lint、unit（76 files / 598 tests）、format、ADMIN build、build-info、Wrangler dry-run、diff checkが成功し、GitHub exact-head `verify` は再実行中。
-- stagingのrole別ライブ受入とOPSD判断は未完了。Google OAuthを使った自動ブラウザログインは拒否され、Cloudflare Access経由の認証強制とworkers.dev直アクセス防止も未検証。ライブのrole判定はNOT TESTED。
-- 以上からCode Ready / Production Verified / Limited Intake GOはBLOCKED / NO-GO。Version provenanceとstaging/運営受入が整うまでmainへのmergeは行わない。
+- PR #546 merged as `a68580307ded9ee808db6962b72c932ca3b764cc`; PR #547 merged as `3e63e96e9e71ae870ed5600a7da8f35fc3f49091`. PR #545 remains blocked pending separate approved backup, migration 0137, and read-only post-apply confirmation. No D1 write/apply or staging write occurred.
+- stagingのrole別ライブ受入とOPSD判断は未完了。Google OAuth、Resend、Discordの実サービス受入は未実施です。ライブのrole判定はNOT TESTED。
+- [新規メンバー受入stagingチェックリスト](ADMIN_MEMBER_INTAKE_STAGING_CHECKLIST.md)に最新のmigration・deployment証跡と未達ゲートを記録しています。限定受入GOは引き続きBLOCKED / NO-GOです。
 
 ## 以前の確認記録
 
 以下の2026-11-03節は当時の記録であり、migration番号と最新状態は上の2026-11-12確認を正とする。
+
+専用stagingの実サービス受入、OPSD-01〜09の運営承認、synthetic account台帳、証拠形式は[新規メンバー受入stagingチェックリスト](ADMIN_MEMBER_INTAKE_STAGING_CHECKLIST.md)を使う。staging手順が未実施の場合、以下の隔離自動試験を実サービスの受入完了として扱わない。
 
 ## 自動検証
 
