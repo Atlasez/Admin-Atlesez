@@ -90,6 +90,14 @@
   font-size: calc(1.06rem * var(--text-scale));
 }
 
+.seminar-kicker {
+  margin-bottom: var(--space-2) !important;
+  color: var(--accent-primary);
+  font-size: calc(0.78rem * var(--text-scale));
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
 .seminar-actions,
 .seminar-row,
 .seminar-vote,
@@ -212,6 +220,12 @@
 .seminar-columns + .seminar-block,
 .seminar-block + .seminar-columns {
   margin-top: var(--space-5);
+}
+
+.seminar-callout {
+  margin-top: var(--space-5);
+  padding-block: var(--space-4);
+  border-top: 1px solid var(--border-default);
 }
 
 .seminar-columns,
@@ -412,6 +426,11 @@
 }
 
 .seminar-catalog-groups {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.seminar-catalog-groups-inner {
   display: grid;
   gap: var(--space-5);
 }

@@ -1,0 +1,16 @@
+---
+import SeminarLayout from "../../layouts/SeminarLayout.astro";
+---
+
+<SeminarLayout title="ゼミ参加フォーム" page="join">
+  <p class="seminar-back"><a href="/seminars/">ゼミ一覧に戻る</a></p>
+  <header class="seminar-page-head">
+    <h1>ゼミ参加フォーム</h1>
+    <p class="seminar-muted">
+      申請内容は主催者へ送られます。主催者が承認すると、参加者ページから活動に参加できます。
+    </p>
+  </header>
+  <div data-page-content aria-busy="true">
+    <p role="status">フォームを準備しています。</p>
+  </div>
+</SeminarLayout>
