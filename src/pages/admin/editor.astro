@@ -5720,15 +5720,15 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
    * ダークテーマ用の状態色へ切り替える。本文や記事データは変更しない。
    */
   [data-pref-bg="dark"] .editor-workspace {
-    --editor-status-info-background: #1f3b4d;
-    --editor-status-info-border: #5f9fca;
-    --editor-status-info-text: #c5e7fb;
+    --editor-status-info-background: #20272c;
+    --editor-status-info-border: #557d98;
+    --editor-status-info-text: #c7e7f7;
     --editor-status-warning-background: #4a3a1b;
     --editor-status-warning-border: #c79a3d;
     --editor-status-warning-text: #f3d58a;
-    --editor-status-success-background: #1d3a2a;
-    --editor-status-success-border: #64b889;
-    --editor-status-success-text: #c8f0d5;
+    --editor-status-success-background: #202a24;
+    --editor-status-success-border: #5c9b70;
+    --editor-status-success-text: #c5efd3;
     --editor-status-error-background: #4b2226;
     --editor-status-error-border: #d77f88;
     --editor-status-error-text: #ffd8dc;
@@ -5768,6 +5768,35 @@ const editorData = JSON.stringify({ subjects, articles, conceptOptions, commentT
   [data-pref-bg="dark"] .editor-workspace .document-statuses [data-publication-run][data-state="failed"] .publication-run-indicator,
   [data-pref-bg="dark"] .editor-workspace .document-statuses [data-publication-run][data-state="needs_operator"] .publication-run-indicator {
     background: var(--editor-status-warning-border);
+  }
+
+  /* コメント・フィードバックの状態チップにも同じ暗色テーマを適用する。 */
+  [data-pref-bg="dark"] .editor-workspace .review-panel .thread-status.is-pending,
+  [data-pref-bg="dark"] .editor-workspace .feedback-request-status.is-open,
+  [data-pref-bg="dark"] .editor-workspace .state-in-review,
+  [data-pref-bg="dark"] .editor-workspace .state-on-hold {
+    background: var(--editor-status-warning-background);
+    border-color: var(--editor-status-warning-border);
+    color: var(--editor-status-warning-text);
+  }
+  [data-pref-bg="dark"] .editor-workspace .review-panel .thread-status.is-acknowledged,
+  [data-pref-bg="dark"] .editor-workspace .feedback-request-status.is-doing,
+  [data-pref-bg="dark"] .editor-workspace .state-published {
+    background: var(--editor-status-info-background);
+    border-color: var(--editor-status-info-border);
+    color: var(--editor-status-info-text);
+  }
+  [data-pref-bg="dark"] .editor-workspace .review-panel .thread-status.is-resolved,
+  [data-pref-bg="dark"] .editor-workspace .feedback-request-status.is-done,
+  [data-pref-bg="dark"] .editor-workspace .state-approved {
+    background: var(--editor-status-success-background);
+    border-color: var(--editor-status-success-border);
+    color: var(--editor-status-success-text);
+  }
+  [data-pref-bg="dark"] .editor-workspace .state-draft {
+    background: var(--background-secondary);
+    border-color: var(--border-default);
+    color: var(--text-secondary);
   }
 
   /* 保存前警告・選択範囲・返信欄など、編集操作に付随する補助UI */

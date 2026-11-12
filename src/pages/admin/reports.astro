@@ -213,6 +213,16 @@ const japanRegionPaths = japanMap.locations
   .report-list :global(.status-badge) { background: color-mix(in srgb, var(--accent), transparent 90%); border: 1px solid currentColor; border-radius: 999px; color: var(--accent); font-size: .74rem; font-weight: 800; padding: .28rem .55rem; white-space: nowrap; }
   .report-list :global(.report-card[data-status="reviewing"] .status-badge) { background: #fff4d6; color: #9a6400; }
   .report-list :global(.report-card[data-status="resolved"] .status-badge) { background: #e4f5ea; color: #267143; }
+  [data-pref-bg="dark"] .report-list :global(.report-card[data-status="reviewing"] .status-badge) {
+    background: color-mix(in srgb, var(--warning) 14%, var(--background-primary));
+    border-color: color-mix(in srgb, var(--warning) 48%, var(--border-default));
+    color: var(--warning);
+  }
+  [data-pref-bg="dark"] .report-list :global(.report-card[data-status="resolved"] .status-badge) {
+    background: color-mix(in srgb, var(--success) 14%, var(--background-primary));
+    border-color: color-mix(in srgb, var(--success) 48%, var(--border-default));
+    color: var(--success);
+  }
   .report-list :global(.report-empty) { color: var(--muted); padding: 2.5rem 2rem; text-align: center; }
   .report-pagination { align-items: center; display: flex; gap: .7rem; justify-content: center; margin-top: .8rem; }
   .report-pagination[hidden] { display: none; }
