@@ -270,6 +270,67 @@ describe("seminar platform", () => {
       title: "リーマン面ゼミ",
       acceptingApplications: false,
     });
+    const imported = new Map(
+      seminars.map((seminar: { number: number }) => [seminar.number, seminar]),
+    );
+    expect(imported.get(20)).toMatchObject({
+      title: "流体力学ゼミ",
+      details: { theme: "流体力学" },
+    });
+    expect(imported.get(31)).toMatchObject({
+      details: {
+        description: expect.stringContaining(
+          "主催者自身は近現代ドイツの歴史・政治に非常に強い関心があります。",
+        ),
+        remarks:
+          "他人を傷つけたり、差別的な発言をする方の参加は断固お断りさせていただきます。\n「差別をしない」というのは人として当たり前のことであり、普遍的な理念です。",
+      },
+    });
+    expect(imported.get(5)).toMatchObject({
+      details: {
+        remarks:
+          "かなり進んでいて、上巻の半分以上は終わりました。これから超関数を導入していく感じです。",
+      },
+    });
+    expect(imported.get(29)).toMatchObject({
+      details: {
+        remarks:
+          "9版と10版で多少数値にブレがある。しかし、0.1とかの些細な違いなのでこの違いの意図まではよく分からなかった。",
+      },
+    });
+    expect(imported.get(16)).toMatchObject({
+      details: {
+        remarks: expect.stringContaining(
+          "https://docs.google.com/document/d/1oC5vn6lWZ5_S2tFY8tsbUfJQM68vjwK-WhLmSHwPvNg/edit?usp=sharing",
+        ),
+      },
+    });
+    expect(imported.get(10)).toMatchObject({
+      details: { remarks: "6/20時点で§8の中盤です。" },
+    });
+    expect(imported.get(8)).toMatchObject({
+      details: {
+        remarks:
+          "現在の進行状況としては、まだ数学的準備のフェーズです。ラグランジアンも出てきてません。",
+      },
+    });
+    expect(imported.get(15)).toMatchObject({
+      details: {
+        remarks: expect.stringContaining("火曜6限"),
+      },
+    });
+    for (const number of [2, 3])
+      expect(imported.get(number)).toMatchObject({
+        details: {
+          remarks: expect.stringContaining("個別ページでは「募集中」"),
+        },
+      });
+    expect(imported.get(17)).toMatchObject({
+      details: {
+        description:
+          expect.stringContaining("場の量子論を勉強中の初学者です。"),
+      },
+    });
     expect(
       (await request(`${api}/32/host`, outsider, { email: host })).status,
     ).toBe(403);
