@@ -14,6 +14,7 @@ import {
   numberFromUrl,
   post,
   privateProfile,
+  seminarApiUrl,
   section,
   selects,
   statusLabels,
@@ -313,7 +314,7 @@ function materialSection(data: Workspace) {
       materials
         .map(
           (file) => `<article class="seminar-entry">
-      <div class="seminar-row"><h3><a href="/api/seminars/${seminar.number}/materials/${html(file.id)}" download>${html(file.filename)}</a></h3>
+      <div class="seminar-row"><h3><a href="${seminarApiUrl("/" + seminar.number + "/materials/" + file.id)}" download>${html(file.filename)}</a></h3>
       <p class="seminar-muted">${Math.max(1, Math.ceil(file.bytes / 1000))} KB ・ ${dateLabel(file.created_at)}</p></div>
       ${
         file.canManage

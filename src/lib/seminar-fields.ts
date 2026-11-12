@@ -39,6 +39,14 @@ export const profileFields = [
   { key: "name", label: "氏名", limit: 120, required: true },
   { key: "reading", label: "氏名の読み（ひらがな）", limit: 120 },
   { key: "registration", label: "旧サイトで発行された参加番号", limit: 50 },
+  { key: "birthday", label: "生年月日（任意）", limit: 10 },
+  { key: "residenceCountry", label: "居住地（国・任意）", limit: 100 },
+  {
+    key: "residencePrefecture",
+    label: "居住地（都道府県・任意）",
+    limit: 60,
+  },
+  { key: "residenceCity", label: "居住地（都市名・任意）", limit: 120 },
   {
     key: "affiliationType",
     label: "所属区分（大学・高校・社会人など）",
