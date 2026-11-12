@@ -236,8 +236,6 @@ describe("seminar platform", () => {
   });
 
   it.each([
-    ["/seminars/", "https://atlasez.org/seminars/"],
-    ["/seminars", "https://atlasez.org/seminars/"],
     ["/seminars/propose/", "https://atlasez.org/seminars/propose/"],
     [
       "/seminars/join/?number=32",
@@ -256,6 +254,19 @@ describe("seminar platform", () => {
       expect(response.headers.get("location")).toBe(target);
     },
   );
+
+  it("serves the public seminar catalogue on the Admin host", async () => {
+    const { anonymous } = fixture();
+    const page = await anonymous("/seminars/");
+    expect(page.status).toBe(200);
+    expect(await page.text()).toBe("isolated fixture");
+
+    const canonical = await anonymous("/seminars");
+    expect(canonical.status).toBe(308);
+    expect(canonical.headers.get("location")).toBe(
+      "https://admin.atlasez.test/seminars/",
+    );
+  });
 
   it("lists the imported directory publicly without enabling unassigned hosts", async () => {
     const { anonymous, request } = fixture();
