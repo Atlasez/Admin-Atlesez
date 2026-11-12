@@ -1,0 +1,187 @@
+.seminar-review {
+  max-width: 70rem;
+  margin-inline: auto;
+  padding: var(--space-5) var(--space-4) var(--space-6);
+}
+
+.seminar-review :where(h1, h2, h3, p, dl) {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.seminar-review-heading,
+.seminar-review-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.seminar-review-heading {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.seminar-review-heading h1 {
+  font-size: calc(1.65rem * var(--text-scale));
+}
+
+.seminar-review-jump,
+.seminar-review .seminar-actions,
+.seminar-review .seminar-inline-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.seminar-review-jump,
+.seminar-review [data-admin-load-skeleton] {
+  margin-top: var(--space-3);
+}
+
+.seminar-review-section {
+  margin-top: var(--space-5);
+  scroll-margin-top: 5rem;
+}
+
+.seminar-review-section > h2,
+.seminar-review-toolbar {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.seminar-review-section h2 {
+  font-size: calc(1.12rem * var(--text-scale));
+}
+
+.seminar-review .seminar-muted,
+.seminar-review .seminar-number,
+.seminar-review .seminar-meta,
+.seminar-review dt {
+  color: var(--text-secondary);
+  font-size: calc(0.86rem * var(--text-scale));
+}
+
+.seminar-review-entry {
+  border-bottom: 1px solid var(--border-default);
+}
+
+.seminar-review-entry > summary {
+  display: list-item;
+  min-height: var(--touch-target);
+  align-content: center;
+  padding-block: var(--space-2);
+  cursor: pointer;
+  font-weight: 650;
+  list-style-position: inside;
+  overflow-wrap: anywhere;
+}
+
+.seminar-review-entry > summary:hover {
+  background: var(--background-secondary);
+}
+
+.seminar-review-state {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.seminar-review-state[data-state="pending"] {
+  color: var(--accent-primary);
+}
+
+.seminar-review-body,
+.seminar-review-empty,
+.seminar-review [data-review-legacy] > p,
+.seminar-review [data-operation-status]:not(:empty) {
+  padding-block: var(--space-3);
+}
+
+.seminar-review-body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.seminar-review-body h3 {
+  font-size: calc(1rem * var(--text-scale));
+}
+
+.seminar-review .seminar-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+
+.seminar-review .seminar-details > div {
+  border-bottom: 1px solid var(--border-default);
+  min-width: 0;
+  padding-bottom: var(--space-1);
+}
+
+.seminar-review .seminar-full {
+  grid-column: 1 / -1;
+}
+
+.seminar-review dd,
+.seminar-review .seminar-prewrap {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.seminar-review label {
+  display: grid;
+  gap: var(--space-1);
+  font-size: calc(0.88rem * var(--text-scale));
+}
+
+.seminar-review :is(input, select, textarea) {
+  min-width: 0;
+  min-height: 2.25rem;
+  padding: var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--background-primary);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.seminar-review textarea {
+  max-width: var(--reading-width);
+  resize: vertical;
+}
+
+.seminar-review .seminar-actions {
+  margin-top: var(--space-2);
+}
+
+.seminar-review .button {
+  border-radius: var(--radius);
+}
+
+.seminar-review .seminar-danger {
+  border-color: var(--danger);
+  background: var(--background-primary);
+  color: var(--danger);
+}
+
+.seminar-review .seminar-danger:hover {
+  background: var(--background-secondary);
+}
+
+[data-admin-shell] .seminar-review [data-admin-load-skeleton][hidden],
+.seminar-review [data-review-content][hidden] {
+  display: none;
+}
+
+@media (max-width: 540px) {
+  .seminar-review {
+    padding-inline: var(--space-3);
+  }
+
+  .seminar-review .seminar-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

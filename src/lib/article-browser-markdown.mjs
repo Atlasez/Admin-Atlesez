@@ -12,6 +12,10 @@ import {
 } from "./article-directives.mjs";
 import { remarkJapaneseStrong } from "./article-japanese-strong.mjs";
 import {
+  rehypeKanjiDictionaryLayout,
+  remarkKanjiDictionaryLayout,
+} from "./kanji-dictionary-layout.mjs";
+import {
   rehypeArticleKatex,
   remarkArticleMathMacros,
 } from "./article-math.mjs";
@@ -298,11 +302,13 @@ export async function renderArticleMarkdown(
     .use(remarkMath)
     .use(remarkArticleOrderedListContinuation)
     .use(remarkJapaneseStrong)
+    .use(remarkKanjiDictionaryLayout)
     .use(remarkArticleMathMacros, customPresets)
     .use(remarkBrowserEditorialAssets)
     .use(remarkArticleTikzPlaceholder)
     .use(remarkRehype, { allowDangerousHtml: true });
   processor.use(rehypeRaw);
+  processor.use(rehypeKanjiDictionaryLayout);
   if (katex) processor.use(rehypeArticleKatex);
   processor.use(rehypeStringify, { allowDangerousHtml: true });
   const file = await processor.process(String(source ?? ""));

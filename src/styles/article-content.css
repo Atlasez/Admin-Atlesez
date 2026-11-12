@@ -20,11 +20,110 @@
   margin-block: 0.7em;
 }
 
+.article-body[data-article-subject="kanji"] .kanji-entry-grid {
+  background: color-mix(
+    in srgb,
+    var(--background-secondary) 42%,
+    var(--background-primary)
+  );
+  border: 1px solid var(--border-default);
+  border-radius: 0.45rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0.8rem 0 1.25rem;
+  overflow: hidden;
+}
+
+.article-body[data-article-subject="kanji"] .kanji-entry-column {
+  min-width: 0;
+  padding: 0.15rem 0.9rem 0.55rem;
+}
+
+.article-body[data-article-subject="kanji"]
+  .kanji-entry-column
+  + .kanji-entry-column {
+  border-inline-start: 1px solid var(--border-default);
+}
+
+.article-body[data-article-subject="kanji"] .kanji-entry-grid h3 {
+  border-bottom: 1px solid var(--border-default);
+  color: var(--accent-primary);
+  font-size: 0.92em;
+  margin: 0 0 0.55rem;
+  padding: 0.55rem 0 0.35rem;
+}
+
+.article-body[data-article-subject="kanji"] .kanji-entry-grid p {
+  margin: 0.55rem 0 0.8rem;
+}
+
+.article-body[data-article-subject="kanji"] .kanji-character-table {
+  border-collapse: collapse;
+  margin: 0.25rem auto 0.7rem;
+  max-width: 100%;
+  min-width: min(100%, 13rem);
+  width: auto;
+}
+
+.article-body[data-article-subject="kanji"] .kanji-character-table th,
+.article-body[data-article-subject="kanji"] .kanji-character-table td {
+  border: 1px solid var(--border-default);
+  padding: 0.35rem 0.65rem;
+}
+
+.article-body[data-article-subject="kanji"] .kanji-character-table th {
+  background: var(--background-secondary);
+  color: var(--text-secondary);
+  font-size: 0.76em;
+  font-weight: 700;
+  text-align: center;
+}
+
+.article-body[data-article-subject="kanji"]
+  .kanji-character-table
+  td:first-child {
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+  font-size: 1.15em;
+  font-weight: 700;
+  text-align: center;
+  width: 3.6rem;
+}
+
+.article-body[data-article-subject="kanji"]
+  .kanji-character-table
+  td:nth-child(2) {
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .article-body[data-article-subject="kanji"] .kanji-entry-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .article-body[data-article-subject="kanji"]
+    .kanji-entry-column
+    + .kanji-entry-column {
+    border-block-start: 1px solid var(--border-default);
+    border-inline-start: 0;
+  }
+
+  .article-body[data-article-subject="kanji"] .kanji-character-table {
+    min-width: 0;
+  }
+}
+
 .article-body[data-article-subject="mathematics"] .defi,
 .article-body[data-article-subject="mathematics"] .math-definition {
-  background: color-mix(in srgb, #6cb4c2 10%, var(--background-primary));
-  border: 1px solid color-mix(in srgb, #6cb4c2 35%, var(--border-default));
-  border-left: 3px solid #6cb4c2;
+  background: var(
+    --article-math-definition-fill,
+    color-mix(in srgb, #6cb4c2 10%, var(--background-primary))
+  );
+  border: 1px solid
+    var(
+      --article-math-definition-border,
+      color-mix(in srgb, #6cb4c2 35%, var(--border-default))
+    );
+  border-left: 3px solid var(--article-math-definition-accent, #6cb4c2);
   border-radius: 0 0.55rem 0.55rem;
   box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
   margin-block: 2.8rem 1.15rem;
@@ -40,9 +139,12 @@
 .article-body[data-article-subject="mathematics"] .cor,
 .article-body[data-article-subject="mathematics"] .example,
 .article-body[data-article-subject="mathematics"] .math-theorem {
-  background: color-mix(in srgb, #e0c375 12%, var(--background-primary));
-  border: 1px solid #e0c375;
-  border-left-width: 3px;
+  background: var(
+    --article-math-statement-fill,
+    color-mix(in srgb, #e0c375 12%, var(--background-primary))
+  );
+  border: 1px solid var(--article-math-statement-border, #e0c375);
+  border-left: 3px solid var(--article-math-statement-accent, #e0c375);
   border-radius: 0 0.55rem 0.55rem;
   box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
   margin-block: 2.8rem 1.15rem;
@@ -79,11 +181,11 @@
 }
 
 .article-body[data-article-subject="mathematics"] .thmtitle {
-  color: #12333a;
+  color: var(--article-math-definition-title-color, #12333a);
   float: left;
   box-sizing: border-box;
-  background: #6cb4c2;
-  border: 3px solid #6cb4c2;
+  background: var(--article-math-definition-title-fill, #6cb4c2);
+  border: 3px solid var(--article-math-definition-title-border, #6cb4c2);
   border-bottom: none;
   border-radius: 6px 6px 0 0;
   margin: -51.4px 0 0 -23px;
@@ -99,14 +201,14 @@
 .article-body[data-article-subject="mathematics"] .lemma .thmtitle,
 .article-body[data-article-subject="mathematics"] .cor .thmtitle,
 .article-body[data-article-subject="mathematics"] .example .thmtitle {
-  background: #e0c375;
-  border-color: #e0c375;
-  color: #4b3a12;
+  background: var(--article-math-statement-title-fill, #e0c375);
+  border-color: var(--article-math-statement-title-border, #e0c375);
+  color: var(--article-math-statement-title-color, #4b3a12);
 }
 
 .article-body[data-article-subject="mathematics"] .example .thmtitle {
   float: none;
-  border: 3px solid #e0c375;
+  border: 3px solid var(--article-math-statement-title-border, #e0c375);
   border-radius: 6px;
   width: fit-content;
   max-width: 100%;
@@ -159,14 +261,12 @@
 }
 
 .article-body[data-article-subject="mathematics"] .proof-details > summary {
-  align-items: center;
   background: var(--background-secondary);
   border: 1px solid var(--border-default);
   border-radius: 0.4rem;
   cursor: pointer;
-  display: inline-flex;
+  display: inline-block;
   font-weight: 800;
-  gap: 0.45rem;
   list-style: none;
   padding: 0.35rem 0.8rem 0.35rem 2rem;
   position: relative;
@@ -194,7 +294,7 @@
   left: 0.8rem;
   position: absolute;
   top: 0.65rem;
-  transform: rotate(45deg);
+  transform: rotate(-45deg);
   transition: transform 0.15s ease;
   width: 0.45rem;
 }
@@ -202,7 +302,7 @@
 .article-body[data-article-subject="mathematics"]
   .proof-details[open]
   > summary::before {
-  transform: rotate(225deg);
+  transform: rotate(45deg);
 }
 
 .article-body[data-article-subject="mathematics"]
@@ -354,6 +454,14 @@
 .article-body .folding-content {
   padding: 0.8rem 1rem;
 }
+
+.article-body[data-article-subject="mathematics"]
+  details.proof-details.folding {
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+
 .article-body .tikz-diagram,
 .article-preview .tikz-diagram,
 .published-article-preview .tikz-diagram {

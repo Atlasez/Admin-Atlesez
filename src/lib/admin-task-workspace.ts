@@ -227,6 +227,7 @@ export async function handleTaskWorkspace(
           id: task.id,
           title: task.title,
           status: task.status,
+          subject: task.subject,
           updatedAt: task.updated_at,
           archived: Boolean(task.archived_at),
           assigneeEmails: access.canAssign

@@ -806,6 +806,112 @@ test("通知の絞り込み中に古い応答が新しい一覧を上書きし�
   ).toBeVisible();
 });
 
+test("通知の絞り込み後に古いJSON読み取りが失敗してもエラーを表示しない", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  let releaseAllResponse!: () => void;
+  const allResponseGate = new Promise<void>((resolve) => {
+    releaseAllResponse = resolve;
+  });
+  let signalAllRequest!: () => void;
+  const allRequestStarted = new Promise<void>((resolve) => {
+    signalAllRequest = resolve;
+  });
+  let signalAllResponse!: () => void;
+  const allResponseFinished = new Promise<void>((resolve) => {
+    signalAllResponse = resolve;
+  });
+
+  await page.route("**/api/admin/notifications**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("unreadOnly") === "true") {
+      await route.fulfill({
+        json: {
+          notifications: [
+            {
+              id: "comment-current123",
+              kind: "comment",
+              title: "現在の未読通知",
+              detail: "最新条件の結果です。",
+              href: "/admin/editor/",
+              read: false,
+            },
+          ],
+          notificationsTruncated: false,
+          nextCursor: null,
+        },
+      });
+      return;
+    }
+
+    signalAllRequest();
+    await allResponseGate;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: "{malformed",
+    });
+    signalAllResponse();
+  });
+
+  await page.goto("admin/notifications/");
+  await allRequestStarted;
+  try {
+    await page.getByRole("button", { name: "未読", exact: true }).click();
+    await expect(
+      page.getByRole("link", { name: "現在の未読通知" }),
+    ).toBeVisible();
+  } finally {
+    releaseAllResponse();
+  }
+
+  await allResponseFinished;
+  await page.waitForTimeout(25);
+  await expect(page.locator("[data-notification-inbox]")).toHaveAttribute(
+    "data-admin-load-state",
+    "ready",
+  );
+  await expect(
+    page.locator('[data-admin-load-error-scope="notification-inbox"]'),
+  ).toBeHidden();
+  await expect(
+    page.getByRole("link", { name: "現在の未読通知" }),
+  ).toBeVisible();
+});
+
+test("未取得の通知がある場合は未読件数の集計範囲を明示する", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  await page.route("**/api/admin/notifications**", (route) =>
+    route.fulfill({
+      json: {
+        notifications: Array.from({ length: 50 }, (_, index) => ({
+          id: "comment-read-" + String(index).padStart(8, "0"),
+          kind: "comment",
+          title: "既読通知" + (index + 1),
+          detail: "取得済みの既読通知です。",
+          href: "/admin/editor/",
+          read: true,
+        })),
+        notificationsTruncated: true,
+        nextCursor: "unfetched-notifications",
+      },
+    }),
+  );
+
+  await page.goto("admin/notifications/");
+
+  const summary = page.locator(".notification-summary");
+  await expect(page.locator("[data-unread-count]")).toHaveText("0");
+  await expect(summary).toContainText("取得済み50件中");
+  await expect(summary).toContainText("続きは未確認");
+  await expect(
+    page.getByRole("button", { name: "さらに読み込む" }),
+  ).toBeVisible();
+});
+
 test("ポータルの読み込みエラーから再試行できる", async ({ page }) => {
   await mockAdminShell(page, { portalFailureOnce: true });
 
@@ -906,6 +1012,65 @@ test("参加中のプロジェクトカードは取得後もレイアウトを�
   expect(cardBox).not.toBeNull();
   expect(groupBox).not.toBeNull();
   expect(cardBox!.width).toBeLessThanOrEqual(groupBox!.width);
+});
+
+test("ポータルのカードと操作要素を角ばった形に統一する", async ({ page }) => {
+  await mockAdminShell(page, {
+    todos: [
+      {
+        id: "square-corner-task",
+        project_id: "atlas",
+        title: "フィードバック依頼を確認",
+        status: "open",
+        due_at: "",
+        due_timezone: "Asia/Tokyo",
+      },
+    ],
+    calendarEvents: [
+      {
+        id: "square-corner-event",
+        kind: "organization",
+        title: "同時作業会",
+        startsAt: new Date().toISOString(),
+        projectName: "アトラス",
+      },
+    ],
+  });
+  await page.goto("admin/portal/");
+
+  const roundedSurfaceSelectors = [
+    ".project-entry",
+    ".project-entry-card",
+    ".home-section",
+    ".calendar-toolbar",
+    ".calendar-filter-option",
+    ".calendar-filter-mark",
+    ".calendar-agenda-section",
+    ".calendar-agenda-item",
+    ".calendar-agenda-copy em",
+    ".todo-card",
+    ".todo-icon",
+    ".todo-kind",
+    ".todo-status",
+  ];
+  for (const selector of roundedSurfaceSelectors) {
+    const element = page.locator(selector).first();
+    await expect(element, `${selector} should have square corners`).toHaveCSS(
+      "border-radius",
+      "0px",
+    );
+  }
+});
+
+test("ポータルの空表示も直角で表示する", async ({ page }) => {
+  await mockAdminShell(page);
+  await page.goto("admin/portal/");
+
+  await expect(page.locator(".calendar-agenda-empty")).toHaveCSS(
+    "border-radius",
+    "0px",
+  );
+  await expect(page.locator(".todo-empty")).toHaveCSS("border-radius", "0px");
 });
 
 test("未参加のプロジェクトを応募導線付きで表示する", async ({ page }) => {

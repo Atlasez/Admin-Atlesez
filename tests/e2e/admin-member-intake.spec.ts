@@ -168,10 +168,68 @@ test("古い受入保存を拒否し検索や他カードの保存でも未保�
   await page.locator("[data-search]").fill("他メンバー");
   await expect(own).toHaveCount(0);
   await page.locator('[data-entry="other@example.test"] [data-save]').click();
-  await expect(page.locator("[data-message]")).toContainText("2名の記録");
+  await expect(page.locator("[data-message]")).toContainText("2名の対応記録");
   await page.locator("[data-search]").fill("");
   await expect(own.locator("[data-contact-note]")).toHaveValue(
     "未保存の連絡メモ",
+  );
+});
+
+test("応募者・メンバー対応は応募状態と確認予定を日本語で区別する", async ({
+  page,
+}) => {
+  await shell(page);
+  await page.route("**/api/admin/member-intake?**", (route) =>
+    route.fulfill({
+      json: {
+        project,
+        entries: [
+          {
+            ...entry,
+            email: "applicant@example.test",
+            display_name: "応募者",
+            is_member: 0,
+            application_id: "application-1",
+            application_status: "accepted",
+            follow_up_at: "2026-11-15T03:00:00.000Z",
+          },
+          {
+            ...entry,
+            email: "member@example.test",
+            display_name: "参加メンバー",
+            is_member: 1,
+            application_id: "application-2",
+            application_status: "reviewing",
+            follow_up_at: "2026-11-10T03:00:00.000Z",
+            follow_up_completed_at: "2026-11-10T03:05:00.000Z",
+          },
+        ],
+        responsibleCandidates: candidates,
+      },
+    }),
+  );
+
+  await page.goto(`admin/member-intake/?project=${project.id}`);
+  await expect(
+    page.getByRole("heading", { name: "応募者・メンバー対応" }),
+  ).toBeVisible();
+
+  const applicant = page.locator('[data-entry="applicant@example.test"]');
+  await expect(applicant).toContainText("応募：受け入れ済み");
+  await expect(applicant.locator(".entry-status")).toHaveText("確認予定あり");
+  await expect(
+    applicant.locator("label").filter({ hasText: "次回確認予定日時" }),
+  ).toBeVisible();
+  await expect(
+    applicant.getByRole("checkbox", { name: "今回の確認は完了" }),
+  ).toBeVisible();
+
+  const completed = page.locator('[data-entry="member@example.test"]');
+  await expect(completed).toContainText("応募：確認中");
+  await expect(completed.locator(".entry-status")).toHaveText("確認済み");
+  await expect(page.locator("[data-entries]")).not.toContainText("accepted");
+  await expect(page.locator("[data-entries]")).not.toContainText(
+    "次回フォロー",
   );
 });
 
@@ -204,9 +262,9 @@ test("本人の参加案内が失敗してもポータルを利用でき、再�
                 responsible_name: "担当運営者",
                 consultation_name: "相談担当者",
                 first_task_id: "operator-task",
-                first_task_title: "運営の受入準備",
+                first_task_title: "運営の参加前準備",
                 first_task_type: "operator",
-                follow_up_at: null,
+                follow_up_at: "2026-11-15T03:00:00.000Z",
               },
             ],
           },
@@ -214,19 +272,19 @@ test("本人の参加案内が失敗してもポータルを利用でき、再�
   });
   await page.goto("admin/portal/");
   const card = page.locator("[data-my-intake]");
-  await expect(card).toContainText("参加後フォローを読み込めませんでした");
+  await expect(card).toContainText("参加後の案内を読み込めませんでした");
   await expect(page.locator('[data-project-group="member"]')).toContainText(
     project.name,
   );
   await expect(page.locator("[data-portal-error]")).toBeHidden();
-  await card
-    .getByRole("button", { name: "参加後フォローを再読み込み" })
-    .click();
+  await card.getByRole("button", { name: "参加後の案内を再読み込み" }).click();
   await expect(card).toContainText("相談先：相談担当者");
-  await expect(card).toContainText("参加前の運営準備：運営の受入準備");
+  await expect(card).toContainText("次回確認予定：");
+  await expect(card).not.toContainText("次回フォロー");
+  await expect(card).toContainText("参加前の運営準備：運営の参加前準備");
   await expect(card.locator('a[href*="operator-task"]')).toHaveCount(0);
   await expect(
-    card.getByRole("button", { name: "参加後フォローを再読み込み" }),
+    card.getByRole("button", { name: "参加後の案内を再読み込み" }),
   ).toBeHidden();
   expect(ownLoads).toBe(2);
 });

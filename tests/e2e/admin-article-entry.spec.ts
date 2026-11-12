@@ -258,7 +258,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator(".workflow-card")).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: /新規記事作成/ }),
-    ).toHaveAttribute("href", "/admin/editor/?new=1&choose=1&from=articles");
+    ).toHaveAttribute("href", "/admin/editor/?new=1&from=articles");
     await expect(
       page.getByRole("button", { name: /加筆・修正/ }),
     ).toBeVisible();
@@ -290,10 +290,8 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       workflowCardStyle.borderColor,
     );
     expect(workflowCardStyle.borderColor).not.toBe("rgb(255, 255, 255)");
-    expect(workflowCardStyle.outlineStyle).toBe("solid");
-    expect(workflowCardStyle.outlineWidth).toBe("3px");
-    expect(workflowCardStyle.outlineColor).toBe("rgb(255, 255, 255)");
-    expect(workflowCardStyle.outlineOffset).toBe("2px");
+    expect(workflowCardStyle.outlineStyle).toBe("none");
+    expect(workflowCardStyle.outlineWidth).toBe("0px");
     await expect(
       page.getByRole("link", { name: /編集・フィードバックを開く/ }),
     ).toHaveCount(0);
@@ -383,7 +381,13 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       card.locator('[data-update-proposal-state="in-progress"]'),
     ).toHaveText("更新案作成中");
-    await expect(card).toContainText("公開済み・運営管理中");
+    await expect(card.locator(".article-status-group")).toContainText([
+      "編集",
+      "学習サイト",
+    ]);
+    await expect(card).not.toContainText("運営連携");
+    await expect(card).toContainText("公開中");
+    await expect(card).toContainText("更新案作成中");
     await page.screenshot({
       path: "test-results/admin-articles-update-proposal-in-progress.png",
       fullPage: true,
@@ -435,31 +439,142 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       "すべてのカテゴリ",
       "環論",
     ]);
+    await expect(
+      page.locator("[data-subject-browser] [data-subject-quick]"),
+    ).toHaveCount(23);
     await expect(page.locator("[data-subject-browser]")).toContainText("数学");
     await expect(page.locator("[data-subject-browser]")).toContainText("物理");
     await expect(
       page.locator('[data-subject-quick="mathematics"]'),
     ).toContainText("2件");
+    await expect(page.locator('[data-subject-quick="physics"]')).toContainText(
+      "1件",
+    );
+    await expect(page.locator('[data-subject-quick="kanbun"]')).toContainText(
+      "0件",
+    );
     await expect(page.locator(".subject-browser__item em")).toHaveCount(0);
-    await expect(page.locator(".subject-browser__empty")).toBeVisible();
+    await expect(page.locator(".subject-browser__empty")).toHaveCount(0);
+    await page.screenshot({
+      path: "test-results/admin-articles-horizontal-subjects.png",
+      fullPage: true,
+    });
+    await page.locator('[data-subject-quick="kanbun"]').click();
+    await expect(page.locator("[data-subject]")).toHaveValue("kanbun");
+    await expect(page.locator("[data-list]")).toContainText(
+      "条件に一致する原稿はありません。",
+    );
+    await expect(page.locator('[data-subject-quick="physics"]')).toContainText(
+      "1件",
+    );
     await page.locator('[data-subject-quick="mathematics"]').click();
     await expect(page.locator("[data-subject]")).toHaveValue("mathematics");
     await expect(page.locator("[data-list] .article")).toHaveCount(2);
-    await page.locator("[data-subject]").selectOption("mathematics");
+    await page.locator('[data-subject-quick="mathematics"]').click();
     await expect(page.locator("[data-list] .article")).toHaveCount(2);
     await expect(page.locator("[data-list]")).toContainText("環論の記事");
     await expect(page.locator("[data-list]")).toContainText("群論の記事");
     await expect(page.locator("[data-list]")).not.toContainText("力学の記事");
-
+    await expect(page.locator("[data-list]")).toContainText("数学");
+    await expect(page.locator("[data-list]")).toContainText("環論");
+    await expect(page.locator("[data-list]")).toContainText("群論");
+    await expect(page.locator("[data-list]")).not.toContainText(
+      "mathematics / ring-theory",
+    );
     await page.locator("[data-category]").selectOption("ring-theory");
     await expect(page.locator("[data-list] .article")).toHaveCount(1);
     await expect(page.locator("[data-list]")).toContainText("環論の記事");
     await expect(page.locator("[data-list]")).not.toContainText("群論の記事");
     await expect(page.locator("[data-count]")).toHaveText("1件");
 
-    await page.locator("[data-subject]").selectOption("all");
+    await page.getByRole("button", { name: "全分野に戻る" }).click();
     await expect(page.locator("[data-category]")).toHaveValue("ring-theory");
     await expect(page.locator("[data-list] .article")).toHaveCount(1);
+  });
+
+  test("分野を選ぶと追加操作なしですべての記事を表示する", async ({ page }) => {
+    const requestedUrls: string[] = [];
+    const makeMathArticle = (index: number) => ({
+      id: `math-doc-${index}`,
+      subject: "mathematics",
+      category: "group-theory",
+      title: `数学の記事 ${index}`,
+      status: "draft" as const,
+      updated_at: new Date(Date.UTC(2026, 8, 30 - index)).toISOString(),
+      published_at: null,
+    });
+
+    await page.route(editorDocumentListRoute, async (route) => {
+      const url = new URL(route.request().url());
+      requestedUrls.push(url.href);
+      if (url.searchParams.get("subject") === "mathematics") {
+        if (url.searchParams.get("cursor") === "math-page-2") {
+          await route.fulfill({
+            json: {
+              scope: { email: "alice@example.com", allSubjects: true },
+              documents: [makeMathArticle(101)],
+              pagination: { limit: 100, hasMore: false, nextCursor: null },
+            },
+          });
+          return;
+        }
+        await route.fulfill({
+          json: {
+            scope: { email: "alice@example.com", allSubjects: true },
+            documents: Array.from({ length: 100 }, (_, index) =>
+              makeMathArticle(index + 1),
+            ),
+            pagination: {
+              limit: 100,
+              hasMore: true,
+              nextCursor: "math-page-2",
+            },
+          },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com", allSubjects: true },
+          documents: [
+            makeMathArticle(1),
+            {
+              id: "physics-doc-1",
+              subject: "physics",
+              category: "mechanics",
+              title: "物理の記事",
+              status: "draft",
+              updated_at: "2026-08-01T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+          pagination: { limit: 20, hasMore: true, nextCursor: "global-page-2" },
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=subject-load-all");
+    await expect(page.locator("[data-article-load-more]")).toBeVisible();
+    await page.locator('[data-subject-quick="mathematics"]').click();
+
+    await expect(page.locator("[data-list] .article")).toHaveCount(101);
+    await expect(
+      page.locator('[data-document-id="math-doc-101"]'),
+    ).toContainText("数学の記事 101");
+    await expect(
+      page.locator("[data-list] [data-expand-category]"),
+    ).toHaveCount(0);
+    await expect(page.locator("[data-article-pagination]")).toBeHidden();
+    expect(
+      requestedUrls.some(
+        (url) => new URL(url).searchParams.get("subject") === "mathematics",
+      ),
+    ).toBe(true);
+    expect(
+      requestedUrls.some(
+        (url) => new URL(url).searchParams.get("cursor") === "math-page-2",
+      ),
+    ).toBe(true);
   });
 
   test("D-3a: 公開予約済みの記事を日時付きで表示し、絞り込める", async ({
@@ -497,9 +612,10 @@ test.describe("A/D 原稿一覧の作業導線", () => {
 
     await page.goto("admin/articles/?verify=scheduled");
     const scheduledCard = page.locator('[data-document-id="scheduled-doc"]');
-    await expect(scheduledCard).toContainText("公開予約済み・2026/09/10 12:00");
-    await expect(scheduledCard).toContainText("公開予約：2026/09/10 12:00");
+    await expect(scheduledCard).toContainText("公開予約・2026/09/10 12:00");
+    await expect(scheduledCard).toContainText("学習サイト");
 
+    await page.locator(".advanced-filters > summary").click();
     await page.locator("[data-public]").selectOption("scheduled");
     await expect(page.locator("[data-list] .article")).toHaveCount(1);
     await expect(page.locator("[data-list]")).toContainText("予約公開の記事");
@@ -573,7 +689,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     ).toBeHidden();
 
     await page.locator("[data-query]").fill("数学");
-    await page.locator("[data-subject]").selectOption("mathematics");
+    await page.locator('[data-subject-quick="mathematics"]').click();
     await page.locator("[data-status]").selectOption("approved");
     await page.reload();
 
@@ -581,7 +697,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-subject]")).toHaveValue("mathematics");
     await expect(page.locator("[data-status]")).toHaveValue("approved");
 
-    await page.getByRole("button", { name: "絞り込みをリセット" }).click();
+    await page.locator("[data-reset-filters]").click();
     await expect(page.locator("[data-query]")).toHaveValue("");
     await expect(page.locator("[data-subject]")).toHaveValue("all");
     await expect(page.locator("[data-status]")).toHaveValue("all");
@@ -713,9 +829,10 @@ test.describe("A/D 原稿一覧の作業導線", () => {
 
     await page.goto("admin/articles/?verify=retry");
     await expect(page.locator("[data-admin-load-error]")).toBeVisible();
-    await expect(page.locator("[data-catalog-summary]")).not.toContainText(
+    await expect(page.locator("[data-list]")).not.toContainText(
       "確認しています",
     );
+    await expect(page.locator("[data-catalog-overview]")).toHaveCount(0);
     await expect(page.locator("[data-scope-note]")).toHaveAttribute(
       "data-state",
       "error",
@@ -898,6 +1015,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       "整理前の下書き",
     );
 
+    await page.locator(".advanced-filters > summary").click();
     await page.locator("[data-archive]").selectOption("archived");
     await expect(page.locator("[data-list] .article")).toHaveCount(2);
     await expect(page.locator("[data-list]")).toContainText("整理前の下書き");

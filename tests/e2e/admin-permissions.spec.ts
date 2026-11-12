@@ -548,3 +548,125 @@ test("権限管理の列配置と展開フォーム・操作メニューは狭�
     }
   }
 });
+
+test("既存メンバー移行をプレビューしてからDiscordなしで実行する", async ({
+  page,
+}) => {
+  let previewBody: Record<string, unknown> | null = null;
+  let applyBody: Record<string, unknown> | null = null;
+  let discordRequests = 0;
+  const expected = {
+    subjects: [],
+    membershipRole: null,
+    managerSource: null,
+    managerRevision: null,
+    managerReviewRequired: false,
+    hasPublicIntro: false,
+    hasProjectIntro: false,
+  };
+  await page.route("**/api/admin/report-admin-permissions", async (route) => {
+    await route.fulfill({
+      json: { permissions: [], workflowRoles: [], discordRoles: [] },
+    });
+  });
+  await page.route("**/api/admin/project-manager-grants", async (route) => {
+    await route.fulfill({ json: { members: [] } });
+  });
+  await page.route("**/api/admin/permission-audit**", async (route) => {
+    await route.fulfill({ json: { entries: [], pagination: {} } });
+  });
+  await page.route("**/api/admin/member-migrations", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    if (body.mode === "preview") {
+      previewBody = body;
+      const members = Array.isArray(body.members) ? body.members : [];
+      await route.fulfill({
+        json: {
+          ok: true,
+          batchId: body.batchId,
+          members: members.map((member: Record<string, unknown>) => ({
+            ...member,
+            expected,
+            addedSubjects: member.subjects,
+            existingSubjects: [],
+            existingProjectRole: null,
+            resultingProjectRole: "manager",
+            hasPublicIntro: false,
+            hasProjectIntro: false,
+            discordSync: "skipped",
+          })),
+        },
+      });
+      return;
+    }
+    applyBody = body;
+    await route.fulfill({
+      json: {
+        ok: true,
+        batchId: body.batchId,
+        discordSync: "skipped",
+        results: [
+          {
+            email: "hku.myoon.log34@gmail.com",
+            status: "migrated",
+            addedSubjects: ["chemistry"],
+            projectManager: true,
+            profileIntroPending: true,
+            discordSync: "skipped",
+          },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/admin/member-discord-roles", async (route) => {
+    discordRequests += 1;
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.route("**/api/admin/discord-provision-roles", async (route) => {
+    discordRequests += 1;
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.route("**/api/admin/member-settings", async (route) => {
+    discordRequests += 1;
+    await route.fulfill({ json: { ok: true } });
+  });
+  page.on("dialog", (dialog) => dialog.accept());
+  await page.goto("./admin/permissions/?project=atlas");
+  await page.locator(".legacy-member-migration > summary").click();
+  await page
+    .locator("[data-legacy-csv]")
+    .fill(
+      "email,subjects,projectManager,sourceNote\nhku.myoon.log34@gmail.com,chemistry,true,既存の運営・Atlasezメンバー。サイト作成フィードバック要員",
+    );
+  await page.locator("[data-legacy-confirm]").check();
+  await page.locator("[data-legacy-preview]").click();
+  await expect(page.locator("[data-legacy-preview-result]")).toContainText(
+    "化学（担当）",
+  );
+  await expect(page.locator("[data-legacy-preview-result]")).toContainText(
+    "運営内運営（独立任命）",
+  );
+  await expect(page.locator("[data-legacy-preview-result]")).toContainText(
+    "Discord: 接続・同期しません",
+  );
+  await page.locator("[data-legacy-apply]").click();
+  await expect(page.locator("[data-legacy-message]")).toContainText(
+    "Discordへの接続・同期は行っていません",
+  );
+  expect(previewBody).toMatchObject({
+    mode: "preview",
+    confirmedExistingMembers: true,
+  });
+  expect(applyBody).toMatchObject({
+    mode: "apply",
+    members: [
+      {
+        email: "hku.myoon.log34@gmail.com",
+        subjects: ["chemistry"],
+        projectManager: true,
+        expected,
+      },
+    ],
+  });
+  expect(discordRequests).toBe(0);
+});

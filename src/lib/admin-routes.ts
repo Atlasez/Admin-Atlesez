@@ -1,3 +1,9 @@
+export const SEMINAR_REVIEW_PATH = "/admin/semi-platform/review/";
+
+export const isSeminarReviewPath = (pathname: string) =>
+  pathname === SEMINAR_REVIEW_PATH ||
+  pathname === SEMINAR_REVIEW_PATH.slice(0, -1);
+
 const adminPageNames = [
   "workspace",
   "member-profile",
@@ -82,12 +88,12 @@ export const globalAdminPrototypePaths = uiPrototypeNames.flatMap((name) => {
 // Nested pages stay out of the top-level navigation list while still passing
 // through the admin Worker page gate.
 const adminNestedPagePathSet = new Set([
-  "/admin/editor/outline",
-  "/admin/editor/outline/",
   "/admin/member-profile/edit",
   "/admin/member-profile/edit/",
   ...globalAdminPrototypePaths,
 ]);
 
 export const isAdminPagePath = (pathname: string) =>
-  adminPagePathSet.has(pathname) || adminNestedPagePathSet.has(pathname);
+  adminPagePathSet.has(pathname) ||
+  adminNestedPagePathSet.has(pathname) ||
+  isSeminarReviewPath(pathname);

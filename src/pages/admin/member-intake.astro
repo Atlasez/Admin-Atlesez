@@ -13,10 +13,10 @@ const requested = Astro.url.searchParams.get("project")?.trim().toLowerCase() ??
 const project = projects.find(([slug]) => slug === requested);
 ---
 
-<AdminLayout title="応募後の受入フォロー" description="連絡状況、初回タスク、次回フォローを記録します">
+<AdminLayout title="応募者・メンバー対応" description="連絡状況、担当者、初回タスク、次回確認予定を記録します">
   <main class="intake" data-member-intake data-project={project?.[0] ?? ""}>
     <header>
-      <div><p>メンバー運営</p><h1>応募後の受入フォロー</h1><span>連絡状況、担当運営者、初回の小さなタスク、次回フォローを記録します。ここから応募者へ連絡や招待は送信されません。</span></div>
+      <div><p>メンバー運営</p><h1>応募者・メンバー対応</h1><span>応募者・メンバーへの連絡状況、担当者、相談先、初回タスク、次回確認予定を記録します。連絡や招待はここから送信されません。</span></div>
       <a data-applications-link href={project ? `/admin/applications/?project=${encodeURIComponent(project[0])}` : "/admin/applications/"}>応募管理へ戻る →</a>
     </header>
     <section class="project-picker" aria-label="プロジェクト選択">
@@ -27,7 +27,7 @@ const project = projects.find(([slug]) => slug === requested);
       <label class="search-label">名前・メールで検索<input type="search" data-search placeholder="応募者またはメンバーを検索" /></label>
       <output data-message aria-live="polite">{project ? "読み込み中…" : "プロジェクトを選択してください。"}</output>
     </section>
-    <section class="entries" data-entries aria-label="応募者・メンバーの受入フォロー"></section>
+    <section class="entries" data-entries aria-label="応募者・メンバーの対応記録"></section>
     <AdminRetryNotice />
   </main>
 </AdminLayout>
@@ -81,7 +81,7 @@ const project = projects.find(([slug]) => slug === requested);
     let loading = false;
     let loadGeneration = 0;
     let load:(showLoading?:boolean)=>Promise<void>;
-    const retry = createAdminLoadRetry(root, () => load(true), "受入フォロー記録を読み込めませんでした。");
+    const retry = createAdminLoadRetry(root, () => load(true), "対応記録を読み込めませんでした。");
     const dateInput = (value: unknown) => {
       if (!value) return "";
       const date = new Date(String(value));
@@ -95,12 +95,14 @@ const project = projects.find(([slug]) => slug === requested);
         const managers = [...new Map([...responsible, ...(row.responsible_email ? [{email:row.responsible_email,displayName:row.responsible_email}] : [])].map((item) => [item.email, item])).values()];
         const selectedResponsible = String(row.responsible_email ?? "");
         const selectedConsultation = String(row.consultation_email ?? "");
-        const applicationLabel = row.application_status ? `応募：${row.application_status}` : row.application_id ? "応募：保存期間経過" : "直接追加メンバー／応募情報なし";
+        const applicationStatusLabels: Record<string, string> = { new: "新規", reviewing: "確認中", accepted: "受け入れ済み", rejected: "見送り" };
+        const applicationStatus = applicationStatusLabels[String(row.application_status ?? "")] ?? "状態要確認";
+        const applicationLabel = row.application_status ? `応募：${applicationStatus}` : row.application_id ? "応募：保存期間経過" : "直接追加メンバー／応募情報なし";
         const taskLink = row.first_task_id ? `<a href="/admin/task-detail/?task=${encodeURIComponent(row.first_task_id)}">初回タスク：${escape(row.first_task_title)}（${escape(row.first_task_status ?? "未着手")}）</a>` : "";
         const firstTaskLabel = row.first_task_id
-          ? row.first_task_type === "operator" ? "受入準備タスク（担当運営者）" : "初回タスク（メンバー担当）"
-          : row.is_member ? "初回の小さなタスク（メンバー担当）" : "受入準備タスク（担当運営者）";
-        return `<article class="entry" data-entry="${escape(row.email)}"><div class="entry-head"><div><h2>${escape(row.display_name || row.email)}</h2><p>${escape(row.email)} ・ ${escape(applicationLabel)}</p></div><span class="entry-status">${row.follow_up_completed_at ? "フォロー完了" : row.follow_up_at ? "フォロー予定あり" : "フォロー未設定"}</span></div><div class="entry-fields"><label>担当運営者<select data-responsible><option value="">担当未設定</option>${managers.map((item) => `<option value="${escape(item.email)}" ${item.email === selectedResponsible ? "selected" : ""}>${escape(item.displayName)}</option>`).join("")}</select></label><label>相談先<select data-consultation><option value="">相談先未設定</option>${managers.map((item) => `<option value="${escape(item.email)}" ${item.email === selectedConsultation ? "selected" : ""}>${escape(item.displayName)}</option>`).join("")}</select></label><label>連絡状況<select data-contact-status><option value="not_contacted" ${row.contact_status === "not_contacted" || !row.contact_status ? "selected" : ""}>未連絡</option><option value="contacted" ${row.contact_status === "contacted" ? "selected" : ""}>連絡済み</option><option value="replied" ${row.contact_status === "replied" ? "selected" : ""}>返信あり</option></select></label><label>次回フォロー日時<input type="datetime-local" data-follow-up value="${escape(dateInput(row.follow_up_at))}" /></label><label class="wide">連絡メモ<textarea data-contact-note maxlength="2000" placeholder="送信した連絡の要点や次に確認すること">${escape(row.contact_note)}</textarea></label><label class="${row.first_task_id ? "wide" : ""}">${firstTaskLabel}${row.first_task_id ? `<input value="${escape(row.first_task_title)}" disabled />` : `<input data-first-task maxlength="200" placeholder="例：最初の記事を1本読んで感想を共有する" />`}</label><label class="check"><input type="checkbox" data-follow-completed ${row.follow_up_completed_at ? "checked" : ""} />次回フォロー完了</label></div><div class="entry-actions"><button type="button" data-save>記録を保存</button>${taskLink}</div></article>`;
+          ? row.first_task_type === "operator" ? "参加前の準備タスク（運営担当）" : "初回タスク（メンバー担当）"
+          : row.is_member ? "初回タスク（メンバー担当）" : "参加前の準備タスク（運営担当）";
+        return `<article class="entry" data-entry="${escape(row.email)}"><div class="entry-head"><div><h2>${escape(row.display_name || row.email)}</h2><p>${escape(row.email)} ・ ${escape(applicationLabel)}</p></div><span class="entry-status">${row.follow_up_completed_at ? "確認済み" : row.follow_up_at ? "確認予定あり" : "確認予定未設定"}</span></div><div class="entry-fields"><label>担当運営者<select data-responsible><option value="">担当未設定</option>${managers.map((item) => `<option value="${escape(item.email)}" ${item.email === selectedResponsible ? "selected" : ""}>${escape(item.displayName)}</option>`).join("")}</select></label><label>相談先<select data-consultation><option value="">相談先未設定</option>${managers.map((item) => `<option value="${escape(item.email)}" ${item.email === selectedConsultation ? "selected" : ""}>${escape(item.displayName)}</option>`).join("")}</select></label><label>連絡状況<select data-contact-status><option value="not_contacted" ${row.contact_status === "not_contacted" || !row.contact_status ? "selected" : ""}>未連絡</option><option value="contacted" ${row.contact_status === "contacted" ? "selected" : ""}>連絡済み</option><option value="replied" ${row.contact_status === "replied" ? "selected" : ""}>返信あり</option></select></label><label>次回確認予定日時<input type="datetime-local" data-follow-up value="${escape(dateInput(row.follow_up_at))}" /></label><label class="wide">連絡メモ<textarea data-contact-note maxlength="2000" placeholder="送信した連絡の要点や次に確認すること">${escape(row.contact_note)}</textarea></label><label class="${row.first_task_id ? "wide" : ""}">${firstTaskLabel}${row.first_task_id ? `<input value="${escape(row.first_task_title)}" disabled />` : `<input data-first-task maxlength="200" placeholder="例：最初の記事を1本読んで感想を共有する" />`}</label><label class="check"><input type="checkbox" data-follow-completed ${row.follow_up_completed_at ? "checked" : ""} />今回の確認は完了</label></div><div class="entry-actions"><button type="button" data-save>記録を保存</button>${taskLink}</div></article>`;
       }).join("") || '<p class="empty">該当する応募者・メンバーがいません。</p>';
       for (const card of entries.querySelectorAll<HTMLElement>("[data-entry]")) {
         const draft = drafts.get(draftKey(card.dataset.entry ?? ""));
@@ -120,7 +122,7 @@ const project = projects.find(([slug]) => slug === requested);
       if (!project) { rows = []; render(); message.value = "プロジェクトを選択してください。"; return; }
       retry.begin();
       const requestedProject = project;
-      if (showLoading) message.value = "受入フォロー記録を読み込んでいます…";
+      if (showLoading) message.value = "対応記録を読み込んでいます…";
       try {
         const response = await fetch(`/api/admin/member-intake?project=${encodeURIComponent(project)}`, {credentials:"same-origin",cache:"no-store"});
         const data = await readAdminApiJson<{entries?:Entry[];responsibleCandidates?:Array<{email:string;displayName:string}>;error?:string}>(response, "記録を読み込めませんでした。");
@@ -129,7 +131,7 @@ const project = projects.find(([slug]) => slug === requested);
         rows = Array.isArray(data.entries) ? data.entries : [];
         responsible = Array.isArray(data.responsibleCandidates) ? data.responsibleCandidates : [];
         render();
-        message.value = `${rows.length}名の記録を読み込みました。連絡メールや招待は送信していません。`;
+        message.value = `${rows.length}名の対応記録を読み込みました。連絡メールや招待は送信していません。`;
         retry.success();
       } catch (error) { if (projectSelect.value !== requestedProject || generation !== loadGeneration) return; retry.fail(error); message.value = error instanceof Error ? error.message : "記録を読み込めませんでした。"; }
       finally { if (generation === loadGeneration) loading = false; }
@@ -161,7 +163,7 @@ const project = projects.find(([slug]) => slug === requested);
         const data = await readAdminApiJson<{error?:string}>(response, "記録を保存できませんでした。");
         if (!response.ok) throw new Error(data.error ?? "記録を保存できませんでした。");
         drafts.delete(draftKey(email));
-        message.value = "記録を保存しました。連絡メールや招待は送信していません。";
+        message.value = "対応記録を保存しました。連絡メールや招待は送信していません。";
         await load();
       } catch (error) { message.value = error instanceof Error ? error.message : "記録を保存できませんでした。"; }
       finally { busy = false; button.disabled = false; projectSelect.disabled = false; }

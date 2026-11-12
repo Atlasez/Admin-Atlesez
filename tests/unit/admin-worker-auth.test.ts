@@ -2466,6 +2466,18 @@ describe("applicant stage server-side access", () => {
       ],
       ["POST", "/api/admin/operations/availability-rules", { weekday: 1 }, 200],
       [
+        "POST",
+        "/api/admin/operations/availability-rules",
+        { weekdays: [2, 3, 4] },
+        200,
+      ],
+      [
+        "POST",
+        "/api/admin/operations/availability-rules",
+        { weekdays: [2, 7] },
+        400,
+      ],
+      [
         "DELETE",
         "/api/admin/operations/availability-blocks/123e4567-e89b-12d3-a456-426614174000",
         undefined,
