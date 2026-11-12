@@ -6,6 +6,12 @@ import {
   seminarNumber,
 } from "../../lib/seminar-fields";
 
+export type SeminarSession = {
+  signedIn: boolean;
+  email?: string;
+  canReview?: boolean;
+};
+
 export type CatalogItem = {
   number: number;
   title: string;
@@ -29,6 +35,12 @@ export const statusLabels = {
   rejected: "見送り",
 };
 
+const ADMIN_ORIGIN = "https://admin.atlasez.org";
+const SEMINAR_API_PATH = "/api/seminars";
+
+export const seminarApiUrl = (path = "") =>
+  new URL(`${SEMINAR_API_PATH}${path}`, ADMIN_ORIGIN).toString();
+
 export const html = (value: unknown) =>
   String(value ?? "").replace(/[&<>"']/g, (character) => {
     const escapes: Record<string, string> = {
@@ -45,7 +57,15 @@ export const urlFor = (page: string, number: number) =>
   `/seminars/${page}/?number=${number}`;
 
 export const loginUrl = () =>
-  `/auth/google/login?returnTo=${encodeURIComponent(location.pathname + location.search)}`;
+  (() => {
+    const returnTo = new URL(
+      `${location.pathname}${location.search}`,
+      "https://atlasez.org",
+    );
+    const login = new URL("/auth/google/login", ADMIN_ORIGIN);
+    login.searchParams.set("returnTo", returnTo.toString());
+    return login.toString();
+  })();
 
 export const numberFromUrl = () => {
   const value = new URLSearchParams(location.search).get("number") ?? "";
@@ -53,8 +73,9 @@ export const numberFromUrl = () => {
 };
 
 export async function api<T>(path = "", init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api/seminars${path}`, {
+  const response = await fetch(seminarApiUrl(path), {
     cache: "no-store",
+    credentials: "include",
     ...init,
   });
   const data = await response.json().catch(() => null);
@@ -69,8 +90,12 @@ export async function api<T>(path = "", init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export const post = (path: string, data: unknown, method = "POST") =>
-  api(path, {
+export const post = <T = unknown>(
+  path: string,
+  data: unknown,
+  method = "POST",
+): Promise<T> =>
+  api<T>(path, {
     method,
     headers: { "content-type": "application/json" },
     body: JSON.stringify(data),

@@ -16,6 +16,11 @@ const seminar = {
   },
 };
 
+const publicCors = (origin: string | undefined) => ({
+  "access-control-allow-origin": origin ?? "http://localhost:4321",
+  "access-control-allow-credentials": "true",
+});
+
 test("一覧を元サイトと同じ募集状況ごとに表示し検索できる", async ({ page }) => {
   const seminars = [
     seminar,
@@ -35,10 +40,16 @@ test("一覧を元サイトと同じ募集状況ごとに表示し検索でき�
     },
   ];
   await page.route("**/api/seminars/session", (route) =>
-    route.fulfill({ json: { signedIn: false } }),
+    route.fulfill({
+      json: { signedIn: false },
+      headers: publicCors(route.request().headers().origin),
+    }),
   );
   await page.route("**/api/seminars", (route) =>
-    route.fulfill({ json: { seminars } }),
+    route.fulfill({
+      json: { seminars },
+      headers: publicCors(route.request().headers().origin),
+    }),
   );
 
   await page.goto("/seminars/");

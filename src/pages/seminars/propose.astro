@@ -1,0 +1,16 @@
+---
+import SeminarLayout from "../../layouts/SeminarLayout.astro";
+---
+
+<SeminarLayout title="ゼミ企画フォーム" page="propose">
+  <p class="seminar-back"><a href="/seminars/">ゼミ一覧に戻る</a></p>
+  <header class="seminar-page-head">
+    <h1>ゼミ企画フォーム</h1>
+    <p class="seminar-muted">
+      入力された企画はゼミプラットフォーム運営が確認します。承認されると、ゼミ一覧に自動で公開されます。
+    </p>
+  </header>
+  <div data-page-content aria-busy="true">
+    <p role="status">フォームを準備しています。</p>
+  </div>
+</SeminarLayout>

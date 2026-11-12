@@ -90,6 +90,18 @@ describe("seminar platform", () => {
       false,
       "https://atlasez.org/seminars/join/?number=32",
     ],
+    [
+      "https://atlasez.org/seminars/member/",
+      applicant,
+      false,
+      "https://atlasez.org/seminars/member/",
+    ],
+    [
+      "https://atlasez.org/seminars/workspace/?number=32",
+      applicant,
+      false,
+      "https://atlasez.org/seminars/workspace/?number=32",
+    ],
     ["https://example.com/seminars/propose/", host, false, "/apply/"],
   ])(
     "returns Google accounts to the approved page from %s",
@@ -218,6 +230,96 @@ describe("seminar platform", () => {
     expect(operations.headers.get("access-control-allow-origin")).toBeNull();
   });
 
+  it("allows public catalog and approved-member reads with credentialed CORS", async () => {
+    const { request, approved, join } = fixture();
+    const catalog = await request(
+      api,
+      applicant,
+      undefined,
+      "https://atlasez.org",
+    );
+    expect(catalog.status).toBe(200);
+    expect(catalog.headers.get("access-control-allow-origin")).toBe(
+      "https://atlasez.org",
+    );
+    expect((await catalog.json()).seminars).toHaveLength(32);
+
+    const detail = await request(
+      `${api}/32`,
+      applicant,
+      undefined,
+      "https://atlasez.org",
+    );
+    expect(detail.status).toBe(200);
+    expect(detail.headers.get("access-control-allow-credentials")).toBe("true");
+
+    const number = await approved();
+    const applicationId = await join(number);
+    expect(
+      (
+        await request(`${api}/${number}/applications/${applicationId}`, host, {
+          decision: "approved",
+        })
+      ).status,
+    ).toBe(200);
+    const dashboard = await request(
+      `${api}/dashboard`,
+      applicant,
+      undefined,
+      "https://atlasez.org",
+    );
+    expect(dashboard.status).toBe(200);
+    expect(dashboard.headers.get("access-control-allow-origin")).toBe(
+      "https://atlasez.org",
+    );
+    expect(await dashboard.json()).toMatchObject({
+      memberships: [{ number, isHost: false }],
+    });
+    const workspace = await request(
+      `${api}/${number}/workspace`,
+      applicant,
+      undefined,
+      "https://atlasez.org",
+    );
+    expect(workspace.status).toBe(200);
+    expect(workspace.headers.get("access-control-allow-origin")).toBe(
+      "https://atlasez.org",
+    );
+  });
+
+  it("limits public preflights to seminar pages and membership actions", async () => {
+    const { env } = fixture();
+    const publicHeaders = {
+      origin: "https://atlasez.org",
+      "access-control-request-method": "POST",
+      "access-control-request-headers": "content-type, x-seminar-filename",
+    };
+    const upload = await worker.fetch(
+      new Request(`${url}${api}/32/materials`, {
+        method: "OPTIONS",
+        headers: publicHeaders,
+      }),
+      env as never,
+    );
+    expect(upload.status).toBe(204);
+    expect(upload.headers.get("access-control-allow-methods")).toContain(
+      "DELETE",
+    );
+
+    const operations = await worker.fetch(
+      new Request(`${url}${api}/operations`, {
+        method: "OPTIONS",
+        headers: {
+          origin: "https://atlasez.org",
+          "access-control-request-method": "GET",
+        },
+      }),
+      env as never,
+    );
+    expect(operations.status).toBe(403);
+    expect(operations.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
   it("redirects the former operations URL and serves the admin page only to project reviewers", async () => {
     const { anonymous, request } = fixture();
     const legacy = await anonymous("/seminars/operations/");
@@ -236,7 +338,10 @@ describe("seminar platform", () => {
   });
 
   it.each([
+    ["/seminars", "https://atlasez.org/seminars/"],
+    ["/seminars/", "https://atlasez.org/seminars/"],
     ["/seminars/propose/", "https://atlasez.org/seminars/propose/"],
+    ["/seminars/member/", "https://atlasez.org/seminars/member/"],
     [
       "/seminars/join/?number=32",
       "https://atlasez.org/seminars/join/?number=32",
@@ -244,6 +349,10 @@ describe("seminar platform", () => {
     [
       "/seminars/detail/?number=32",
       "https://atlasez.org/seminars/detail/?number=32",
+    ],
+    [
+      "/seminars/workspace/?number=32",
+      "https://atlasez.org/seminars/workspace/?number=32",
     ],
   ])(
     "sends public seminar route %s to the public site",
@@ -254,19 +363,6 @@ describe("seminar platform", () => {
       expect(response.headers.get("location")).toBe(target);
     },
   );
-
-  it("serves the public seminar catalogue on the Admin host", async () => {
-    const { anonymous } = fixture();
-    const page = await anonymous("/seminars/");
-    expect(page.status).toBe(200);
-    expect(await page.text()).toBe("isolated fixture");
-
-    const canonical = await anonymous("/seminars");
-    expect(canonical.status).toBe(308);
-    expect(canonical.headers.get("location")).toBe(
-      "https://admin.atlasez.test/seminars/",
-    );
-  });
 
   it("lists the imported directory publicly without enabling unassigned hosts", async () => {
     const { anonymous, request } = fixture();
