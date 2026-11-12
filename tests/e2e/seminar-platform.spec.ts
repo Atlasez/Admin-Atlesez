@@ -80,6 +80,7 @@ test("一覧を元サイトと同じ募集状況ごとに表示し検索でき�
 
 test("ゼミ運営担当者は企画申請を確認・承認できる", async ({ page }) => {
   let status = "pending";
+  let seminarApiOrigin = "";
   await page.route("**/api/admin/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/admin/auth-status")
@@ -93,7 +94,9 @@ test("ゼミ運営担当者は企画申請を確認・承認できる", async ({
     return route.fulfill({ json: { notifications: [], profile: {} } });
   });
   await page.route("**/api/seminars/**", async (route) => {
-    const path = new URL(route.request().url()).pathname;
+    const requestUrl = new URL(route.request().url());
+    seminarApiOrigin ||= requestUrl.origin;
+    const path = requestUrl.pathname;
     if (path === "/api/seminars/session")
       return route.fulfill({
         json: {
@@ -140,6 +143,7 @@ test("ゼミ運営担当者は企画申請を確認・承認できる", async ({
   ).toHaveAttribute("aria-current", "page");
   await expect(page.getByText(/リーマン面ゼミ ・ 審査待ち/)).toBeVisible();
   await expect(page.getByText("企画申請を読み込んでいます。")).toBeHidden();
+  expect(seminarApiOrigin).toBe(new URL(page.url()).origin);
   await page.getByRole("button", { name: "承認する" }).click();
   await expect(page.getByText(/リーマン面ゼミ ・ 承認済み/)).toBeVisible();
   await page

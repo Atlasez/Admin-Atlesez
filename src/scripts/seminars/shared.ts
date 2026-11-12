@@ -39,7 +39,12 @@ const ADMIN_ORIGIN = "https://admin.atlasez.org";
 const SEMINAR_API_PATH = "/api/seminars";
 
 export const seminarApiUrl = (path = "") =>
-  new URL(`${SEMINAR_API_PATH}${path}`, ADMIN_ORIGIN).toString();
+  new URL(
+    `${SEMINAR_API_PATH}${path}`,
+    document.body.dataset.seminarPage === undefined
+      ? location.origin
+      : ADMIN_ORIGIN,
+  ).toString();
 
 export const html = (value: unknown) =>
   String(value ?? "").replace(/[&<>"']/g, (character) => {
