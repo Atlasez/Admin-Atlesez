@@ -1,14 +1,16 @@
 # ADMIN新規メンバー受入：運営決定・staging実施チェックリスト
 
-作成日: 2026-11-03 JST  
+作成日: 2026-11-03 JST
+
 状態: **未実施／未承認**。このチェックリストは運営判断と隔離環境の準備票であり、募集開始・実ユーザーへの通知・本番変更を許可するものではない。
 
 ## 2026-11-12 最新mainとの照合
 
-- 最新ADMIN main `fc32dff2528d682dee56fadf797c630c9e54e8bd`には `0134_seminar_platform.sql`、`0135_seminar_public_catalog.sql`、`0136_seminar_operations_project.sql`が含まれます。本番D1のread-only ledgerでもこの3件を確認しました。
-- 応募処理用の#545 migrationは `0137_application_intake_reconciliation.sql`へ付け替え済みで、本番では未適用です。適用、backup、restoreはこの確認では行っていません。
+- 最新ADMIN mainは `a68580307ded9ee808db6962b72c932ca3b764cc`（PR #546 merge commit）です。main CI run [43144282819](https://github.com/Atlasez/Admin-Atlesez/actions/runs/43144282819) と読み取り専用ADMIN build検証 [43144997089](https://github.com/Atlasez/Admin-Atlesez/actions/runs/43144997089) はsuccess。
+- 本番D1のread-only ledgerでは `0134_seminar_platform.sql`、`0135_seminar_public_catalog.sql`、`0136_seminar_operations_project.sql`を確認しました。応募処理用の#545 migrationは番号衝突を避けて `0137_application_intake_reconciliation.sql`へ変更済みで、本番には未適用です。backup、restore、migration applyは行っていません。
 - staging D1の最後のread-only確認は2026-11-04で、その時点の候補0134までpendingなしでした。この結果は現在のmainや0137の適用を証明しません。新しいread-only照合が終わるまでSTG試験のmigration前提は未確認とします。
-- Production Workerの100%配信Versionは `Unknown (version_upload)`でWorkers Builds checkout SHAとの対応が未確認です。#545/#546/#547のmergeはprovenance gateが解消するまで行いません。
+- 最新mainのCloudflare checkはhead SHA `a68580307ded9ee808db6962b72c932ca3b764cc`に紐づくWorkers Build ID `77823226-e8c4-4b3f-8e94-968fdf093b29` / Version `23d5ffbe-1304-4e79-821c-8aad0feaf39a` をsuccessとして記録しました。読み取り専用Deployment同期 [run 43145687927](https://github.com/Atlasez/Admin-Atlesez/actions/runs/43145687927) は同Versionが固定Worker `atlasez-admin` に100%配信、Deployment `1fe8f19b-5fa9-4ace-aad8-300be9bf37ff`、2026-11-12 02:58:13 UTCを記録し、公開build-info SHA `a68580307ded9ee808db6962b72c932ca3b764cc` と一致しました。WranglerのSource表示はUnknownですが、このBuild check・Version・100% Deployment・build-infoの対応で現在mainのprovenanceを照合しています。
+- PR #546は `a68580307ded9ee808db6962b72c932ca3b764cc` としてmerge済みです。#545は0137のbackup・互換性・別途承認済みmigration/事後read-only確認が未達のためmergeしません。#547はこのmainに追従後、exact-head CIとmerge後の配信監査を行います。
 
 ## 実施前の停止条件
 
@@ -95,7 +97,7 @@ STG-01〜09の開始前に、Cloudflare管理者はWorker名・route・D1 bindin
 | OPSD-08 Discord roleの停止・退会・復帰  | [ ] 休止/退会時に全roleを解除 [ ] Atlasez内scopeだけ停止しDiscord role維持 [ ] 対象project roleだけ解除 [ ] 状態ごとに異なる方針を表で決定。休止、project離脱、恒久退会、復帰、連携失敗時を分け、本人への説明、Bot失敗時の停止状態、手動確認者、再連携条件を記入。                          | role grant/revokeとサイト認可が一致するstaging結果を保存。本人同意と運営承認のない連携・削除をしない。未決定中はDiscord依存の受入を停止。 | 運営責任者、Discord管理者                | 状態: ____　決定日: ____　承認者role/署名: ____ |
 | OPSD-09 隔離staging・合成roleアカウント | [ ] 専用staging Worker/D1 [ ] provider別sandbox [ ] まずMockのみ。staging URL、Worker識別、D1 UUID、OAuth client識別、Resend環境、Discord test guild/bot、各synthetic account pseudonymとrole、fixture作成・削除担当を記入する。secret値・個人メールはここへ書かない。                      | 本番からの隔離を読み取りで確認し、各roleのUI/API matrix、test data初期化・cleanup、利用者の承認が完了。                                   | ADMIN maintainer、各role owner           | 状態: ____　決定日: ____　承認者role/署名: ____ |
 
-決定票の記録先（承認済み運営記録。個人情報をこのrepoへ保存しない）: ____  
+決定票の記録先（承認済み運営記録。個人情報をこのrepoへ保存しない）: ____
 根拠・関連Issue/PR: ____　公開文面/手順の更新担当: ____　次回見直し日: ____
 
 ## staging環境・合成アカウント台帳
@@ -190,9 +192,9 @@ before/afterの行数・状態 / PIIを除いた画像またはログ / cleanup�
 - SQLite/Worker/Mock providerを使う自動試験: 該当するPRのexact-head CIとテスト報告で確認する。これらは実サービス到達の代替ではない。
 - OPSD-01〜09: **未承認**。候補・推奨は運営決定ではない。
 
-運営責任者: ____　決定日: ____　承認対象環境: ____　承認対象commit: ____  
-セキュリティ/プライバシー確認role: ____　staging owner: ____　cleanup owner: ____  
-限定受入への判断: [ ] NO-GO [ ] 別途承認後に再判定　根拠記録: ____
+- 運営責任者: ____　決定日: ____　承認対象環境: ____　承認対象commit: ____
+- セキュリティ/プライバシー確認role: ____　staging owner: ____　cleanup owner: ____
+- 限定受入への判断: [ ] NO-GO [ ] 別途承認後に再判定　根拠記録: ____
 
 このチェックリストへの署名だけで、本番配信、D1変更、実メール、Discord変更、実ユーザー招待、募集開始を許可しない。各行為は既存の明示承認・変更手順に従う。
 
