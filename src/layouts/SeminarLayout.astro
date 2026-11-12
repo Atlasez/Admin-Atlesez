@@ -7,10 +7,17 @@ import "../styles/seminars.css";
 interface Props {
   title: string;
   page: string;
+  catalogHref?: string;
+  noindex?: boolean;
 }
-const { title, page } = Astro.props;
+const {
+  title,
+  page,
+  catalogHref = "https://atlasez.org/seminars/",
+  noindex = page !== "catalog",
+} = Astro.props;
 const nav = [
-  { label: "ゼミ一覧", href: "https://atlasez.org/seminars/", page: "catalog" },
+  { label: "ゼミ一覧", href: catalogHref, page: "catalog" },
   { label: "参加者ページ", href: "/seminars/member/", page: "member" },
   { label: "運営ページ", href: SEMINAR_REVIEW_PATH, page: "operations" },
 ];
@@ -22,7 +29,7 @@ const login = `/auth/google/login?returnTo=${encodeURIComponent(Astro.url.pathna
     <BaseHead
       title={page === "catalog" ? `${title} | Atlasez` : `${title} | ゼミプラットフォーム`}
       description="Atlasezの自主ゼミの一覧と、企画・参加申請。"
-      noindex={page !== "catalog"}
+      noindex={noindex}
       enableArticleEnhancements={false}
     />
   </head>

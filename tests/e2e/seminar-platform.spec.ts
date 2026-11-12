@@ -16,6 +16,57 @@ const seminar = {
   },
 };
 
+test("一覧を元サイトと同じ募集状況ごとに表示し検索できる", async ({ page }) => {
+  const seminars = [
+    seminar,
+    {
+      ...seminar,
+      number: 31,
+      title: "分子軌道法ゼミ",
+      recruitment: "paused",
+      phase: "ended",
+    },
+    {
+      ...seminar,
+      number: 30,
+      title: "一般確率論ゼミ",
+      recruitment: "closed",
+      phase: "ended",
+    },
+  ];
+  await page.route("**/api/seminars/session", (route) =>
+    route.fulfill({ json: { signedIn: false } }),
+  );
+  await page.route("**/api/seminars", (route) =>
+    route.fulfill({ json: { seminars } }),
+  );
+
+  await page.goto("/seminars/");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "ゼミ一覧" }),
+  ).toBeVisible();
+  for (const status of ["募集中", "募集停止", "募集終了"]) {
+    await expect(
+      page.getByRole("heading", { level: 2, name: status }),
+    ).toBeVisible();
+  }
+  await expect(page.getByText("開催状況：終了").first()).toBeVisible();
+  await expect(page.getByText("3件のゼミを掲載しています。")).toBeVisible();
+  await page.getByText("内容を確認").first().click();
+  await expect(page.getByText("目的").first()).toBeVisible();
+
+  await page
+    .getByRole("searchbox", { name: "ゼミ名・テーマ・教材で検索" })
+    .fill("一般確率論");
+  await expect(
+    page.getByRole("heading", { level: 3, name: "一般確率論ゼミ" }),
+  ).toBeVisible();
+  await expect(page.getByText("1件が見つかりました。")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 3, name: "リーマン面ゼミ" }),
+  ).toHaveCount(0);
+});
+
 test("ゼミ運営担当者は企画申請を確認・承認できる", async ({ page }) => {
   let status = "pending";
   await page.route("**/api/admin/**", async (route) => {

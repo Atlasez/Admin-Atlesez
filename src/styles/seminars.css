@@ -379,6 +379,127 @@
   gap: var(--space-1);
 }
 
+.seminar-catalog {
+  max-width: 62rem;
+  margin-inline: auto;
+}
+
+.seminar-catalog-lead {
+  padding-block: var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.seminar-catalog-lead h1 {
+  font-size: calc(2rem * var(--text-scale));
+}
+
+.seminar-catalog-lead p {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+}
+
+.seminar-catalog-search {
+  max-width: 38rem;
+  margin-block: var(--space-4) var(--space-5);
+}
+
+.seminar-catalog-search label {
+  margin-bottom: var(--space-1);
+}
+
+.seminar-catalog-search p {
+  margin-top: var(--space-1);
+}
+
+.seminar-catalog-groups {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.seminar-catalog-group-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--accent-primary);
+}
+
+.seminar-catalog-group-heading h2 {
+  font-size: calc(1.35rem * var(--text-scale));
+}
+
+.seminar-catalog-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.seminar-catalog-card {
+  min-width: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  background: var(--background-primary);
+}
+
+.seminar-catalog-card-body {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 100%;
+  padding: var(--space-3);
+  color: var(--text-primary);
+}
+
+.seminar-catalog-number,
+.seminar-catalog-theme,
+.seminar-catalog-phase {
+  color: var(--text-secondary);
+  font-size: calc(0.88rem * var(--text-scale));
+}
+
+.seminar-catalog-card h3 {
+  font-size: calc(1.08rem * var(--text-scale));
+}
+
+.seminar-catalog-theme {
+  overflow-wrap: anywhere;
+}
+
+.seminar-catalog-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.seminar-catalog-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.7rem;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--accent-primary);
+  border-radius: 999px;
+  color: var(--accent-primary);
+  font-size: calc(0.82rem * var(--text-scale));
+  font-weight: 650;
+}
+
+.seminar-catalog-empty {
+  margin-top: var(--space-3);
+  color: var(--text-secondary);
+}
+
+.seminar-catalog-expanded {
+  border-top: 1px solid var(--border-default);
+}
+
+.seminar-catalog-expanded summary {
+  color: var(--accent-primary);
+}
+
 @media (max-width: 767px) {
   .seminar-header-inner {
     gap: var(--space-1) var(--space-2);
@@ -430,6 +551,10 @@
   .seminar-columns,
   .seminar-form-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .seminar-catalog-lead h1 {
+    font-size: calc(1.55rem * var(--text-scale));
   }
 }
 

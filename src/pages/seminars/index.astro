@@ -1,0 +1,39 @@
+---
+import SeminarLayout from "../../layouts/SeminarLayout.astro";
+---
+
+<SeminarLayout
+  title="ゼミ一覧"
+  page="catalog"
+  catalogHref="/seminars/"
+  noindex
+>
+  <div class="seminar-catalog">
+    <header class="seminar-catalog-lead">
+      <h1>ゼミ一覧</h1>
+      <p>募集状況ごとに掲載しています。募集を終えたゼミも確認できます。</p>
+    </header>
+
+    <section class="seminar-catalog-search" aria-label="ゼミを検索">
+      <label for="seminar-catalog-query">ゼミ名・テーマ・教材で検索</label>
+      <input
+        id="seminar-catalog-query"
+        type="search"
+        data-seminar-catalog-query
+        placeholder="例：流体力学、集合と位相"
+        autocomplete="off"
+      />
+      <p class="seminar-muted" data-seminar-catalog-count role="status" aria-live="polite">
+        ゼミ一覧を読み込んでいます。
+      </p>
+    </section>
+
+    <div class="seminar-catalog-groups" data-seminar-catalog-results aria-busy="true">
+      <p role="status">ゼミ一覧を読み込んでいます。</p>
+    </div>
+  </div>
+
+  <script>
+    import "../../scripts/seminars/catalog";
+  </script>
+</SeminarLayout>

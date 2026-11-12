@@ -21565,7 +21565,7 @@ const legacySeminarReviewPage = (pathname: string) =>
 const seminarPage = (pathname: string) =>
   /^\/seminars(?:\/(?:detail|propose|join|member|workspace))?\/?$/.test(pathname);
 const publicSeminarPage = (pathname: string) =>
-  /^\/seminars(?:\/(?:detail|propose|join))?\/?$/.test(pathname);
+  /^\/seminars\/(?:detail|propose|join)\/?$/.test(pathname);
 
 const safePublicSeminarReturnTarget = (candidate: string) => {
   let target: URL;
@@ -23650,6 +23650,8 @@ async function handleAdminRequest(
   if (request.method === "GET" || request.method === "HEAD") {
     if (legacySeminarReviewPage(url.pathname))
       return new Response(null, { status: 302, headers: { location: SEMINAR_REVIEW_PATH } });
+    if (url.pathname === "/seminars")
+      return Response.redirect(new URL(`/seminars/${url.search}`, url.origin), 308);
     if (publicSeminarPage(url.pathname)) {
       const pathname = url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`;
       return Response.redirect(
