@@ -121,6 +121,14 @@ export async function dispatchApplicationEmails(
   // 冪等性キーをproviderへ初めて渡す時刻を保持し、応募受付から初回配信までの
   // 待ち時間が長くても、実際のキー保持期間を超えるまでは同じキーで再試行する。
   const limit = Math.min(100, Math.max(1, options.limit ?? 100));
+  const reconciliationFilter =
+    options.channel === "seminar"
+      ? ""
+      : `AND EXISTS (
+        SELECT 1 FROM atlasez_member_applications a
+         WHERE a.id=${table}.application_id
+           AND a.intake_reconciliation_required=0
+      )`;
   const outsideIdempotencyWindow = (await env.REPORTS.prepare(
     `UPDATE ${table}
         SET status='failed',claim_token=NULL,claimed_at=NULL,
@@ -165,11 +173,7 @@ export async function dispatchApplicationEmails(
         OR (status='sending' AND first_attempt_at>?
             AND COALESCE(claimed_at,updated_at)<=?)
       )
-      AND EXISTS (
-        SELECT 1 FROM atlasez_member_applications a
-         WHERE a.id=atlasez_application_email_deliveries.application_id
-           AND a.intake_reconciliation_required=0
-      )
+      ${reconciliationFilter}
       ORDER BY CASE WHEN status='sending' THEN COALESCE(claimed_at,updated_at) ELSE next_attempt_at END ASC,
                created_at ASC LIMIT ?`,
   )
