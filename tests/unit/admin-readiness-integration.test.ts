@@ -144,13 +144,6 @@ function calendarAuditMember(db: DatabaseSync, email: string) {
   ).run(email, now);
 }
 
-const creatorAuditArticle = {
-  locale: "ja",
-  subject: "mathematics",
-  category: "ring-theory",
-  slug: "ring-definition",
-};
-
 function creatorAuditGithubFixture(env: ReturnType<typeof environment>["env"]) {
   Object.assign(env, {
     GITHUB_PUBLISH_TOKEN: "isolated-test-token",
@@ -316,334 +309,66 @@ it("運営作成原稿の一覧・詳細は個人プロフィールを作者に�
   expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
-it("公開記事registerは実SQLで運営作成・操作者記録を分離し、再登録とカタログ観測でも取り込み根拠を維持する", async () => {
-  const { db, request, env } = environment();
-  creatorAuditProfile(db);
-  const githubFetch = creatorAuditGithubFixture(env);
-  const registeredResponse = await request(
-    "/api/admin/editor/catalog/register",
-    "global@atlasez.test",
-    creatorAuditArticle,
-  );
-  expect(
-    registeredResponse.status,
-    await registeredResponse.clone().text(),
-  ).toBe(201);
-  const registered = (await registeredResponse.json()) as {
-    documentId: string;
-  };
-  const expected = {
-    id: registered.documentId,
-    creator_kind: "organization",
-    source_article_id: "ja-mathematics-ring-definition",
-    created_by: "global@atlasez.test",
-    updated_by: "global@atlasez.test",
-    status: "draft",
-  };
-  expect(
-    db
-      .prepare("SELECT * FROM editorial_documents WHERE id=?")
-      .get(registered.documentId),
-  ).toMatchObject(expected);
-  for (const path of [
-    `/api/admin/editor/documents/${registered.documentId}`,
-    "/api/admin/editor/documents",
-  ]) {
-    const response = await request(path, "global@atlasez.test");
-    expect(response.status, await response.clone().text()).toBe(200);
-    const payload = (await response.json()) as {
-      document?: Record<string, unknown>;
-      documents?: Array<Record<string, unknown>>;
-    };
-    expect(payload.document ?? payload.documents?.[0]).toMatchObject({
-      ...expected,
-      created_by_display_name: "Atlasez運営",
-      created_by_avatar_url: "",
-      updated_by_display_name: "個人の表示名",
-    });
-  }
-  const repeated = await request(
-    "/api/admin/editor/catalog/register",
-    "global@atlasez.test",
-    creatorAuditArticle,
-  );
-  expect(repeated.status, await repeated.clone().text()).toBe(200);
-  expect(await repeated.json()).toMatchObject({
-    documentId: registered.documentId,
-  });
-  const observed = await request(
-    "/api/admin/editor/catalog",
-    "global@atlasez.test",
-  );
-  expect(observed.status, await observed.clone().text()).toBe(200);
-  expect(
-    db
-      .prepare(
-        "SELECT document_id,registration_method,registered_by FROM editorial_article_catalog",
-      )
-      .all(),
-  ).toEqual([
-    {
-      document_id: registered.documentId,
-      registration_method: "public-article-adoption",
-      registered_by: "global@atlasez.test",
-    },
-  ]);
-  expect(
-    db.prepare("SELECT COUNT(*) AS count FROM editorial_documents").get(),
-  ).toEqual({ count: 1 });
-  const workspace = await request(
-    "/api/admin/personal-workspace",
-    "global@atlasez.test",
-  );
-  expect(await workspace.json()).toMatchObject({ documents: [] });
-  expect(githubFetch).toHaveBeenCalled();
-  expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-});
-
-it("旧jaディレクトリのカタログ行をcanonicalなjpn pathへ寄せて公開記事を登録する", async () => {
-  const { db, request, env } = environment();
-  creatorAuditProfile(db);
-  creatorAuditGithubFixture(env);
-  const now = new Date().toISOString();
-  db.prepare(
-    `INSERT INTO editorial_article_catalog
-      (path,identity_key,repository,locale,subject,category,slug,source_article_id,title,last_seen_at,registration_method)
-     VALUES ('src/content/articles/ja/mathematics/ring-theory/ring-definition.md',?,'Atlasez/Atlasez01','ja','mathematics','ring-theory','ring-definition','ja-mathematics-ring-definition','環の定義',?,'catalog-observation')`,
-  ).run("ja/mathematics/ring-theory/ring-definition", now);
-
-  const response = await request(
-    "/api/admin/editor/catalog/register",
-    "global@atlasez.test",
-    creatorAuditArticle,
-  );
-  expect(response.status, await response.clone().text()).toBe(201);
-  const { documentId } = (await response.json()) as { documentId: string };
-  expect(
-    db
-      .prepare(
-        "SELECT path,document_id,registration_method,registered_by FROM editorial_article_catalog",
-      )
-      .all(),
-  ).toEqual([
-    {
-      path: "src/content/articles/jpn/mathematics/ring-theory/ring-definition.md",
-      document_id: documentId,
-      registration_method: "public-article-adoption",
-      registered_by: "global@atlasez.test",
-    },
-  ]);
-  expect(
-    db.prepare("SELECT COUNT(*) AS count FROM editorial_documents").get(),
-  ).toEqual({ count: 1 });
-  expect(
-    db.prepare("SELECT COUNT(*) AS count FROM editorial_comments").get(),
-  ).toEqual({ count: 0 });
-  expect(
-    db.prepare("SELECT COUNT(*) AS count FROM editorial_tasks").get(),
-  ).toEqual({ count: 0 });
-});
-
-it("canonical原稿と同じpathの更新案があっても未登録記事をcanonical原稿へ紐付ける", async () => {
-  const { db, request, env } = environment();
-  creatorAuditProfile(db);
-  creatorAuditGithubFixture(env);
-  const now = new Date().toISOString();
-  const canonicalId = "a4a6c053-58c9-4c22-9df3-e4567720d3f5";
-  const proposalId = "19383967-06dd-4407-95c8-09fcf7ee3e8c";
-  const insert = db.prepare(
-    `INSERT INTO editorial_documents
-      (id,creator_kind,document_kind,base_document_id,source_article_id,subject,category,locale,slug,title,concept_id,body,status,created_by,updated_by,created_at,updated_at)
-     VALUES (?,'organization',?,?,?,'mathematics','ring-theory','ja','ring-definition',?,'math.ring-theory.ring-definition','保持する原稿本文','draft','global@atlasez.test','global@atlasez.test',?,?)`,
-  );
-  insert.run(canonicalId, "canonical", null, null, "運営の正規原稿", now, now);
-  insert.run(
-    proposalId,
-    "update-proposal",
-    canonicalId,
-    "ja-mathematics-ring-definition",
-    "更新案",
-    now,
-    now,
-  );
-
-  const response = await request(
-    "/api/admin/editor/catalog/register",
-    "global@atlasez.test",
-    creatorAuditArticle,
-  );
-  expect(response.status, await response.clone().text()).toBe(200);
-  expect(await response.json()).toMatchObject({
-    ok: true,
-    registered: true,
-    documentId: canonicalId,
-  });
-  expect(
-    db
-      .prepare("SELECT source_article_id FROM editorial_documents WHERE id=?")
-      .get(canonicalId),
-  ).toEqual({ source_article_id: "ja-mathematics-ring-definition" });
-  expect(
-    db
-      .prepare("SELECT source_article_id FROM editorial_documents WHERE id=?")
-      .get(proposalId),
-  ).toEqual({ source_article_id: "ja-mathematics-ring-definition" });
-  expect(
-    db.prepare("SELECT COUNT(*) AS count FROM editorial_comments").get(),
-  ).toEqual({ count: 0 });
-  expect(
-    db.prepare("SELECT COUNT(*) AS count FROM editorial_tasks").get(),
-  ).toEqual({ count: 0 });
-});
-
-it("公開記事IDが別identityの原稿にある場合は未登録と誤表示せず競合として返す", async () => {
+it("既存の公開記事と運営原稿のsource_article_id連携をカタログから読める", async () => {
   const { db, request, env } = environment();
   creatorAuditGithubFixture(env);
-  const documentId = "850a1ce1-1123-4b27-b92c-d9276a9e2a01";
+  const documentId = "630fac16-45e3-5742-a023-5f060786f130";
   const now = new Date().toISOString();
   db.prepare(
     `INSERT INTO editorial_documents
-      (id,source_article_id,subject,category,locale,slug,title,concept_id,body,created_by,updated_by,created_at,updated_at)
-     VALUES (?, 'ja-mathematics-ring-definition','mathematics','overview','ja','ring-definition','環の定義','math.overview.ring-definition','保持する本文','global@atlasez.test','global@atlasez.test',?,?)`,
-  ).run(documentId, now, now);
+      (id,source_article_id,subject,category,locale,slug,title,summary,concept_id,body,status,created_by,updated_by,created_at,updated_at)
+     VALUES (?,?,'mathematics','ring-theory','ja','ring-definition','環の定義','運営原稿','math.ring-theory.ring-definition','運営本文','draft','global@atlasez.test','global@atlasez.test',?,?)`,
+  ).run(documentId, "ja-mathematics-ring-definition", now, now);
 
   const response = await request(
     "/api/admin/editor/catalog",
     "global@atlasez.test",
   );
   expect(response.status, await response.clone().text()).toBe(200);
-  const payload = (await response.json()) as {
+  const result = (await response.json()) as {
     catalog: Array<Record<string, unknown>>;
   };
-  expect(
-    payload.catalog.find(
-      (entry) =>
-        entry.identity_key === "ja/mathematics/ring-theory/ring-definition",
-    ),
-  ).toMatchObject({
-    state: "identity-conflict",
-    editorial_document_id: documentId,
-  });
-
-  const diagnostics = await request(
-    "/api/admin/editor/catalog/diagnostics",
-    "global@atlasez.test",
-  );
-  expect(diagnostics.status).toBe(200);
-  const result = (await diagnostics.json()) as {
-    issues: Array<Record<string, unknown>>;
-  };
-  expect(
-    result.issues.filter(
-      (issue) =>
-        issue.identity_key === "ja/mathematics/ring-theory/ring-definition",
-    ),
-  ).toEqual(
+  expect(result.catalog).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        code: "identity-mismatch",
-        severity: "error",
-        document_id: documentId,
+        identity_key: "ja/mathematics/ring-theory/ring-definition",
+        source_article_id: "ja-mathematics-ring-definition",
+        state: "managed",
+        editorial_document_id: documentId,
+        public_status: "published",
       }),
     ]),
   );
   expect(
-    result.issues.some(
-      (issue) =>
-        issue.identity_key === "ja/mathematics/ring-theory/ring-definition" &&
-        issue.code === "unregistered",
-    ),
-  ).toBe(false);
-});
-
-it("公開記事の一括登録は重複を除き、競合記事があっても他記事を続け、通知系レコードを作らない", async () => {
-  const { db, request, env } = environment();
-  creatorAuditProfile(db);
-  creatorAuditGithubFixture(env);
-  const response = await request(
-    "/api/admin/editor/catalog/register-bulk",
-    "global@atlasez.test",
-    {
-      articles: [
-        creatorAuditArticle,
-        creatorAuditArticle,
-        { ...creatorAuditArticle, slug: "unavailable-article" },
-      ],
-    },
-  );
-  expect(response.status, await response.clone().text()).toBe(200);
-  const result = (await response.json()) as {
-    attempted: number;
-    results: Array<{ status: string }>;
-  };
-  expect(result.attempted).toBe(2);
-  expect(result.results.map((item) => item.status)).toEqual([
-    "registered",
-    "failed",
-  ]);
-  expect(
     db.prepare("SELECT COUNT(*) AS count FROM editorial_documents").get(),
   ).toEqual({ count: 1 });
+  expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+});
+
+it("公開記事カタログの移行用診断・登録APIは廃止済み", async () => {
+  const { db, request } = environment();
+  const retiredRoutes = [
+    ["/api/admin/editor/catalog/diagnostics", undefined],
+    ["/api/admin/editor/catalog/register", {}],
+    ["/api/admin/editor/catalog/register-bulk", { articles: [] }],
+  ] as const;
+
+  for (const [path, body] of retiredRoutes) {
+    const response = await request(path, "global@atlasez.test", body);
+    expect(response.status, path).toBe(404);
+  }
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_documents").get(),
+  ).toEqual({ count: 0 });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_article_catalog").get(),
+  ).toEqual({ count: 0 });
   expect(
     db.prepare("SELECT COUNT(*) AS count FROM editorial_comments").get(),
   ).toEqual({ count: 0 });
   expect(
     db.prepare("SELECT COUNT(*) AS count FROM editorial_tasks").get(),
   ).toEqual({ count: 0 });
-});
-
-it("既存の個人原稿への公開記事linkは本文・作者種別・操作者を維持する", async () => {
-  const { db, request, env } = environment();
-  creatorAuditProfile(db);
-  creatorAuditGithubFixture(env);
-  const id = "850a1ce1-1123-4b27-b92c-d9276a9e2ee5";
-  const now = new Date().toISOString();
-  db.prepare(
-    "INSERT INTO editorial_documents(id,subject,category,slug,title,concept_id,body,created_by,updated_by,created_at,updated_at) VALUES (?,'mathematics','ring-theory','ring-definition','個人の元原稿','math.ring-theory.ring-definition','個人の本文を維持','global@atlasez.test','global@atlasez.test',?,?)",
-  ).run(id, now, now);
-  const response = await request(
-    "/api/admin/editor/catalog/register",
-    "global@atlasez.test",
-    creatorAuditArticle,
-  );
-  expect(response.status, await response.clone().text()).toBe(200);
-  expect(await response.json()).toMatchObject({
-    documentId: id,
-    bodySeed: "existing-editorial-document-preserved",
-    publicationStarted: false,
-  });
-  expect(
-    db.prepare("SELECT * FROM editorial_documents WHERE id=?").get(id),
-  ).toMatchObject({
-    creator_kind: "person",
-    created_by: "global@atlasez.test",
-    title: "個人の元原稿",
-    body: "個人の本文を維持",
-    source_article_id: "ja-mathematics-ring-definition",
-  });
-  const detail = await request(
-    `/api/admin/editor/documents/${id}`,
-    "global@atlasez.test",
-  );
-  expect(detail.status).toBe(200);
-  expect(await detail.json()).toMatchObject({
-    document: {
-      creator_kind: "person",
-      created_by_display_name: "個人の表示名",
-      created_by_avatar_url: "https://example.test/person.png",
-    },
-  });
-  const workspace = await request(
-    "/api/admin/personal-workspace",
-    "global@atlasez.test",
-  );
-  expect(await workspace.json()).toMatchObject({ documents: [{ id }] });
-  expect(
-    db
-      .prepare("SELECT registration_method FROM editorial_article_catalog")
-      .get(),
-  ).toEqual({ registration_method: "public-article-link" });
-  expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
 it("ポータルの個人期限をUTCに正規化し表示タイムゾーンの今日・翌日境界を集計する", async () => {

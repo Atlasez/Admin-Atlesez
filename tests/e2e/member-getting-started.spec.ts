@@ -26,8 +26,16 @@ for (const width of [1280, 390]) {
       "portal",
     );
     await expect(
-      page.getByRole("link", { name: "マイページ", exact: true }).last(),
-    ).toHaveAttribute("href", "/admin/member-profile/");
+      page.locator('#admin-primary-nav [data-admin-page="member-profile"]'),
+    ).toHaveCount(0);
+    await expect(page.locator("[data-admin-account-profile]")).toHaveAttribute(
+      "href",
+      "/admin/member-profile/",
+    );
+    await expect(page.locator("[data-admin-account-profile]")).toHaveAttribute(
+      "aria-label",
+      "マイページを開く",
+    );
     await expect(
       page.getByRole("link", { name: "タスクテンプレート", exact: true }),
     ).toHaveAttribute("href", "/admin/task-templates/");

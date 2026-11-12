@@ -67,5 +67,26 @@ describe("article preview parity source of truth", () => {
       expect(editor).toContain(variable);
       expect(articleContent).toContain(variable);
     }
+    expect(editor).toContain(
+      '.published-article-preview .article-body[data-article-subject="mathematics"] details.proof-details.folding { border:0; border-radius:0;',
+    );
+    expect(articleContent).toMatch(
+      /\.article-body\[data-article-subject="mathematics"\]\s+details\.proof-details\.folding\s*\{\s*border:\s*0;/,
+    );
+    expect(articleContent).toMatch(
+      /\.article-body\[data-article-subject="mathematics"\]\s+\.proof-details\s*>\s*summary\s*\{[^}]*display:\s*inline-block;/s,
+    );
+    expect(articleContent).toMatch(
+      /\.article-body\[data-article-subject="mathematics"\]\s+\.proof-details\s*>\s*summary::before\s*\{[^}]*transform:\s*rotate\(-45deg\);/s,
+    );
+    expect(articleContent).toMatch(
+      /\.article-body\[data-article-subject="mathematics"\]\s+\.proof-details\[open\]\s*>\s*summary::before\s*\{[^}]*transform:\s*rotate\(45deg\);/s,
+    );
+    expect(editor).toContain(
+      ".published-article-preview .proof-details > summary { background:var(--background-secondary); border:1px solid var(--border); border-radius:.4rem; cursor:pointer; display:inline-block;",
+    );
+    expect(editor).toContain(
+      ".published-article-preview .proof-details[open] > summary::before { transform:rotate(45deg); }",
+    );
   });
 });

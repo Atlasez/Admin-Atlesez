@@ -37,6 +37,19 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
           </form>
         </div>
       </details>
+      <details class="legacy-member-migration action-card">
+        <summary><span class="action-card__summary-copy"><small>既存の所属から移行</small><strong>既存運営メンバーの移行</strong></span><span class="action-card__chevron" aria-hidden="true">⌄</span></summary>
+        <div class="legacy-member-migration__body">
+          <p>すでに運営・Atlasezへ参加している人を運営サイトへ登録します。新規応募や自己紹介の代わりにはせず、自己紹介が未完了なら本人が後から保存します。この移行処理はDiscordへ接続・同期しません。</p>
+          <label>CSVファイル（任意）<input type="file" accept=".csv,text/csv" data-legacy-file /></label>
+          <label>移行するメンバー（CSV）<textarea data-legacy-csv rows="6" spellcheck="false" placeholder="email,subjects,projectManager,sourceNote&#10;editor@example.com,chemistry,true,既存の運営名簿で確認"></textarea></label>
+          <small>担当分野はslugをセミコロン区切りで指定します（例: chemistry）。全分野権限は *。運営内運営はprojectManager列をtrueにします。根拠には既存名簿で確認したことなど、個人情報を含まない短い説明を記録してください。</small>
+          <label class="legacy-member-migration__confirm"><input type="checkbox" data-legacy-confirm />対象者全員がすでに運営またはAtlasezへ参加していることを確認しました</label>
+          <button type="button" class="button-primary" data-legacy-preview>対象者と権限をプレビュー</button>
+          <output class="legacy-member-migration__message" data-legacy-message aria-live="polite"></output>
+          <div class="legacy-member-migration__preview" data-legacy-preview-result aria-live="polite"></div>
+        </div>
+      </details>
       <div class="member-toolbar" aria-label="参加者の検索と絞り込み">
         <label class="member-toolbar__search">参加者を検索<input type="search" data-member-search placeholder="名前・メールアドレスで検索" autocomplete="off" /></label>
         <label>表示を絞り込む<select data-member-filter><option value="all">すべての参加者</option><option value="unconnected">Discord未連携</option><option value="no-roles">Discord役職なし</option><option value="has-roles">Discord役職あり</option></select></label>
@@ -135,11 +148,18 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 <script>
     import { lockAdminForm } from "../../scripts/admin-form-submit-lock";
     import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+    import { parseLegacyMemberMigrationCsv } from "../../lib/admin-legacy-member-migration-csv";
   const initializeMemberAdmin = () => {
   const root = document.querySelector<HTMLElement>("[data-member-admin]");
   if (root && root.dataset.initialized !== "true") {
     root.dataset.initialized = "true";
     const form = root.querySelector<HTMLFormElement>("[data-add-form]")!;
+    const legacyCsv = root.querySelector<HTMLTextAreaElement>("[data-legacy-csv]")!;
+    const legacyFile = root.querySelector<HTMLInputElement>("[data-legacy-file]")!;
+    const legacyConfirm = root.querySelector<HTMLInputElement>("[data-legacy-confirm]")!;
+    const legacyPreviewButton = root.querySelector<HTMLButtonElement>("[data-legacy-preview]")!;
+    const legacyMessage = root.querySelector<HTMLOutputElement>("[data-legacy-message]")!;
+    const legacyPreviewResult = root.querySelector<HTMLElement>("[data-legacy-preview-result]")!;
     const list = root.querySelector<HTMLElement>("[data-member-list]")!;
     const memberPagination = root.querySelector<HTMLElement>("[data-member-pagination]")!;
     const memberPaginationSummary = root.querySelector<HTMLElement>("[data-member-pagination-summary]")!;
@@ -184,6 +204,60 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const esc = (value: string) => value.replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char] ?? char));
     const subjectLabels = new Map(Array.from(form.querySelectorAll("option")).map(option => [option.value, option.textContent ?? option.value]));
     const workflowSubjectLabels = new Map(Array.from(subjectLabels.entries()).map(([value, label]) => [value, label.replace(/（担当）$/, "")]));
+    let legacyMigrationPreview: { batchId: string; members: any[] } | null = null;
+    const clearLegacyPreview = () => {
+      legacyMigrationPreview = null;
+      legacyPreviewResult.replaceChildren();
+      legacyMessage.value = "";
+      legacyMessage.dataset.state = "";
+    };
+    const appendLegacyLine = (parent: HTMLElement, text: string, tag = "p") => {
+      const node = document.createElement(tag);
+      node.textContent = text;
+      parent.append(node);
+      return node;
+    };
+    const renderLegacyPreview = (members: any[]) => {
+      legacyPreviewResult.replaceChildren();
+      const list = document.createElement("ol");
+      list.className = "legacy-member-migration__rows";
+      for (const member of members) {
+        const item = document.createElement("li");
+        const title = document.createElement("strong");
+        title.textContent = String(member.email);
+        item.append(title);
+        const existing = (member.existingSubjects ?? []).map((subject: string) => subjectLabels.get(subject) ?? subject);
+        const resulting = (member.resultingSubjects ?? []).map((subject: string) => subjectLabels.get(subject) ?? subject);
+        const added = (member.addedSubjects ?? []).map((subject: string) => subjectLabels.get(subject) ?? subject);
+        appendLegacyLine(item, `現在の担当権限: ${existing.length ? existing.join("、") : "なし"}`);
+        appendLegacyLine(item, `追加する担当権限: ${added.length ? added.join("、") : "なし（すでに登録済み）"}`);
+        appendLegacyLine(item, `移行後の担当権限: ${resulting.length ? resulting.join("、") : "なし"}`);
+        appendLegacyLine(item, `アトラスの役割: ${member.existingProjectRole === "manager" ? "現在は運営内運営" : member.existingProjectRole === "member" ? "現在は運営メンバー" : "現在は未所属"} → ${member.resultingProjectRole === "manager" ? "運営内運営" : "運営メンバー"}${member.projectManager ? "（独立任命）" : ""}`);
+        appendLegacyLine(item, `自己紹介: ${member.hasPublicIntro && member.hasProjectIntro ? "両方保存済み" : "未完了分は本人が後から保存"}`);
+        appendLegacyLine(item, "Discord: 接続・同期しません");
+        list.append(item);
+      }
+      legacyPreviewResult.append(list);
+      const apply = document.createElement("button");
+      apply.type = "button";
+      apply.className = "button-primary";
+      apply.dataset.legacyApply = "true";
+      apply.textContent = `${members.length}人を運営サイトへ移行`;
+      legacyPreviewResult.append(apply);
+    };
+    const renderLegacyResults = (results: any[]) => {
+      legacyPreviewResult.replaceChildren();
+      const list = document.createElement("ul");
+      list.className = "legacy-member-migration__rows";
+      for (const result of results) {
+        const item = document.createElement("li");
+        const status = result.status === "migrated" ? "移行しました" : result.status === "unchanged" ? "変更なし" : "移行できませんでした";
+        appendLegacyLine(item, `${String(result.email)}: ${status}${result.profileIntroPending ? "。自己紹介は本人の保存待ち" : ""}`, "strong");
+        if (result.error) appendLegacyLine(item, String(result.error));
+        list.append(item);
+      }
+      legacyPreviewResult.append(list);
+    };
     const subjectNames = (values: string[]) => values.map(value => workflowSubjectLabels.get(value) ?? value).filter(Boolean);
     const scopeMarkup = (values: string[], empty = "なし") => {
       const unique = Array.from(new Set(values));
@@ -409,6 +483,98 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     };
     memberRetry = createAdminLoadRetry(root, () => load(), "参加者一覧を読み込めませんでした。", { scope: "members" });
     memberLoadMore.addEventListener("click", () => { void load(true); });
+    legacyCsv.addEventListener("input", clearLegacyPreview);
+    legacyConfirm.addEventListener("change", clearLegacyPreview);
+    legacyFile.addEventListener("change", async () => {
+      const file = legacyFile.files?.[0];
+      if (!file) return;
+      try {
+        legacyCsv.value = await file.text();
+        clearLegacyPreview();
+      } catch {
+        legacyMessage.value = "CSVファイルを読み込めませんでした。";
+        legacyMessage.dataset.state = "error";
+      }
+    });
+    legacyPreviewButton.addEventListener("click", async () => {
+      if (!legacyConfirm.checked) {
+        legacyMessage.value = "既存の運営・Atlasezメンバーであることを確認してください。";
+        legacyMessage.dataset.state = "error";
+        return;
+      }
+      try {
+        const members = parseLegacyMemberMigrationCsv(legacyCsv.value);
+        const unknown = members.flatMap((member) => member.subjects).filter((subject) => subject !== "*" && !subjectLabels.has(subject));
+        if (unknown.length) throw new Error(`担当分野のslugを確認してください: ${Array.from(new Set(unknown)).join("、")}`);
+        legacyPreviewButton.disabled = true;
+        legacyPreviewButton.textContent = "確認中…";
+        legacyMessage.value = "現在の所属・権限を読み取り中です。Discordには接続しません。";
+        legacyMessage.dataset.state = "";
+        const batchId = crypto.randomUUID();
+        const response = await fetch("/api/admin/member-migrations", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ mode: "preview", batchId, confirmedExistingMembers: true, members }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error ?? "移行対象を確認できませんでした。");
+        legacyMigrationPreview = { batchId: String(data.batchId), members: Array.isArray(data.members) ? data.members : [] };
+        renderLegacyPreview(legacyMigrationPreview.members);
+        legacyMessage.value = `${legacyMigrationPreview.members.length}人分を確認しました。内容を確認してから移行を実行してください。`;
+      } catch (error) {
+        legacyMigrationPreview = null;
+        legacyPreviewResult.replaceChildren();
+        legacyMessage.value = error instanceof Error ? error.message : "移行対象を確認できませんでした。";
+        legacyMessage.dataset.state = "error";
+      } finally {
+        legacyPreviewButton.disabled = false;
+        legacyPreviewButton.textContent = "対象者と権限をプレビュー";
+      }
+    });
+    legacyPreviewResult.addEventListener("click", async (event) => {
+      const apply = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-legacy-apply]");
+      if (!apply || !legacyMigrationPreview) return;
+      if (!legacyConfirm.checked) {
+        legacyMessage.value = "既存の運営・Atlasezメンバーであることを再確認してください。";
+        legacyMessage.dataset.state = "error";
+        clearLegacyPreview();
+        return;
+      }
+      if (!confirm(`${legacyMigrationPreview.members.length}人を既存メンバーとして運営サイトへ移行します。プロフィールが未完了の場合は本人が後から保存します。Discordには接続・同期しません。実行しますか？`)) return;
+      apply.disabled = true;
+      legacyPreviewButton.disabled = true;
+      legacyMessage.value = "移行を保存しています…";
+      legacyMessage.dataset.state = "";
+      try {
+        const response = await fetch("/api/admin/member-migrations", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            mode: "apply",
+            batchId: legacyMigrationPreview.batchId,
+            confirmedExistingMembers: true,
+            members: legacyMigrationPreview.members.map(({ email, subjects, projectManager, sourceNote, expected }) => ({ email, subjects, projectManager, sourceNote, expected })),
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error ?? "移行を保存できませんでした。");
+        legacyMigrationPreview = null;
+        renderLegacyResults(Array.isArray(data.results) ? data.results : []);
+        legacyMessage.value = data.ok ? "移行を記録しました。Discordへの接続・同期は行っていません。" : "一部の行を保存できませんでした。エラーを確認し、最新状態を再プレビューしてください。";
+        legacyMessage.dataset.state = data.ok ? "" : "error";
+        await load();
+        root.querySelector<HTMLButtonElement>("[data-manager-grants-reload]")?.click();
+      } catch (error) {
+        legacyMigrationPreview = null;
+        legacyPreviewResult.replaceChildren();
+        legacyMessage.value = error instanceof Error ? error.message : "移行を保存できませんでした。最新状態を再プレビューしてください。";
+        legacyMessage.dataset.state = "error";
+      } finally {
+        legacyPreviewButton.disabled = false;
+      }
+    });
     memberSearch.addEventListener("input", () => { memberQuery = memberSearch.value; render(filteredMembers()); });
     memberFilter.addEventListener("change", () => { memberViewFilter = memberFilter.value; render(filteredMembers()); });
     memberFilterReset.addEventListener("click", () => { memberQuery = ""; memberViewFilter = "all"; memberSearch.value = ""; memberFilter.value = "all"; render(filteredMembers()); memberSearch.focus(); });

@@ -26,10 +26,23 @@ const render = (
   select: HTMLSelectElement,
   list: HTMLElement,
   count: HTMLElement,
+  renderedOptions: { signature: string | null },
 ) => {
   const options = Array.from(select.options).filter(
     (option) => !option.disabled && option.value,
   );
+  const signature = JSON.stringify(
+    options.map((option) => ({
+      value: option.value,
+      label: option.textContent?.trim() || option.value,
+      disabled: option.disabled,
+    })),
+  );
+  if (renderedOptions.signature === signature) {
+    syncFromNative(select, list, count);
+    return;
+  }
+  renderedOptions.signature = signature;
   list.replaceChildren();
   if (!options.length) {
     list.textContent = "選択できる項目がありません。";
@@ -91,8 +104,11 @@ const enhance = (select: HTMLSelectElement) => {
   select.tabIndex = -1;
   select.parentElement?.insertBefore(wrapper, select);
   wrapper.append(list, footer);
-  render(select, list, count);
-  const observer = new MutationObserver(() => render(select, list, count));
+  const renderedOptions = { signature: null as string | null };
+  render(select, list, count, renderedOptions);
+  const observer = new MutationObserver(() =>
+    render(select, list, count, renderedOptions),
+  );
   observer.observe(select, { childList: true, subtree: true });
 };
 

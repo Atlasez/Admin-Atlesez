@@ -65,6 +65,10 @@ function initialize() {
   let filter = ["all", "created", "assigned"].includes(initialView ?? "")
     ? initialView!
     : "assigned";
+  const initialSearch = initialParams.get("q");
+  if (initialSearch !== null) search.value = initialSearch;
+  showArchived.checked = initialParams.get("includeArchived") === "1";
+  showTestData.checked = initialParams.get("includeTestData") === "1";
   let selectedProjects: Set<string> | null = initialParams.has("project")
     ? new Set(initialParams.getAll("project"))
     : null;
@@ -75,6 +79,27 @@ function initialize() {
     const value = initialParams.get(name);
     if (value && [...select.options].some((option) => option.value === value))
       select.value = value;
+  }
+  const restoreScrollParam = initialParams.get("__returnScroll");
+  const restoreCountParam = initialParams.get("__returnCount");
+  const restoreScrollY =
+    restoreScrollParam !== null && Number.isFinite(Number(restoreScrollParam))
+      ? Math.max(0, Number(restoreScrollParam))
+      : null;
+  const restoreTaskCount =
+    restoreCountParam !== null && Number.isFinite(Number(restoreCountParam))
+      ? Math.max(0, Math.floor(Number(restoreCountParam)))
+      : null;
+  if (restoreScrollParam !== null || restoreCountParam !== null) {
+    const cleanParams = new URLSearchParams(initialParams);
+    cleanParams.delete("__returnScroll");
+    cleanParams.delete("__returnCount");
+    const cleanSearch = cleanParams.toString();
+    history.replaceState(
+      history.state,
+      "",
+      `${location.pathname}${cleanSearch ? `?${cleanSearch}` : ""}${location.hash}`,
+    );
   }
   let nextCursor: string | null = null;
   let requestVersion = 0;
@@ -131,6 +156,24 @@ function initialize() {
     }
     if (focusId) params.set("focus", focusId);
     return params;
+  };
+  const taskListReturnUrl = () => {
+    const params = new URLSearchParams({ view: filter });
+    if (search.value.trim()) params.set("q", search.value.trim());
+    if (statusFilter.value !== "all") params.set("status", statusFilter.value);
+    if (dueFilter.value !== "all") params.set("due", dueFilter.value);
+    if (showArchived.checked) params.set("includeArchived", "1");
+    if (showTestData.checked) params.set("includeTestData", "1");
+    if (selectedProjects) {
+      if (selectedProjects.size) {
+        for (const id of selectedProjects) params.append("project", id);
+      } else {
+        params.append("project", "");
+      }
+    }
+    params.set("__returnScroll", String(Math.max(0, Math.round(scrollY))));
+    params.set("__returnCount", String(data.tasks?.length ?? 0));
+    return `/admin/member-tasks/?${params.toString()}${location.hash}`;
   };
   const updateViewButtons = () =>
     root
@@ -229,7 +272,7 @@ function initialize() {
           const testToggle = manager
             ? `<button type="button" class="status-button" data-test-task="${escape(task.id)}" data-test-next="${task.is_test_data ? "false" : "true"}">${task.is_test_data ? "通常タスクに戻す" : "テスト用に設定"}</button>`
             : "";
-          return `<article class="task status-${escape(task.status)} ${task.archived_at ? "is-archived" : ""}${focusId === task.id ? " is-focused" : ""}" data-task-id="${escape(task.id)}" ${focusId === task.id ? 'tabindex="-1"' : ""}><div class="task-body"><div class="task-title"><span class="status-dot" aria-hidden="true"></span><h3>${escape(task.title)}</h3>${task.is_test_data ? '<span class="badge badge-status">テストデータ</span>' : ""}${task.archived_at ? '<span class="badge badge-status">アーカイブ済み</span>' : ""}</div><div class="task-meta"><span class="badge">${task.task_kind === "feedback" ? "フィードバック依頼" : "タスク依頼"}</span><span class="badge">${escape(project?.name ?? task.project_id)}</span><span class="badge badge-status">${statusLabel}</span>${assignee ? `<span class="badge">担当: ${escape(assignee)}</span>` : ""}</div>${task.details ? `<p>${escape(task.details)}</p>` : ""}${task.due_at ? `<p>期限: ${escape(formatTaskDeadline(task.due_at, task.due_timezone || "Asia/Tokyo"))}</p>` : ""}${approvalLink}<a href="/admin/task-detail/?task=${encodeURIComponent(task.id)}">詳細・引き継ぎ →</a></div>${
+          return `<article class="task status-${escape(task.status)} ${task.archived_at ? "is-archived" : ""}${focusId === task.id ? " is-focused" : ""}" data-task-id="${escape(task.id)}" ${focusId === task.id ? 'tabindex="-1"' : ""}><div class="task-body"><div class="task-title"><span class="status-dot" aria-hidden="true"></span><h3>${escape(task.title)}</h3>${task.is_test_data ? '<span class="badge badge-status">テストデータ</span>' : ""}${task.archived_at ? '<span class="badge badge-status">アーカイブ済み</span>' : ""}</div><div class="task-meta"><span class="badge">${task.task_kind === "feedback" ? "フィードバック依頼" : "タスク依頼"}</span><span class="badge">${escape(project?.name ?? task.project_id)}</span><span class="badge badge-status">${statusLabel}</span>${assignee ? `<span class="badge">担当: ${escape(assignee)}</span>` : ""}</div>${task.details ? `<p>${escape(task.details)}</p>` : ""}${task.due_at ? `<p>期限: ${escape(formatTaskDeadline(task.due_at, task.due_timezone || "Asia/Tokyo"))}</p>` : ""}${approvalLink}<a href="/admin/task-detail/?task=${encodeURIComponent(task.id)}" data-task-detail-link>詳細・引き継ぎ →</a></div>${
             editable
               ? `<div class="task-actions"><label class="status-control"><span>進捗</span><select aria-label="${escape(task.title)}の状態" data-task-status="${escape(task.id)}">${[
                   ["open", "未着手"],
@@ -374,13 +417,14 @@ function initialize() {
       get<HTMLInputElement>("[data-title]").focus({ preventScroll: true });
     },
   );
-  loadMore.addEventListener("click", async () => {
+  const loadMoreTasks = async () => {
     if (loadingMore || !nextCursor) return;
     const version = requestVersion;
     const params = query();
     params.set("cursor", nextCursor);
     loadingMore = true;
     render();
+    let loadedPage = false;
     try {
       const response = await fetch(`/api/admin/member-tasks?${params}`, {
         credentials: "same-origin",
@@ -402,6 +446,7 @@ function initialize() {
         ],
       };
       nextCursor = loaded.pagination?.nextCursor ?? null;
+      loadedPage = true;
     } catch (error) {
       if (version === requestVersion)
         message.value =
@@ -414,7 +459,31 @@ function initialize() {
         render();
       }
     }
-  });
+    return loadedPage;
+  };
+  const restoreListPosition = async () => {
+    if (restoreScrollY === null) return;
+    const restorationVersion = requestVersion;
+    const isCurrentContext = () =>
+      root.isConnected && requestVersion === restorationVersion;
+    if (!isCurrentContext()) return;
+    const targetCount = Math.min(
+      restoreTaskCount ?? data.tasks?.length ?? 0,
+      1000,
+    );
+    while ((data.tasks?.length ?? 0) < targetCount && nextCursor) {
+      if (!isCurrentContext()) return;
+      const previousCount = data.tasks?.length ?? 0;
+      const loadedPage = await loadMoreTasks();
+      if (!loadedPage || (data.tasks?.length ?? 0) <= previousCount) break;
+    }
+    if (!isCurrentContext()) return;
+    requestAnimationFrame(() => {
+      if (!isCurrentContext()) return;
+      window.scrollTo(0, restoreScrollY);
+    });
+  };
+  loadMore.addEventListener("click", () => void loadMoreTasks());
   const mutate = async (
     button: HTMLButtonElement,
     path: string,
@@ -478,6 +547,15 @@ function initialize() {
     );
   });
   list.addEventListener("click", (event) => {
+    const detailLink = (event.target as HTMLElement).closest<HTMLAnchorElement>(
+      "[data-task-detail-link]",
+    );
+    if (detailLink) {
+      const detailUrl = new URL(detailLink.href, location.origin);
+      detailUrl.searchParams.set("returnTo", taskListReturnUrl());
+      detailLink.href = `${detailUrl.pathname}${detailUrl.search}${detailUrl.hash}`;
+      return;
+    }
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>(
       "[data-archive-task], [data-save-status], [data-test-task]",
     );
@@ -516,7 +594,7 @@ function initialize() {
     );
   });
   updateViewButtons();
-  void load();
+  void load().then(restoreListPosition);
   document.addEventListener(
     "astro:before-swap",
     () => {

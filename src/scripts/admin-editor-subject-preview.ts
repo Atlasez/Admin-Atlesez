@@ -197,6 +197,36 @@ function ensurePublishedArticleBody(target: HTMLElement): HTMLElement {
   return body;
 }
 
+function foldPreviewChapters(target: HTMLElement): void {
+  const headings = [...target.querySelectorAll<HTMLElement>(":scope > h2")];
+  const HTMLElementCtor = target.ownerDocument.defaultView?.HTMLElement;
+  if (!HTMLElementCtor) return;
+  for (const heading of headings) {
+    const parent = heading.parentElement;
+    if (parent?.classList.contains("preview-chapter-body")) continue;
+
+    const chapter = target.ownerDocument.createElement("details");
+    chapter.className = "preview-chapter";
+    chapter.open = true;
+    const summary = target.ownerDocument.createElement("summary");
+    summary.textContent = heading.textContent?.trim() || "章";
+    const content = target.ownerDocument.createElement("div");
+    content.className = "preview-chapter-body";
+    chapter.append(summary, content);
+    heading.replaceWith(chapter);
+
+    let node = chapter.nextSibling;
+    while (
+      node &&
+      !(node instanceof HTMLElementCtor && node.matches("h2"))
+    ) {
+      const next = node.nextSibling;
+      content.append(node);
+      node = next;
+    }
+  }
+}
+
 export function applySubjectPreviewProfile(
   target: HTMLElement,
   subject: string,
@@ -211,6 +241,9 @@ export function applySubjectPreviewProfile(
     normalizeMathArticleBody(body);
     numberMathStatements(body);
   }
+  // Normalize legacy math paragraphs while they are still direct article-body
+  // children; chapter folding first would hide them from the shared normalizer.
+  foldPreviewChapters(body);
 }
 
 function installPreviewShellStyles(doc: Document): void {

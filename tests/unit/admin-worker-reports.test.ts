@@ -6,7 +6,9 @@ class ReportsStatement {
     readonly query: string,
     private readonly db: ReportsDb,
   ) {}
+  private values: unknown[] = [];
   bind(...values: unknown[]) {
+    this.values = values;
     this.db.bindings.push(values);
     return this;
   }
@@ -14,9 +16,14 @@ class ReportsStatement {
     if (this.query.includes("FROM report_admin_permissions"))
       return { results: [{ subject: "mathematics" }] as T[] };
     if (this.query.includes("FROM article_reports")) {
-      const reports = this.query.includes("subject IN")
+      let reports = this.query.includes("subject IN")
         ? this.db.reports.filter((row) => row.subject === "mathematics")
         : this.db.reports;
+      if (this.query.includes("article_id = ?")) {
+        const articleIdIndex = this.query.includes("subject IN") ? 1 : 0;
+        const articleId = this.values[articleIdIndex];
+        reports = reports.filter((row) => row.article_id === articleId);
+      }
       return { results: reports as T[] };
     }
     if (this.query.includes("FROM article_analytics_daily")) {
@@ -43,7 +50,7 @@ class ReportsDb {
       id: "report-a",
       article_title: "A",
       article_url: "https://example.com/a",
-      article_id: null,
+      article_id: "article-a",
       subject: "mathematics",
       category: "algebra",
       report_type: "error",
@@ -59,7 +66,7 @@ class ReportsDb {
       id: "report-b",
       article_title: "B",
       article_url: "https://example.com/b",
-      article_id: null,
+      article_id: "article-b",
       subject: "physics",
       category: "mechanics",
       report_type: "suggestion",
@@ -176,6 +183,32 @@ describe("reports and statistics access", () => {
     expect(db.bindings.some((values) => values.includes("mathematics"))).toBe(
       true,
     );
+  });
+
+  it("filters article reports by article ID without bypassing subject scope", async () => {
+    const db = new ReportsDb();
+    const response = await worker.fetch(
+      request("/api/admin/article-reports?status=all&articleId=article-a"),
+      env(db) as never,
+    );
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as { reports: Array<{ id: string }> };
+    expect(data.reports.map((report) => report.id)).toEqual(["report-a"]);
+    expect(db.queries.some((query) => query.includes("article_id = ?"))).toBe(
+      true,
+    );
+    expect(db.bindings.some((values) => values.includes("article-a"))).toBe(
+      true,
+    );
+
+    const outOfScope = await worker.fetch(
+      request("/api/admin/article-reports?status=all&articleId=article-b"),
+      env(db) as never,
+    );
+    expect(outOfScope.status).toBe(200);
+    expect(
+      ((await outOfScope.json()) as { reports: unknown[] }).reports,
+    ).toEqual([]);
   });
 
   it("returns 401 without an operator identity", async () => {

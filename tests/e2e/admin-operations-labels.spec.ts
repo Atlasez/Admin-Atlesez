@@ -99,6 +99,66 @@ test("T-1/T-2/T-5: タスク管理の初期表示が仕様どおりになる", a
   await expect(page.getByRole("heading", { name: "ToDo" })).toHaveCount(0);
 });
 
+test("担当者選択は重複アカウントをまとめ、再描画しても選択表示を維持する", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/operations**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        scope: { email: "manager@example.com", isManager: true },
+        project: { id: "atlas", slug: "atlas", name: "Atlasez" },
+        tasks: [],
+        events: [],
+        progress: [],
+        members: [
+          { email: "test@example.com", display_name: "テスト" },
+          { email: "TEST@example.com", display_name: "テスト" },
+          { email: "alice@example.com", display_name: "アリス" },
+        ],
+        availabilityBlocks: [],
+        availabilityRules: [],
+      }),
+    });
+  });
+
+  await page.goto("admin/operations/?project=atlas");
+  await page.getByRole("button", { name: "タスクを作成・依頼" }).click();
+
+  const testOption = page
+    .locator(".admin-multi-select-option")
+    .filter({ hasText: "テスト" });
+  await expect(testOption).toHaveCount(1);
+  const testCheckbox = testOption.locator('input[type="checkbox"]');
+  const testCheckboxHandle = await testCheckbox.elementHandle();
+  await testCheckbox.check();
+
+  const otherCheckbox = page
+    .locator(".admin-multi-select-option")
+    .filter({ hasText: "アリス" })
+    .locator('input[type="checkbox"]');
+  await otherCheckbox.check();
+  await otherCheckbox.uncheck();
+  await expect(testCheckbox).toBeChecked();
+
+  // Operations renders the page again when task-list filters change. Keep the
+  // create dialog open to verify that this does not replace the checkbox row.
+  await page.locator("[data-task-show-completed]").evaluate((element) => {
+    const input = element as HTMLInputElement;
+    input.checked = true;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const testCheckboxStayedMounted = await testCheckboxHandle?.evaluate(
+    async (element) => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return element.isConnected;
+    },
+  );
+  expect(testCheckboxStayedMounted).toBe(true);
+  await expect(testCheckbox).toBeChecked();
+});
+
 test("タスク一覧はカーソルで追加読み込みできる", async ({ page }) => {
   let requests = 0;
   await page.route("**/api/admin/operations**", async (route) => {

@@ -26,6 +26,8 @@ import { memberTaskFilters } from "./lib/member-task-filters";
 import {
   globalAdminPrototypePaths,
   isAdminPagePath,
+  isSeminarReviewPath,
+  SEMINAR_REVIEW_PATH,
 } from "./lib/admin-routes";
 import { applicationAcceptanceEmail } from "./lib/application-acceptance-email";
 import {
@@ -42,6 +44,7 @@ import {
 } from "./lib/date-time";
 import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
 import { dispatchApplicationEmails } from "./lib/application-email-delivery";
+import { handleSeminarApi } from "./lib/seminar-api";
 import {
   deliverDiscordNotifications,
   deliverProgressDiscordNotification,
@@ -1429,7 +1432,7 @@ async function getUserStageForEmail(
   };
 }
 
-/** 共通プロフィールだけは、受入済みメンバー本人にも確認させる。 */
+/** 共通プロフィールだけは、受け入れ済みメンバー本人にも確認させる。 */
 async function getMemberOperationScope(
   request: Request,
   env: Env,
@@ -1875,6 +1878,9 @@ async function listArticleReports(
   if (requested !== "all" && !status)
     return json({ error: "状態を確認してください。" }, 400);
   const searchParams = new URL(request.url).searchParams;
+  const articleId = searchParams.get("articleId")?.trim() ?? "";
+  if (articleId.length > 200)
+    return json({ error: "記事IDを確認してください。" }, 400);
   const requestedLimit = Number(searchParams.get("limit") ?? "100");
   const pageLimit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
@@ -1905,6 +1911,10 @@ async function listArticleReports(
   if (status) {
     filters.push("status = ?");
     values.push(status);
+  }
+  if (articleId) {
+    filters.push("article_id = ?");
+    values.push(articleId);
   }
   if (cursorRank !== null && cursorCreatedAt && cursorId) {
     filters.push(
@@ -2367,7 +2377,7 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   task_restored: "タスクを復元",
   task_marked_test_data: "タスクを試験データに設定",
   task_unmarked_test_data: "タスクの試験データ指定を解除",
-  member_intake_updated: "受入・初回フォローを更新",
+  member_intake_updated: "応募者・メンバー対応記録を更新",
   member_procedure: "休止・退会・再開の手続きを更新",
   task_workspace_updated: "タスク詳細・引き継ぎを更新",
   taxonomy_created: "分野・カテゴリを追加",
@@ -3801,6 +3811,368 @@ async function createReportAdminPermission(
   return json({ ok: true, provisioning }, 201);
 }
 
+type LegacyMemberMigrationInput = {
+  email: string;
+  subjects: string[];
+  projectManager: boolean;
+  sourceNote: string;
+  expected?: LegacyMemberMigrationSnapshot;
+};
+
+type LegacyMemberMigrationSnapshot = {
+  subjects: string[];
+  membershipRole: string | null;
+  managerSource: string | null;
+  managerRevision: number | null;
+  managerReviewRequired: boolean;
+  hasPublicIntro: boolean;
+  hasProjectIntro: boolean;
+};
+
+/**
+ * Import a roster of people already admitted through another Atlasez workflow.
+ * This path deliberately does not inspect or contact Discord and leaves self-intros
+ * for each member to complete later.
+ */
+async function migrateLegacyMembers(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (request.headers.get("content-type")?.includes("application/json") !== true)
+    return json({ error: "JSON形式で送信してください。" }, 415);
+
+  const payload = (await request.json().catch(() => null)) as {
+    mode?: unknown;
+    batchId?: unknown;
+    confirmedExistingMembers?: unknown;
+    members?: unknown;
+  } | null;
+  const mode = payload?.mode;
+  const batchId = text(payload?.batchId, 64).trim();
+  if (mode !== "preview" && mode !== "apply")
+    return json({ error: "プレビューまたは移行実行を指定してください。" }, 400);
+  if (!/^[0-9a-f-]{36}$/i.test(batchId))
+    return json({ error: "移行バッチIDを確認してください。" }, 400);
+  if (payload?.confirmedExistingMembers !== true)
+    return json(
+      { error: "対象者が既存の運営メンバーであることを確認してください。" },
+      400,
+    );
+  if (!Array.isArray(payload?.members) || payload.members.length === 0)
+    return json({ error: "移行するメンバーを入力してください。" }, 400);
+  if (payload.members.length > 50)
+    return json({ error: "一度に移行できるのは50人までです。" }, 400);
+
+  const inputs: LegacyMemberMigrationInput[] = [];
+  const seen = new Set<string>();
+  for (const raw of payload.members) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw))
+      return json({ error: "移行データの形式を確認してください。" }, 400);
+    const row = raw as Record<string, unknown>;
+    const email = text(row.email, 320).trim().toLowerCase();
+    const sourceNote =
+      typeof row.sourceNote === "string" ? row.sourceNote.trim() : "";
+    const subjects = Array.isArray(row.subjects)
+      ? Array.from(
+          new Set(
+            row.subjects
+              .map((subject) => text(subject, 80).trim().toLowerCase())
+              .filter(Boolean),
+          ),
+        )
+      : [];
+    const projectManager = row.projectManager;
+    if (
+      !EMAIL_PATTERN.test(email) ||
+      !sourceNote ||
+      sourceNote.length > 500 ||
+      typeof projectManager !== "boolean" ||
+      (!subjects.length && !projectManager) ||
+      subjects.some(
+        (subject) => subject !== "*" && !SUBJECT_SLUG.test(subject),
+      ) ||
+      (subjects.includes("*") && subjects.length > 1)
+    )
+      return json(
+        { error: "メールアドレス・担当範囲・既存参加の確認根拠を確認してください。" },
+        400,
+      );
+    if (seen.has(email))
+      return json({ error: `移行データにメールアドレスが重複しています: ${email}` }, 400);
+    seen.add(email);
+    if (mode === "apply") {
+      const expected = row.expected as Partial<LegacyMemberMigrationSnapshot> | undefined;
+      if (
+        !expected ||
+        !Array.isArray(expected.subjects) ||
+        !expected.subjects.every((subject) => typeof subject === "string") ||
+        !(expected.membershipRole === null || typeof expected.membershipRole === "string") ||
+        !(expected.managerSource === null || typeof expected.managerSource === "string") ||
+        !(expected.managerRevision === null || Number.isSafeInteger(expected.managerRevision)) ||
+        typeof expected.managerReviewRequired !== "boolean" ||
+        typeof expected.hasPublicIntro !== "boolean" ||
+        typeof expected.hasProjectIntro !== "boolean"
+      )
+        return json({ error: "プレビュー結果がありません。先に最新状態をプレビューしてください。" }, 400);
+    }
+    inputs.push({
+      email,
+      subjects,
+      projectManager,
+      sourceNote,
+      ...(mode === "apply" ? { expected: row.expected as LegacyMemberMigrationSnapshot } : {}),
+    });
+  }
+
+  const project = await env.REPORTS.prepare(
+    "SELECT id FROM atlasez_projects WHERE id='atlas'",
+  ).first<{ id: string }>();
+  if (!project)
+    return json({ error: "移行先のアトラスプロジェクトを確認できません。" }, 409);
+
+  const readSnapshot = async (email: string): Promise<LegacyMemberMigrationSnapshot> => {
+    const [permissionRows, membership, managerGrant, profile, projectProfile] =
+      await Promise.all([
+        env.REPORTS.prepare(
+          "SELECT subject FROM report_admin_permissions WHERE lower(email)=lower(?) ORDER BY subject",
+        ).bind(email).all<{ subject: string }>(),
+        env.REPORTS.prepare(
+          "SELECT role FROM atlasez_project_memberships WHERE project_id='atlas' AND lower(email)=lower(?)",
+        ).bind(email).first<{ role: string }>(),
+        env.REPORTS.prepare(
+          `SELECT source,revision,review_required FROM atlasez_project_manager_grants
+           WHERE project_id='atlas' AND lower(email)=lower(?)`,
+        ).bind(email).first<{ source: string; revision: number; review_required: number }>(),
+        env.REPORTS.prepare(
+          `SELECT length(trim(COALESCE(bio,''))) AS complete FROM editorial_member_profiles
+           WHERE lower(email)=lower(?)`,
+        ).bind(email).first<{ complete: number }>(),
+        env.REPORTS.prepare(
+          `SELECT 1 AS complete FROM editorial_project_member_profiles
+           WHERE project_id='atlas' AND lower(email)=lower(?)
+             AND length(trim(COALESCE(internal_bio,'')))>0 LIMIT 1`,
+        ).bind(email).first<{ complete: number }>(),
+      ]);
+    return {
+      subjects: (permissionRows.results ?? []).map((entry) => entry.subject).sort(),
+      membershipRole: membership?.role ?? null,
+      managerSource: managerGrant?.source ?? null,
+      managerRevision: managerGrant ? Number(managerGrant.revision) : null,
+      managerReviewRequired: Boolean(managerGrant?.review_required),
+      hasPublicIntro: Number(profile?.complete ?? 0) > 0,
+      hasProjectIntro: Boolean(projectProfile?.complete),
+    };
+  };
+  const snapshots: LegacyMemberMigrationSnapshot[] = [];
+  for (const input of inputs) {
+    if (!(await isAtlasMemberActive(env, input.email)))
+      return json(
+        { error: `${input.email} は活動停止中またはアーカイブ済みです。先に状態を確認してください。`, code: "MEMBER_INACTIVE" },
+        409,
+      );
+    snapshots.push(await readSnapshot(input.email));
+  }
+
+  if (mode === "preview")
+    return json({
+      ok: true,
+      batchId,
+      members: inputs.map((input, index) => {
+        const current = snapshots[index];
+        const subjectsAfter = Array.from(
+          new Set([...current.subjects, ...input.subjects]),
+        ).sort();
+        const effectiveManager = Boolean(
+          input.projectManager ||
+          subjectsAfter.includes("*") ||
+          current.membershipRole === "manager" ||
+          current.managerSource === "explicit" ||
+          current.managerSource === "legacy",
+        );
+        return {
+          ...input,
+          expected: current,
+          addedSubjects: input.subjects.filter(
+            (subject) => !current.subjects.includes(subject),
+          ),
+          existingSubjects: current.subjects,
+          resultingSubjects: subjectsAfter,
+          existingProjectRole: current.membershipRole,
+          resultingProjectRole: effectiveManager ? "manager" : "member",
+          hasPublicIntro: current.hasPublicIntro,
+          hasProjectIntro: current.hasProjectIntro,
+          discordSync: "skipped",
+        };
+      }),
+    });
+
+  const stale = inputs
+    .map((input, index) => ({ input, current: snapshots[index] }))
+    .filter(({ input, current }) => {
+      const expected = input.expected;
+      return !expected ||
+        JSON.stringify(expected.subjects ?? []) !== JSON.stringify(current.subjects) ||
+        (expected.membershipRole ?? null) !== current.membershipRole ||
+        (expected.managerSource ?? null) !== current.managerSource ||
+        (expected.managerRevision ?? null) !== current.managerRevision ||
+        Boolean(expected.managerReviewRequired) !== current.managerReviewRequired ||
+        Boolean(expected.hasPublicIntro) !== current.hasPublicIntro ||
+        Boolean(expected.hasProjectIntro) !== current.hasProjectIntro;
+    });
+  if (stale.length)
+    return json(
+      {
+        error: "プレビュー後に対象の状態が変わりました。最新状態を再読み込みして確認してください。",
+        code: "STALE_PREVIEW",
+        emails: stale.map(({ input }) => input.email),
+      },
+      409,
+    );
+
+  const results: Array<Record<string, unknown>> = [];
+  for (let index = 0; index < inputs.length; index += 1) {
+    const input = inputs[index];
+    const current = snapshots[index];
+    const subjectsAfter = Array.from(
+      new Set([...current.subjects, ...input.subjects]),
+    ).sort();
+    const addedSubjects = input.subjects.filter(
+      (subject) => !current.subjects.includes(subject),
+    );
+    const effectiveManager = Boolean(
+      input.projectManager ||
+      subjectsAfter.includes("*") ||
+      current.membershipRole === "manager" ||
+      current.managerSource === "explicit" ||
+      current.managerSource === "legacy",
+    );
+    const shouldAppointManager = input.projectManager && (
+      current.membershipRole !== "manager" ||
+      current.managerSource !== "explicit" ||
+      current.managerReviewRequired
+    );
+    const shouldDeriveManager = subjectsAfter.includes("*") && !current.managerSource;
+    const needsChange = Boolean(
+      addedSubjects.length ||
+      !current.membershipRole ||
+      (effectiveManager && current.membershipRole !== "manager") ||
+      shouldAppointManager ||
+      shouldDeriveManager
+    );
+    if (!needsChange) {
+      results.push({
+        email: input.email,
+        status: "unchanged",
+        addedSubjects: [],
+        projectManager: effectiveManager,
+        discordSync: "skipped",
+      });
+      continue;
+    }
+
+    const now = new Date().toISOString();
+    const statements: D1PreparedStatement[] = [
+      ...addedSubjects.map((subject) =>
+        env.REPORTS.prepare(
+          "INSERT OR IGNORE INTO report_admin_permissions(email,subject) VALUES (?,?)",
+        ).bind(input.email, subject),
+      ),
+      env.REPORTS.prepare(
+        `INSERT INTO atlasez_project_memberships(project_id,email,role,joined_at)
+         VALUES ('atlas',?,?,?)
+         ON CONFLICT(project_id,email) DO UPDATE SET role='manager'
+         WHERE excluded.role='manager' AND atlasez_project_memberships.role!='manager'`,
+      ).bind(input.email, effectiveManager ? "manager" : "member", now),
+    ];
+    if (shouldAppointManager)
+      statements.push(
+        env.REPORTS.prepare(
+          `INSERT INTO atlasez_project_manager_grants
+           (project_id,email,source,granted_by,granted_at,revision,review_required)
+           VALUES ('atlas',?,'explicit',?,?,1,0)
+           ON CONFLICT(project_id,email) DO UPDATE SET source='explicit',granted_by=excluded.granted_by,
+             granted_at=excluded.granted_at,revision=atlasez_project_manager_grants.revision+1,
+             review_required=0
+           WHERE atlasez_project_manager_grants.source!='explicit'
+             OR atlasez_project_manager_grants.review_required!=0`,
+        ).bind(input.email, scope.email, now),
+      );
+    if (shouldDeriveManager)
+      statements.push(
+        ...permissionDerivedAtlasManagerStatements(
+          env.REPORTS,
+          input.email,
+          true,
+          scope.email,
+        ),
+      );
+    statements.push(
+      env.REPORTS.prepare(
+        `INSERT INTO admin_audit_log
+         (id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at)
+         VALUES (?,?,'member_updated','member',?,?,? ,?,?)`,
+      ).bind(
+        crypto.randomUUID(),
+        scope.email,
+        input.email,
+        input.email,
+        "既存運営メンバーを移行",
+        JSON.stringify({
+          migrationType: "legacy_member_import",
+          batchId,
+          sourceNote: input.sourceNote,
+          beforeSubjects: current.subjects,
+          afterSubjects: subjectsAfter,
+          beforeProjectRole: current.membershipRole,
+          afterProjectRole: effectiveManager ? "manager" : "member",
+          managerAppointment: input.projectManager ? "explicit" : "preserved-or-not-requested",
+          profileIntroPending: !current.hasPublicIntro || !current.hasProjectIntro,
+          discordSync: "skipped",
+        }),
+        now,
+      ),
+    );
+
+    try {
+      await env.REPORTS.batch(statements);
+    } catch {
+      results.push({
+        email: input.email,
+        status: "failed",
+        error: "移行を保存できませんでした。状態を確認して再プレビューしてください。",
+      });
+      continue;
+    }
+    if (addedSubjects.length)
+      await recordPermissionAudit(
+        env,
+        scope.email,
+        input.email,
+        "grant",
+        current.subjects,
+        subjectsAfter,
+      );
+    results.push({
+      email: input.email,
+      status: "migrated",
+      addedSubjects,
+      projectManager: effectiveManager,
+      profileIntroPending: !current.hasPublicIntro || !current.hasProjectIntro,
+      discordSync: "skipped",
+    });
+  }
+  return json({
+    ok: results.every((result) => result.status !== "failed"),
+    batchId,
+    results,
+    discordSync: "skipped",
+  });
+}
+
 async function updateReportAdminPermissions(
   request: Request,
   env: Env,
@@ -4345,6 +4717,9 @@ async function listArchivedAtlasMembers(
         "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE lower(email)=lower(?)",
       ).bind(email).first<{ count: number }>(),
     ]);
+    const pendingProfileChange = await env.REPORTS.prepare(
+      "SELECT 1 AS found FROM editorial_member_profile_change_requests WHERE lower(email)=lower(?) AND status='pending' LIMIT 1",
+    ).bind(email).first<{ found: number }>();
     if (!profile && !memberships.results?.length && !permissions.results?.length && !workflowRoles.results?.length && !genreRoles.results?.length && !lifecycle)
       return json({ error: "運営メンバーが見つかりません。" }, 404);
     const history = [
@@ -4378,6 +4753,7 @@ async function listArchivedAtlasMembers(
           affiliationType: profile.affiliation_type, country: profile.country,
           timezone: profile.timezone, updatedAt: profile.updated_at,
         } : null,
+        profileChangePending: Boolean(pendingProfileChange),
         memberships: memberships.results ?? [],
         permissions: permissions.results ?? [],
         workflowRoles: workflowRoles.results ?? [],
@@ -4409,6 +4785,158 @@ async function listArchivedAtlasMembers(
     avatar_url: string;
   }>();
   return json({ members: result.results ?? [] });
+}
+
+async function updateAtlasMemberProfile(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (request.headers.get("content-type")?.includes("application/json") !== true)
+    return json({ error: "JSON形式で送信してください。" }, 415);
+
+  const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const email = text(payload?.email, 320).toLowerCase();
+  if (!payload || !EMAIL_PATTERN.test(email))
+    return json({ error: "メンバーを確認してください。" }, 400);
+  if (!Object.prototype.hasOwnProperty.call(payload, "expectedUpdatedAt") ||
+    (payload.expectedUpdatedAt !== null && (
+      typeof payload.expectedUpdatedAt !== "string" || payload.expectedUpdatedAt.length > 80
+    )))
+    return json({ error: "表示中の情報が古くなっています。再読み込みしてください。" }, 400);
+
+  const fields = [
+    ["displayName", 120],
+    ["university", 200],
+    ["year", 80],
+    ["interests", 800],
+    ["affiliationType", 80],
+    ["country", 120],
+    ["timezone", 80],
+    ["bio", 4_000],
+  ] as const;
+  if (fields.some(([key, maximum]) =>
+    typeof payload[key] !== "string" || (payload[key] as string).length > maximum))
+    return json({ error: "プロフィールの入力内容を確認してください。" }, 400);
+  if (typeof payload.avatarUrl !== "string" || payload.avatarUrl.length > 3_000_000)
+    return json({ error: "プロフィール画像を確認してください。" }, 400);
+
+  const profile = {
+    displayName: normalizedText(payload.displayName, 120),
+    university: normalizedText(payload.university, 200),
+    year: normalizedText(payload.year, 80),
+    interests: normalizedText(payload.interests, 800),
+    affiliationType: normalizedText(payload.affiliationType, 80),
+    country: normalizedText(payload.country, 120),
+    timezone: normalizedText(payload.timezone, 80) || "Asia/Tokyo",
+    bio: text(payload.bio, 4_000),
+    avatarUrl: text(payload.avatarUrl, 3_000_000),
+  };
+  if (!profile.displayName)
+    return json({ error: "表示名を入力してください。" }, 400);
+  if (!validTimeZone(profile.timezone))
+    return json({ error: "タイムゾーンを確認してください。" }, 400);
+  if (profile.avatarUrl &&
+    ((!/^https:\/\//i.test(profile.avatarUrl) &&
+      !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(profile.avatarUrl)) ||
+      /["'<>]/.test(profile.avatarUrl)))
+    return json({ error: "プロフィール画像はPNG・JPEG・WebP、またはhttps://画像URLを指定してください。" }, 400);
+
+  const archivedError = await archivedMemberError(env, email);
+  if (archivedError) return archivedError;
+  if (!await isAtlasMemberActive(env, email))
+    return json({ error: "このメンバーは運営を休止中です。再開後に編集してください。" }, 409);
+  const activeMember = await env.REPORTS.prepare(
+    `SELECT 1 AS found FROM report_admin_permissions WHERE lower(email)=lower(?)
+     UNION ALL SELECT 1 AS found FROM atlasez_project_memberships WHERE project_id='atlas' AND lower(email)=lower(?)
+     UNION ALL SELECT 1 AS found FROM editorial_workflow_roles WHERE lower(email)=lower(?)
+     UNION ALL SELECT 1 AS found FROM admin_genre_role_assignments WHERE lower(email)=lower(?)
+     UNION ALL SELECT 1 AS found FROM atlasez_project_manager_grants WHERE project_id='atlas' AND lower(email)=lower(?)
+     UNION ALL SELECT 1 AS found FROM admin_member_lifecycle WHERE lower(email)=lower(?) AND status='active'
+     LIMIT 1`,
+  ).bind(email, email, email, email, email, email).first<{ found: number }>();
+  if (!activeMember)
+    return json({ error: "運営メンバーが見つかりません。" }, 404);
+
+  const pendingProfileChange = await env.REPORTS.prepare(
+    "SELECT 1 AS found FROM editorial_member_profile_change_requests WHERE lower(email)=lower(?) AND status='pending' LIMIT 1",
+  ).bind(email).first<{ found: number }>();
+  if (pendingProfileChange)
+    return json({ error: "本人からのプロフィール変更申請が審査中です。先に申請を確認してください。", code: "PROFILE_CHANGE_PENDING" }, 409);
+
+  const current = await env.REPORTS.prepare(
+    `SELECT display_name,avatar_url,bio,university,year,interests,affiliation_type,country,timezone,updated_at
+     FROM editorial_member_profiles WHERE lower(email)=lower(?) LIMIT 1`,
+  ).bind(email).first<{
+    display_name: string; avatar_url: string; bio: string; university: string;
+    year: string; interests: string; affiliation_type: string; country: string;
+    timezone: string; updated_at: string;
+  }>();
+  const currentUpdatedAt = current?.updated_at ?? null;
+  if (payload.expectedUpdatedAt !== currentUpdatedAt)
+    return json({ error: "プロフィールが先に更新されています。再読み込みしてから編集してください。", code: "STALE_MEMBER_PROFILE" }, 409);
+
+  const updatedFields = [
+    ...(current?.display_name !== profile.displayName ? ["displayName"] : []),
+    ...(current?.avatar_url !== profile.avatarUrl ? ["avatarUrl"] : []),
+    ...(current?.university !== profile.university ? ["university"] : []),
+    ...(current?.year !== profile.year ? ["year"] : []),
+    ...(current?.interests !== profile.interests ? ["interests"] : []),
+    ...(current?.affiliation_type !== profile.affiliationType ? ["affiliationType"] : []),
+    ...(current?.country !== profile.country ? ["country"] : []),
+    ...(current?.timezone !== profile.timezone ? ["timezone"] : []),
+    ...(current?.bio !== profile.bio ? ["bio"] : []),
+  ];
+  if (updatedFields.length === 0)
+    return json({ ok: true, updatedAt: currentUpdatedAt, updatedFields });
+
+  const now = new Date(Math.max(
+    Date.now(),
+    (Date.parse(currentUpdatedAt ?? "") || 0) + 1,
+  )).toISOString();
+  const result = current
+    ? await env.REPORTS.prepare(
+      `UPDATE editorial_member_profiles SET display_name=?,avatar_url=?,bio=?,university=?,year=?,interests=?,
+         affiliation_type=?,country=?,timezone=?,updated_at=?
+       WHERE lower(email)=lower(?) AND updated_at=?
+         AND NOT EXISTS (
+           SELECT 1 FROM editorial_member_profile_change_requests
+           WHERE lower(email)=lower(?) AND status='pending'
+         )`,
+    ).bind(profile.displayName, profile.avatarUrl, profile.bio, profile.university, profile.year,
+      profile.interests, profile.affiliationType, profile.country, profile.timezone, now, email, currentUpdatedAt, email).run()
+    : await env.REPORTS.prepare(
+      `INSERT OR IGNORE INTO editorial_member_profiles
+       (email,display_name,avatar_url,bio,university,year,interests,affiliation_type,country,timezone,updated_at)
+       SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (
+         SELECT 1 FROM editorial_member_profile_change_requests
+         WHERE lower(email)=lower(?) AND status='pending'
+       )`,
+    ).bind(email, profile.displayName, profile.avatarUrl, profile.bio, profile.university, profile.year,
+      profile.interests, profile.affiliationType, profile.country, profile.timezone, now, email).run();
+  if (Number(result.meta?.changes ?? 0) !== 1) {
+    const pendingAfterRace = await env.REPORTS.prepare(
+      "SELECT 1 AS found FROM editorial_member_profile_change_requests WHERE lower(email)=lower(?) AND status='pending' LIMIT 1",
+    ).bind(email).first<{ found: number }>();
+    if (pendingAfterRace)
+      return json({ error: "本人からのプロフィール変更申請が審査中です。先に申請を確認してください。", code: "PROFILE_CHANGE_PENDING" }, 409);
+    return json({ error: "プロフィールが先に更新されています。再読み込みしてから編集してください。", code: "STALE_MEMBER_PROFILE" }, 409);
+  }
+
+  await recordAdminAudit(
+    env,
+    scope.email,
+    "member_updated",
+    "member",
+    email,
+    email,
+    "運営メンバーのプロフィールを更新",
+    { updatedFields },
+  );
+  return json({ ok: true, updatedAt: now, updatedFields });
 }
 
 type GenreRoleCatalogRow = {
@@ -6166,6 +6694,7 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
     (text(payload.latexEngine, 24) as LatexEngine) || "mathjax";
   const status = text(payload.status, 20) as EditorialDocumentStatus;
   const sourceArticleId = text(payload.sourceArticleId, 180) || null;
+  const canSaveIncompleteDraft = status === "draft";
   const lockedRanges =
     payload.lockedRanges === undefined
       ? undefined
@@ -6180,8 +6709,8 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
     !SUBJECT_SLUG.test(category) ||
     !["ja", "en"].includes(locale) ||
     !SUBJECT_SLUG.test(slug) ||
-    !title ||
-    !summary ||
+    (!title && !canSaveIncompleteDraft) ||
+    (!summary && !canSaveIncompleteDraft) ||
     !/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$/.test(conceptId) ||
     (registerConcept && !conceptName) ||
     !EDITORIAL_DOCUMENT_STATUSES.has(status) ||
@@ -6216,6 +6745,7 @@ async function listEditorialDocuments(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  const searchParams = new URL(request.url).searchParams;
   const filters: string[] = [];
   const values: unknown[] = [];
   if (!scope.allSubjects) {
@@ -6239,9 +6769,13 @@ async function listEditorialDocuments(
     filters.push(`(${subjectFilter} OR (publication_review_stage='project-leader' AND ? = 1))`);
     values.push(...subjectValues, scope.isProjectLeader ? 1 : 0);
   }
-  const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
+  const requestedSubject = searchParams.get("subject")?.trim();
+  if (requestedSubject) {
+    filters.push("d.subject = ?");
+    values.push(requestedSubject);
+  }
+  const includeArchived = searchParams.get("includeArchived") === "1";
   if (!includeArchived) filters.push("d.archived_at IS NULL");
-  const searchParams = new URL(request.url).searchParams;
   // Keep the first page small enough for Cloudflare's Worker CPU budget. The
   // article index can load additional pages explicitly, so a smaller default
   // does not reduce coverage while avoiding 503s when the D1 result contains
@@ -6766,227 +7300,6 @@ async function getEditorialArticleCatalog(
   }
 }
 
-async function getEditorialArticleCatalogDiagnostics(
-  request: Request,
-  env: Env,
-): Promise<Response> {
-  const scope = await getAdminScope(request, env);
-  if (isResponse(scope)) return scope;
-  try {
-    const publicArticles = await loadPublishedArticleCatalog(env);
-    const [documents, storedCatalog] = await Promise.all([
-      catalogDocumentRows(env),
-      listEditorialArticleCatalogRows(env),
-    ]);
-    const visibleArticles = publicArticles.filter(
-      (article) =>
-        canEditSubject(scope, article.subject) ||
-        canCoordinateSubject(scope, article.subject) ||
-        scope.isProjectLeader,
-    );
-    const documentByKey = new Map<string, typeof documents>();
-    for (const document of documents) {
-      const key = editorialArticleIdentity(document);
-      documentByKey.set(key, [...(documentByKey.get(key) ?? []), document]);
-    }
-    const documentBySourceId = new Map<string, typeof documents>();
-    for (const document of documents) {
-      if (!document.source_article_id) continue;
-      documentBySourceId.set(document.source_article_id, [
-        ...(documentBySourceId.get(document.source_article_id) ?? []),
-        document,
-      ]);
-    }
-    const storedByPath = new Map(storedCatalog.map((row) => [row.path, row]));
-    const publicKeys = new Set(
-      visibleArticles.map((article) => article.identityKey),
-    );
-    const issues: Record<string, unknown>[] = [];
-    const addIssue = (
-      code: string,
-      severity: "error" | "warning",
-      article: PublicArticleCatalogEntry,
-      details: Record<string, unknown> = {},
-    ) => {
-      issues.push({
-        code,
-        severity,
-        identity_key: article.identityKey,
-        path: article.path,
-        source_article_id: article.sourceArticleId,
-        title: article.title,
-        ...details,
-      });
-    };
-
-    for (const article of visibleArticles) {
-      const matches = documentByKey.get(article.identityKey) ?? [];
-      const sourceMatches = (documentBySourceId.get(article.sourceArticleId) ?? []).filter(
-        (document) => editorialArticleIdentity(document) !== article.identityKey,
-      );
-      const stored = storedByPath.get(article.path);
-      if (!matches.length && !sourceMatches.length)
-        addIssue("unregistered", "warning", article, {
-          message: "公開記事に対応する運営原稿がありません。",
-        });
-      if (!matches.length && sourceMatches.length)
-        addIssue("identity-mismatch", "error", article, {
-          message: "公開記事IDは別の公開パスの運営原稿に紐付いています。内容を確認してから分類を修正してください。",
-          document_id: sourceMatches[0].id,
-          document_identity_key: editorialArticleIdentity(sourceMatches[0]),
-        });
-      if (matches.length > 1)
-        addIssue("duplicate", "error", article, {
-          message: "同じ公開パスの運営原稿が複数あります。",
-          document_ids: matches.map((document) => document.id),
-        });
-      if (matches.length === 1) {
-        const document = matches[0];
-        if (!document.source_article_id)
-          addIssue("source-link-missing", "warning", article, {
-            message: "運営原稿はありますが、公開記事IDが未登録です。",
-            document_id: document.id,
-          });
-        else if (document.source_article_id !== article.sourceArticleId)
-          addIssue("identity-mismatch", "error", article, {
-            message: "公開記事IDと運営原稿の紐付けが一致しません。",
-            document_id: document.id,
-            document_source_article_id: document.source_article_id,
-          });
-      }
-      if (!stored?.source_checksum)
-        addIssue("source-checksum-missing", "warning", article, {
-          message:
-            "公開元本文のSHA-256が未記録です。本文を正本とみなさず、移行前に出所を確認してください。",
-          source_kind: stored?.source_kind ?? article.sourceKind,
-          source_ref: stored?.source_ref ?? article.sourceRef,
-        });
-      if (
-        stored?.source_article_id &&
-        stored.source_article_id !== article.sourceArticleId
-      )
-        addIssue("identity-mismatch", "error", article, {
-          message: "カタログの公開記事IDと現在の公開記事が一致しません。",
-          catalog_source_article_id: stored.source_article_id,
-        });
-      if (
-        stored?.git_sha &&
-        article.gitSha &&
-        stored.git_sha !== article.gitSha
-      )
-        addIssue("source-version-changed", "warning", article, {
-          message: "カタログ登録後に公開元のGit SHAが変わっています。",
-          catalog_git_sha: stored.git_sha,
-          current_git_sha: article.gitSha,
-        });
-    }
-
-    for (const row of storedCatalog) {
-      if (
-        row.public_status === "published" &&
-        !publicKeys.has(row.identity_key)
-      )
-        issues.push({
-          code: "catalog-public-source-missing",
-          severity: "warning",
-          identity_key: row.identity_key,
-          path: row.path,
-          title: row.title,
-          message:
-            "保存済みカタログにはありますが、現在の公開一覧にありません。",
-        });
-    }
-    const summary = issues.reduce<Record<string, number>>((counts, issue) => {
-      const code = String(issue.code);
-      counts[code] = (counts[code] ?? 0) + 1;
-      return counts;
-    }, {});
-    return json({
-      generated_at: new Date().toISOString(),
-      checked_articles: visibleArticles.length,
-      issue_count: issues.length,
-      healthy: issues.length === 0,
-      summary,
-      issues,
-    });
-  } catch (error) {
-    return json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "公開記事カタログの診断に失敗しました。",
-      },
-      502,
-    );
-  }
-}
-
-const stableEditorialDocumentId = async (identityKey: string) => {
-  const digest = new Uint8Array(
-    await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(identityKey),
-    ),
-  );
-  digest[6] = (digest[6] & 0x0f) | 0x50;
-  digest[8] = (digest[8] & 0x3f) | 0x80;
-  const hex = [...digest.slice(0, 16)]
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-};
-
-async function getPublicArticleForIdentity(
-  env: Env,
-  identity: { locale: string; subject: string; category: string; slug: string },
-): Promise<PublicArticleCatalogEntry | null> {
-  const client = publicArticleCatalogClient(env);
-  if (!client)
-    throw new Error(
-      "GitHub公開連携がまだ設定されていません。公開記事を取得できません。",
-    );
-  const path = editorialArticlePath(identity);
-  const content = await githubArticleContent(
-    client.repository,
-    client.headers,
-    path,
-  );
-  if (!content) return null;
-  const article = parsePublicArticle(path, content.markdown, content.gitSha);
-  if (!article) return null;
-  article.repository = client.repository;
-  article.sourceKind = "github-published-markdown";
-  article.sourceRef = githubArticleSourceRef(
-    client.repository,
-    path,
-    content.gitSha,
-  );
-  article.sourceChecksum = await sha256Hex(content.markdown);
-  article.sourceBodyChecksum = await sha256Hex(article.body);
-  article.sourceFetchedAt = new Date().toISOString();
-  article.sourceAuthority = "reference-only";
-  article.registrationMethod = "catalog-observation";
-  article.identityStatus = "verified";
-  await upsertEditorialArticleCatalog(env, article);
-  return article;
-}
-
-const catalogRegistrationInput = (payload: Record<string, unknown> | null) => {
-  const locale = text(payload?.locale, 8);
-  const subject = text(payload?.subject, 80);
-  const category = text(payload?.category, 80);
-  const slug = text(payload?.slug, 100);
-  if (
-    !/^(ja|en)$/.test(locale) ||
-    !SUBJECT_SLUG.test(subject) ||
-    !SUBJECT_SLUG.test(category) ||
-    !SUBJECT_SLUG.test(slug)
-  )
-    return null;
-  return { locale, subject, category, slug };
-};
-
 type EditorialIdentityInput = {
   sourceArticleId: string | null;
   locale: string;
@@ -7077,314 +7390,11 @@ async function editorialIdentityConflict(
     return json(
       {
         error:
-          "既存の公開記事があります。新規作成ではなく、公開記事を運営管理下へ登録してください。",
+          "公開済み記事と同じ識別情報です。既存の運営原稿を開いてください。",
       },
       409,
     );
   return null;
-}
-
-async function registerPublicArticleInEditorialCatalog(
-  request: Request,
-  env: Env,
-): Promise<Response> {
-  const scope = await getAdminScope(request, env);
-  if (isResponse(scope)) return scope;
-  if (!isSameOrigin(request))
-    return json({ error: "この送信元からは受け付けられません。" }, 403);
-  if (!request.headers.get("content-type")?.includes("application/json"))
-    return json({ error: "JSON形式で送信してください。" }, 415);
-  const payload = (await request.json().catch(() => null)) as Record<
-    string,
-    unknown
-  > | null;
-  const identity = catalogRegistrationInput(payload);
-  if (!identity)
-    return json({ error: "公開記事の識別情報を確認してください。" }, 400);
-  if (!canEditSubject(scope, identity.subject))
-    return json(
-      { error: "この分野の記事を運営管理下へ登録する権限がありません。" },
-      403,
-    );
-  try {
-    const article = await getPublicArticleForIdentity(env, identity);
-    if (!article)
-      return json(
-        {
-          error:
-            "指定された公開記事がGitHub mainに見つかりません。公開済み記事だけ登録できます。",
-        },
-        404,
-      );
-    if (article.body.length > MAX_EDITORIAL_BODY_LENGTH)
-      return json(
-        { error: "公開記事本文が編集ワークスペースの上限を超えています。" },
-        413,
-      );
-    const key = article.identityKey;
-    const existingDocuments = await env.REPORTS.prepare(
-      `SELECT id, source_article_id, body, status, published_at FROM editorial_documents
-       WHERE locale=? AND subject=? AND category=? AND slug=?
-         AND (document_kind IS NULL OR document_kind='canonical')
-       ORDER BY CASE WHEN published_at IS NOT NULL THEN 0 ELSE 1 END, updated_at DESC, id`,
-    )
-      .bind(identity.locale, identity.subject, identity.category, identity.slug)
-      .all<{
-        id: string;
-        source_article_id: string | null;
-        body: string;
-        status: EditorialDocumentStatus;
-        published_at: string | null;
-      }>();
-    const documents = existingDocuments.results ?? [];
-    if (documents.length > 1)
-      return json(
-        {
-          error:
-            "同じ公開パスに複数の運営原稿があります。削除せず、重複原稿を整理してから登録してください。",
-          identityKey: key,
-          duplicateDocumentIds: documents.map((document) => document.id),
-        },
-        409,
-      );
-    const sourceDocument = documents[0];
-    const conflictingSource = await env.REPORTS.prepare(
-      "SELECT id, locale, subject, category, slug FROM editorial_documents WHERE source_article_id=? AND (document_kind IS NULL OR document_kind='canonical') AND (? IS NULL OR id != ?)",
-    )
-      .bind(
-        article.sourceArticleId,
-        sourceDocument?.id ?? null,
-        sourceDocument?.id ?? null,
-      )
-      .first<{
-        id: string;
-        locale: string;
-        subject: string;
-        category: string;
-        slug: string;
-      }>();
-    if (conflictingSource)
-      return json(
-        {
-          error: "この公開記事は別の運営原稿に紐付いています。",
-          code: "SOURCE_ARTICLE_LINK_CONFLICT",
-          documentId: conflictingSource.id,
-          documentIdentityKey: editorialArticleIdentity(conflictingSource),
-        },
-        409,
-      );
-    if (sourceDocument) {
-      if (
-        sourceDocument.source_article_id &&
-        sourceDocument.source_article_id !== article.sourceArticleId
-      )
-        return json(
-          { error: "同じ公開パスに別の公開記事IDが登録されています。" },
-          409,
-        );
-      await env.REPORTS.prepare(
-        "UPDATE editorial_documents SET source_article_id=?, updated_by=?, updated_at=? WHERE id=? AND source_article_id IS NULL",
-      )
-        .bind(
-          article.sourceArticleId,
-          scope.email,
-          new Date().toISOString(),
-          sourceDocument.id,
-        )
-        .run();
-      await upsertEditorialArticleCatalog(
-        env,
-        {
-          ...article,
-          registrationMethod: "public-article-link",
-        },
-        sourceDocument.id,
-        new Date().toISOString(),
-        scope.email,
-      );
-      return json({
-        ok: true,
-        registered:
-          sourceDocument.source_article_id !== article.sourceArticleId,
-        documentId: sourceDocument.id,
-        identityKey: key,
-        sourceChecksum: article.sourceChecksum,
-        sourceChecksumAlgorithm: article.sourceChecksumAlgorithm,
-        sourceAuthority: "reference-only",
-        bodySeed: "existing-editorial-document-preserved",
-        publicationStarted: false,
-      });
-    }
-    const documentId = await stableEditorialDocumentId(key);
-    const now = new Date().toISOString();
-    await env.REPORTS.prepare(
-      `INSERT OR IGNORE INTO editorial_documents
-       (id, creator_kind, source_article_id, subject, category, locale, slug, title, summary, concept_id, body, writing_memo, latex_engine,
-        status, created_by, updated_by, created_at, updated_at, reviewed_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references)
-       VALUES (?, 'organization', ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'katex', 'draft', ?, ?, ?, ?, NULL, NULL, NULL, NULL, 0, '[]', ?)`,
-    )
-      .bind(
-        documentId,
-        article.sourceArticleId,
-        article.subject,
-        article.category,
-        article.locale,
-        article.slug,
-        article.title,
-        article.summary,
-        article.conceptId,
-        article.body,
-        scope.email,
-        scope.email,
-        now,
-        now,
-        JSON.stringify(
-          normalizeArticleReferences(
-            article.references,
-            MAX_PERSONAL_REFERENCES,
-          ),
-        ),
-      )
-      .run();
-    const registered = await env.REPORTS.prepare(
-      "SELECT id, source_article_id FROM editorial_documents WHERE id=?",
-    )
-      .bind(documentId)
-      .first<{ id: string; source_article_id: string | null }>();
-    if (!registered || registered.source_article_id !== article.sourceArticleId)
-      return json(
-        {
-          error:
-            "記事登録が別の操作と競合しました。重複を作らず、もう一度確認してください。",
-        },
-        409,
-      );
-    await upsertEditorialArticleCatalog(
-      env,
-      {
-        ...article,
-        registrationMethod: "public-article-adoption",
-      },
-      documentId,
-      now,
-      scope.email,
-    );
-    return json(
-      {
-        ok: true,
-        registered: true,
-        documentId,
-        identityKey: key,
-        sourceChecksum: article.sourceChecksum,
-        sourceChecksumAlgorithm: article.sourceChecksumAlgorithm,
-        sourceAuthority: "reference-only",
-        bodySeed: "github-reference-only",
-        publicationStarted: false,
-      },
-      201,
-    );
-  } catch (error) {
-    return json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "公開記事を運営管理下へ登録できませんでした。",
-      },
-      502,
-    );
-  }
-}
-
-async function registerPublicArticlesInEditorialCatalog(
-  request: Request,
-  env: Env,
-): Promise<Response> {
-  const scope = await getAdminScope(request, env);
-  if (isResponse(scope)) return scope;
-  if (!isSameOrigin(request))
-    return json({ error: "この送信元からは受け付けられません。" }, 403);
-  if (!request.headers.get("content-type")?.includes("application/json"))
-    return json({ error: "JSON形式で送信してください。" }, 415);
-  const payload = (await request.json().catch(() => null)) as {
-    articles?: unknown;
-  } | null;
-  if (
-    !Array.isArray(payload?.articles) ||
-    payload.articles.length < 1 ||
-    payload.articles.length > 20
-  )
-    return json(
-      { error: "一括登録は1回につき1〜20件で指定してください。" },
-      400,
-    );
-
-  const uniqueArticles = new Map<
-    string,
-    { locale: string; subject: string; category: string; slug: string }
-  >();
-  for (const item of payload.articles) {
-    if (!item || typeof item !== "object")
-      return json({ error: "記事の識別情報を確認してください。" }, 400);
-    const identity = catalogRegistrationInput(item as Record<string, unknown>);
-    if (!identity)
-      return json({ error: "記事の識別情報を確認してください。" }, 400);
-    uniqueArticles.set(editorialArticleIdentity(identity), identity);
-  }
-
-  const results: Array<{
-    identityKey: string;
-    status: "registered" | "already-managed" | "conflict" | "failed";
-    documentId?: string;
-    error?: string;
-  }> = [];
-  const forwardedHeaders = new Headers({ "content-type": "application/json" });
-  for (const name of ["cookie", "origin", "authorization"] as const) {
-    const value = request.headers.get(name);
-    if (value) forwardedHeaders.set(name, value);
-  }
-  for (const [identityKey, identity] of uniqueArticles) {
-    const itemRequest = new Request(request.url, {
-      method: "POST",
-      headers: forwardedHeaders,
-      body: JSON.stringify(identity),
-    });
-    try {
-      const response = await registerPublicArticleInEditorialCatalog(
-        itemRequest,
-        env,
-      );
-      const body = (await response.json().catch(() => ({}))) as {
-        ok?: boolean;
-        registered?: boolean;
-        documentId?: string;
-        error?: string;
-      };
-      results.push({
-        identityKey,
-        status:
-          response.ok && body.ok
-            ? body.registered === false
-              ? "already-managed"
-              : "registered"
-            : response.status === 409
-              ? "conflict"
-              : "failed",
-        ...(body.documentId ? { documentId: body.documentId } : {}),
-        ...(body.error ? { error: body.error } : {}),
-      });
-    } catch (error) {
-      results.push({
-        identityKey,
-        status: "failed",
-        error:
-          error instanceof Error
-            ? error.message
-            : "公開記事を運営管理下へ登録できませんでした。",
-      });
-    }
-  }
-  return json({ ok: true, attempted: uniqueArticles.size, results });
 }
 
 const normalizePersonalMathPresets = (raw: unknown): PersonalMathPreset[] => {
@@ -9681,7 +9691,7 @@ async function provisionAcceptedApplication(
       provisioning_attempt_count: number;
     }>();
   if (!application || application.status !== "accepted")
-    return { status: "skipped", applied: 0, removed: 0, warnings: ["受入済みの応募ではありません。"], attempt: 0, nextAttemptAt: null };
+    return { status: "skipped", applied: 0, removed: 0, warnings: ["受け入れ済みの応募ではありません。"], attempt: 0, nextAttemptAt: null };
   if (application.project_slug === "atlas" && !(await isAtlasMemberActive(env, application.email))) {
     const warning = "休止・退会済みのアトラスメンバーのDiscord同期は停止しています。";
     await env.REPORTS.prepare(
@@ -12313,9 +12323,9 @@ async function memberIntakeTracking(
   if (consultationEmail && !EMAIL_PATTERN.test(consultationEmail))
     return json({ error: "相談先を確認してください。" }, 400);
   if (followUpAt && (!Number.isFinite(Date.parse(followUpAt)) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(followUpAt)))
-    return json({ error: "フォロー予定は日時を指定してください。" }, 400);
+    return json({ error: "次回確認予定日時を指定してください。" }, 400);
   if (typeof payload.followUpCompleted !== "boolean")
-    return json({ error: "フォロー完了状態を指定してください。" }, 400);
+    return json({ error: "確認の完了状態を指定してください。" }, 400);
   if (!Number.isInteger(payload.expectedRevision) || Number(payload.expectedRevision) < 0)
     return json({ error: "記録の更新番号を確認してください。再読み込みしてから保存してください。" }, 400);
   const expectedRevision = Number(payload.expectedRevision);
@@ -12352,11 +12362,11 @@ async function memberIntakeTracking(
       return json({ error: "担当者はこのプロジェクトの運営内運営から選択してください。" }, 403);
   }
   if (payload.followUpCompleted && !followUpAt && !existing?.follow_up_at)
-    return json({ error: "完了にする前にフォロー予定を入力してください。" }, 400);
+    return json({ error: "確認済みにする前に次回確認予定日時を入力してください。" }, 400);
   if (firstTaskTitle && existing?.first_task_id)
     return json({ error: "初回タスクは作成済みです。状態はタスク管理から更新してください。" }, 409);
   if (firstTaskTitle && !membership && !responsibleEmail)
-    return json({ error: "受入準備タスクを作る場合は担当運営者を選択してください。" }, 400);
+    return json({ error: "参加前の準備タスクを作る場合は担当運営者を選択してください。" }, 400);
 
   const now = new Date().toISOString();
   const contactAt = contactStatus === "not_contacted"
@@ -12378,7 +12388,7 @@ async function memberIntakeTracking(
          OR (? > 0 AND EXISTS (SELECT 1 FROM editorial_member_intake_tracking WHERE project_id=? AND email=? AND revision=? AND first_task_id IS NULL))
        )`,
     ).bind(taskId ?? crypto.randomUUID(), access.project.id, null, taskAssigneeEmail, firstTaskTitle,
-      membership ? `初回参加タスク：${email}\n参加後の小さな最初のタスクです。` : `受入準備タスク：${email}\n参加前の案内・準備に関する運営タスクです。`,
+      membership ? `初回参加タスク：${email}\n参加後の小さな最初のタスクです。` : `参加前の準備タスク：${email}\n参加前の案内・準備に関する運営タスクです。`,
       access.scope.email, now, now, firstTaskTitle, expectedRevision, access.project.id, email,
       expectedRevision, access.project.id, email, expectedRevision),
   ];
@@ -12411,7 +12421,7 @@ async function memberIntakeTracking(
     `INSERT INTO admin_audit_log (id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at)
      SELECT ?,?,'member_intake_updated','member',?,?,?, ?,? WHERE changes()=1`,
   ).bind(auditId, access.scope.email, `${access.project.id}:${email}`, email,
-    `メンバー受入フォローを更新：${email}`,
+    `応募者・メンバー対応記録を更新：${email}`,
     JSON.stringify({ projectId: access.project.id, projectSlug, applicationId: currentApp?.id ?? null, contactStatus, responsibleEmail, consultationEmail,
       firstTaskCreated: Boolean(taskId), firstTaskType: taskId ? firstTaskType : null, followUpAt, followUpCompleted: Boolean(followUpCompletedAt) }), now));
   try {
@@ -12420,7 +12430,7 @@ async function memberIntakeTracking(
     if (changes !== 1)
       return json({ error: "記録が別の運営者によって更新されています。再読み込みしてから保存してください。", code: "STALE_INTAKE" }, 409);
   } catch {
-    return json({ error: "受入フォロー記録を保存できませんでした。" }, 500);
+    return json({ error: "応募者・メンバー対応記録を保存できませんでした。" }, 500);
   }
   const updated = await env.REPORTS.prepare(
     `SELECT first_task_id,first_task_title,first_task_type,updated_at FROM editorial_member_intake_tracking WHERE project_id=? AND email=?`,
@@ -12556,7 +12566,7 @@ async function updateApplication(
     return json(
       {
         error:
-          "登録済み運営者との不整合を防ぐため、受入済み応募の状態は戻せません。権限変更は権限管理から行ってください。",
+          "登録済み運営者との不整合を防ぐため、受け入れ済み応募の状態は戻せません。権限変更は権限管理から行ってください。",
       },
       409,
     );
@@ -12610,7 +12620,7 @@ async function updateApplication(
     return json({ ok: true, status });
   }
 
-  // 旧形式の応募は追加列が空でも受入可能にし、自由記述から権限を推測しない。
+  // 旧形式の応募は追加列が空でも受け入れ可能にし、自由記述から権限を推測しない。
   const requestedSubjects =
     payload.desiredSubjects === undefined
       ? null
@@ -12788,7 +12798,7 @@ async function retryApplicationDiscordProvisioning(
   if (!application || application.project_slug !== canonicalApplicationProjectSlug(access.project.slug))
     return json({ error: "応募が見つかりません。" }, 404);
   if (application.status !== "accepted")
-    return json({ error: "受入済みの応募だけDiscord情報の確認を再試行できます。" }, 409);
+    return json({ error: "受け入れ済みの応募だけDiscord情報の確認を再試行できます。" }, 409);
   if (application.project_slug === "atlas" && !(await isAtlasMemberActive(env, application.email)))
     return json({ error: "休止・退会済みのアトラスメンバーのDiscord同期は再試行できません。", code: "MEMBER_INACTIVE" }, 409);
   const now = new Date().toISOString();
@@ -14568,30 +14578,37 @@ async function createAvailabilityRule(
   } catch {
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
-  const weekday = Number(payload.weekday);
+  const weekdayValues = Array.isArray(payload.weekdays)
+    ? payload.weekdays
+    : [payload.weekday];
+  const weekdays = weekdayValues.map(Number);
   const timezone = text(payload.timezone, 80) || "Asia/Tokyo";
   const kind = text(payload.kind, 20) || "unavailable";
   if (
-    !Number.isInteger(weekday) ||
-    weekday < 0 ||
-    weekday > 6 ||
+    weekdays.length < 1 ||
+    weekdays.length > 7 ||
+    new Set(weekdays).size !== weekdays.length ||
+    weekdays.some((weekday) => !Number.isInteger(weekday) || weekday < 0 || weekday > 6) ||
     !validTimeZone(timezone) ||
     !["available", "unavailable"].includes(kind)
   )
     return json({ error: "曜日、タイムゾーンまたは可否を確認してください。" }, 400);
-  await env.REPORTS.prepare(
-    "INSERT INTO editorial_member_availability_rules (id,email,weekday,timezone,label,kind,created_at) VALUES (?,?,?,?,?,?,?)",
-  )
-    .bind(
+  const createdAt = new Date().toISOString();
+  const statements = weekdays.map((weekday) =>
+    env.REPORTS.prepare(
+      "INSERT INTO editorial_member_availability_rules (id,email,weekday,timezone,label,kind,created_at) VALUES (?,?,?,?,?,?,?)",
+    ).bind(
       crypto.randomUUID(),
       scope.email,
       weekday,
       timezone,
       text(payload.label, 160),
       kind,
-      new Date().toISOString(),
-    )
-    .run();
+      createdAt,
+    ),
+  );
+  if (statements.length === 1) await statements[0].run();
+  else await env.REPORTS.batch(statements);
   return json({ ok: true });
 }
 
@@ -15184,7 +15201,7 @@ async function getOnboarding(request: Request, env: Env): Promise<Response> {
   if (isResponse(current)) return current;
   if (!canAccess(current.stage, "onboarding"))
     return json(
-      { error: "オンボーディングを開始できる段階ではありません。" },
+      { error: "参加後の案内を開始できる段階ではありません。" },
       403,
     );
   const [profile, internalProfile] = await Promise.all([
@@ -15224,7 +15241,7 @@ async function completeOnboarding(
   if (isResponse(current)) return current;
   if (!canAccess(current.stage, "onboarding"))
     return json(
-      { error: "オンボーディングを完了できる段階ではありません。" },
+      { error: "参加後の案内を完了できる段階ではありません。" },
       403,
     );
   if (!isSameOrigin(request))
@@ -18111,37 +18128,6 @@ const githubArticleMarkdown = async (
   return githubText(payload.content);
 };
 
-const githubArticleContent = async (
-  repository: string,
-  headers: Record<string, string>,
-  path: string,
-) => {
-  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-  const response = await fetch(
-    `https://api.github.com/repos/${repository}/contents/${encodedPath}?ref=main`,
-    { headers },
-  );
-  if (response.status === 404) return null;
-  if (!response.ok)
-    throw new Error(`GitHubの記事を取得できませんでした: ${path}`);
-  const payload = (await response.json()) as {
-    content?: string;
-    encoding?: string;
-    sha?: string;
-    type?: string;
-  };
-  if (
-    payload.type !== "file" ||
-    !payload.content ||
-    payload.encoding !== "base64"
-  )
-    throw new Error(`GitHubの記事本文を読み取れませんでした: ${path}`);
-  return {
-    markdown: githubText(payload.content),
-    gitSha: typeof payload.sha === "string" ? payload.sha : null,
-  };
-};
-
 const upsertEditorialArticleCatalog = async (
   env: Env,
   article: PublicArticleCatalogEntry,
@@ -21020,9 +21006,13 @@ async function getPublicationReviewState(
     feedbackTaskDone: feedbackTasks.done,
     feedbackComplete,
     canDecide:
-      Boolean(scope.isManager) ||
-      (document.publication_review_stage === "subject-coordinator" && canCoordinateSubject(scope, document.subject)) ||
-      (document.publication_review_stage === "project-leader" && Boolean(scope.isProjectLeader)),
+      document.status === "in-review" &&
+      Boolean(document.publication_review_stage) &&
+      (Boolean(scope.isManager) ||
+        (document.publication_review_stage === "subject-coordinator" &&
+          canCoordinateSubject(scope, document.subject)) ||
+        (document.publication_review_stage === "project-leader" &&
+          Boolean(scope.isProjectLeader))),
     managerOverride: Boolean(scope.isManager),
     coordinatorCount: coordinators.length,
     leaderCount: leaders.length,
@@ -21137,7 +21127,8 @@ async function decidePublicationReview(
     .first<EditorialDocument>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   const stage = document.publication_review_stage;
-  if (!stage) return json({ error: "この原稿は公開審査中ではありません。" }, 409);
+  if (document.status !== "in-review" || !stage)
+    return json({ error: "この原稿は公開審査中ではありません。" }, 409);
   const managerOverride = scope.isManager;
   const authorized = managerOverride || (stage === "subject-coordinator"
     ? canCoordinateSubject(scope, document.subject)
@@ -21568,6 +21559,12 @@ const userAreaForPath = (pathname: string): UserArea | null => {
   return null;
 };
 
+const legacySeminarReviewPage = (pathname: string) =>
+  /^\/seminars\/operations\/?$/.test(pathname);
+
+const seminarPage = (pathname: string) =>
+  /^\/seminars(?:\/(?:detail|propose|join|member|workspace))?\/?$/.test(pathname);
+
 /** Safe OAuth return target for every authenticated user area. */
 const userReturnPath = (value: string | null) => {
   if (!value) return "/apply/";
@@ -21598,6 +21595,8 @@ const userReturnPath = (value: string | null) => {
     return `/auth/native-app/complete?state=${encodeURIComponent(state)}&challenge=${encodeURIComponent(challenge)}&redirect_uri=${encodeURIComponent(redirectURI)}`;
   }
   if (parsed.pathname === "/") return "/";
+  if (legacySeminarReviewPage(parsed.pathname)) return SEMINAR_REVIEW_PATH;
+  if (seminarPage(parsed.pathname)) return parsed.pathname + parsed.search;
   if (isAdminPagePath(parsed.pathname)) return adminReturnPath(candidate);
   if (isApplicantPath(parsed.pathname)) return "/applicant/";
   if (isOnboardingPath(parsed.pathname))
@@ -22582,11 +22581,12 @@ async function completeGoogleLogin(
   const requestedArea = requestedPathname === "/auth/native-app/complete"
     ? "admin"
     : userAreaForPath(requestedPathname);
-  const stage = await getUserStageForEmail(account.canonical_email, env);
-  const location =
-    requestedArea && canAccess(stage.stage, requestedArea)
-      ? requestedReturnTo
-      : stageHome(stage.stage, stage.projectSlug);
+  let location = requestedReturnTo;
+  if (!seminarPage(requestedPathname) && !isSeminarReviewPath(requestedPathname)) {
+    const stage = await getUserStageForEmail(account.canonical_email, env);
+    if (!requestedArea || !canAccess(stage.stage, requestedArea))
+      location = stageHome(stage.stage, stage.projectSlug);
+  }
   const headers = new Headers({ location });
   headers.append(
     "set-cookie",
@@ -23022,10 +23022,10 @@ async function adminNotifications(
       [scope.email, scope.email, scope.email, ...notificationProjectBindings, scope.email],
     ),
     queryNotificationSource<{
-      id: string; title: string; task_kind: string; details: string; project_id: string;
+      id: string; title: string; task_kind: string; details: string; project_id: string; subject: string | null;
       feedback_document_id: string | null; project_slug: string; updated_at: string;
     }>(
-      `SELECT t.id,t.title,t.task_kind,t.details,t.project_id,t.updated_at,
+      `SELECT t.id,t.title,t.task_kind,t.details,t.project_id,t.subject,t.updated_at,
          feedback_link.document_id AS feedback_document_id,
          COALESCE(p.slug,t.project_id) AS project_slug
        FROM editorial_tasks t
@@ -23158,9 +23158,11 @@ async function adminNotifications(
       kind: item.task_kind === "feedback" ? "feedback-request" : "task-request",
       title: `${taskKindLabel(item.task_kind)}：${item.title}`,
       detail: item.details?.split("\n")[0] || "依頼内容を確認してください。",
-      href: !scope.memberAccess && item.task_kind === "feedback" && item.feedback_document_id
-        ? `/admin/editor/?document=${encodeURIComponent(item.feedback_document_id)}`
-        : `/admin/task-detail/?task=${encodeURIComponent(item.id)}`,
+      href: item.subject === "member-profile-change"
+        ? "/admin/profile-requests/"
+        : !scope.memberAccess && item.task_kind === "feedback" && item.feedback_document_id
+          ? `/admin/editor/?document=${encodeURIComponent(item.feedback_document_id)}`
+          : `/admin/task-detail/?task=${encodeURIComponent(item.id)}`,
       updatedAt: item.updated_at,
     })),
     ...(applicationRows.results ?? []).map((item) => ({
@@ -23594,6 +23596,21 @@ async function handleAdminRequest(
   ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === "/api/seminars" || url.pathname.startsWith("/api/seminars/"))
+    return handleSeminarApi(request, env.REPORTS, {
+      account: () => getAuthenticatedAtlasezAccount(request, env),
+      reviewer: async () => {
+        const access = await getProjectReviewerScope(request, env, "seminar-platform");
+        return isResponse(access) ? access : true;
+      },
+      primaryEmail: primaryAdminEmail(env),
+      origin: env.ADMIN_PUBLIC_ORIGIN ?? "https://admin.atlasez.org",
+    });
+  if (request.method === "GET" || request.method === "HEAD") {
+    if (legacySeminarReviewPage(url.pathname))
+      return new Response(null, { status: 302, headers: { location: SEMINAR_REVIEW_PATH } });
+    if (seminarPage(url.pathname)) return fetchAdminAsset(request, env);
+  }
   if (url.pathname === "/api/internal/github-publication-webhook")
     return receiveGithubPublicationWebhook(request, env, ctx);
   if (url.pathname === "/internal/article-reports")
@@ -23765,6 +23782,11 @@ async function handleAdminRequest(
     if (isResponse(scope)) return scope;
     return handleManagerGrants(request, env.REPORTS, scope.email);
   }
+  if (
+    url.pathname === "/api/admin/member-migrations" &&
+    request.method === "POST"
+  )
+    return migrateLegacyMembers(request, env);
   if (url.pathname === "/api/admin/report-admin-permissions") {
     if (request.method === "GET")
       return listReportAdminPermissions(request, env);
@@ -23800,8 +23822,9 @@ async function handleAdminRequest(
   if (url.pathname === "/api/admin/member-management") {
     if (request.method === "GET") return listArchivedAtlasMembers(request, env);
     if (request.method === "POST") return changeAtlasMemberLifecycle(request, env);
+    if (request.method === "PATCH") return updateAtlasMemberProfile(request, env);
     if (request.method === "DELETE") return removeAtlasMember(request, env);
-    return json({ error: "GET、POST、DELETEのみ利用できます。" }, 405);
+    return json({ error: "GET、POST、PATCH、DELETEのみ利用できます。" }, 405);
   }
   if (url.pathname === "/api/admin/genre-role-catalog")
     return genreRoleCatalog(request, env);
@@ -24136,21 +24159,6 @@ async function handleAdminRequest(
     );
   if (url.pathname === "/api/admin/editor/catalog" && request.method === "GET")
     return getEditorialArticleCatalog(request, env);
-  if (
-    url.pathname === "/api/admin/editor/catalog/diagnostics" &&
-    request.method === "GET"
-  )
-    return getEditorialArticleCatalogDiagnostics(request, env);
-  if (
-    url.pathname === "/api/admin/editor/catalog/register" &&
-    request.method === "POST"
-  )
-    return registerPublicArticleInEditorialCatalog(request, env);
-  if (
-    url.pathname === "/api/admin/editor/catalog/register-bulk" &&
-    request.method === "POST"
-  )
-    return registerPublicArticlesInEditorialCatalog(request, env);
   if (url.pathname === "/api/admin/editor/documents") {
     if (request.method === "GET") return listEditorialDocuments(request, env);
     if (request.method === "POST") return createEditorialDocument(request, env);
@@ -24343,11 +24351,17 @@ async function handleAdminRequest(
       ? updateArticleReport(request, env, match[1])
       : json({ error: "PATCHのみ利用できます。" }, 405);
   // プロジェクト固有ページは所属・担当roleで判定し、記事管理権限を要求しない。
-  if (projectHomeForPath(url.pathname) || /^\/admin\/(?:manage|workspace|introductions|applications|member-intake|project-profile-requests|profile-requests)\/?$/.test(url.pathname)) {
+  const seminarReviewPage = isSeminarReviewPath(url.pathname);
+  if (seminarReviewPage || projectHomeForPath(url.pathname) || /^\/admin\/(?:manage|workspace|introductions|applications|member-intake|project-profile-requests|profile-requests)\/?$/.test(url.pathname)) {
     // Home paths define their project. A query must never grant a different home.
     const requestedProject = projectHomeForPath(url.pathname) ?? url.searchParams.get("project") ?? "atlas";
     let access: AdminScope | ProjectReviewerScope | OperationProject | Response;
-    if (/^\/admin\/profile-requests\/?$/.test(url.pathname))
+    if (seminarReviewPage) {
+      if (request.method !== "GET" && request.method !== "HEAD")
+        return json({ error: "GET、HEADのみ利用できます。" }, 405);
+      access = await getProjectReviewerScope(request, env, "seminar-platform");
+    }
+    else if (/^\/admin\/profile-requests\/?$/.test(url.pathname))
       access = await getSecretariatReviewerScope(request, env);
     else if (/^\/admin\/project-profile-requests\/?$/.test(url.pathname))
       access = await getProjectProfileReviewerScope(request, env, requestedProject);
@@ -24585,6 +24599,7 @@ export default {
           applyDueMemberProcedures(env.REPORTS),
           archiveStaleCompletedTasks(env),
           dispatchApplicationEmails(env),
+          dispatchApplicationEmails(env, { channel: "seminar" }),
           dispatchPendingDiscordProvisioning(env),
           syncDiscordRolesToAdmin(env),
           dispatchScheduledEditorialPublications(env),

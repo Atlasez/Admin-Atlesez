@@ -152,6 +152,13 @@ test("B-1: 応募フロー・状況集計・検索と状態フィルターを表
   ).toBeVisible();
   await expect(page.locator(".project-switcher")).toHaveCount(0);
   await expect(page.locator(".flow-steps > li")).toHaveCount(4);
+  await expect(page.locator(".flow-steps")).toContainText("受け入れを確定");
+  await expect(page.locator(".summary-card--accepted")).toContainText(
+    "受け入れ済み",
+  );
+  await expect(page.locator(".intake-link a")).toHaveText(
+    "応募者・メンバーの連絡・準備記録を管理 →",
+  );
   await expect(page.locator("[data-total-count]")).toHaveText("2件");
   await expect(page.locator("[data-summary-new]")).toHaveText("1");
   await expect(page.locator("[data-summary-reviewing]")).toHaveText("1");
@@ -164,6 +171,45 @@ test("B-1: 応募フロー・状況集計・検索と状態フィルターを表
   await page.locator("[data-filter-status]").selectOption("reviewing");
   await expect(page.locator(".application-list .app")).toHaveCount(1);
   await expect(page.locator(".application-list")).toContainText("佐藤 花子");
+});
+
+test("面談画面の応募結果は受け入れ・見送りと表示する", async ({ page }) => {
+  await page.route("**/api/admin/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    return route.fulfill({
+      json: path.endsWith("/interview")
+        ? {
+            application: {
+              id: "application-1",
+              name: "応募者",
+              email: "applicant@example.test",
+              status: "reviewing",
+            },
+            interview: {},
+            review: { decision: "pending" },
+            subjectLabels: { mathematics: "数学" },
+          }
+        : {},
+    });
+  });
+
+  await page.goto(
+    "admin/application-interview/?application=application-1&project=atlas",
+  );
+
+  await expect(
+    page.getByRole("heading", { name: "担当分野と応募結果" }),
+  ).toBeVisible();
+  const result = page.locator("[data-decision]");
+  await expect(result.locator('option[value="accepted"]')).toHaveText(
+    "受け入れ",
+  );
+  await expect(result.locator('option[value="rejected"]')).toHaveText("見送り");
+  await result.selectOption("accepted");
+  await expect(page.locator("[data-confirm-wrap]")).toContainText(
+    "受け入れを確定し",
+  );
+  await expect(page.locator(".review-form")).not.toContainText("採用");
 });
 
 test("応募メールの失敗理由を担当応募にだけ表示しメール内容は表示しない", async ({
