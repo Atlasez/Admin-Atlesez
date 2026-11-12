@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 
-import { createMarkdownProcessor } from "@astrojs/markdown-remark";
+import { Blob as NodeBlob } from "node:buffer";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ARTICLE_MARKDOWN_PROCESSOR_OPTIONS } from "../../src/lib/article-markdown.mjs";
 import { applySubjectPreviewProfile } from "../../src/scripts/admin-editor-subject-preview";
+
+// Shiki's WASM loader needs Blob.stream(), which jsdom does not implement.
+globalThis.Blob = NodeBlob as unknown as typeof Blob;
+const { createMarkdownProcessor } = await import("@astrojs/markdown-remark");
 
 const mountPreview = (html: string) => {
   document.body.innerHTML = `<article class="article-preview">${html}</article>`;

@@ -407,6 +407,34 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     background: #e7f1fb;
     color: #185c86;
   }
+  [data-pref-bg="dark"] .admin-page[data-article-index] .draft,
+  [data-pref-bg="dark"] .admin-page[data-article-index] .badge.archived {
+    background: var(--background-secondary);
+    border-color: var(--border-default);
+    color: var(--text-secondary);
+  }
+  [data-pref-bg="dark"] .admin-page[data-article-index] .in-review,
+  [data-pref-bg="dark"] .admin-page[data-article-index] .badge.scheduled {
+    background: color-mix(in srgb, var(--warning) 14%, var(--background-primary));
+    border-color: color-mix(in srgb, var(--warning) 48%, var(--border-default));
+    color: var(--warning);
+  }
+  [data-pref-bg="dark"] .admin-page[data-article-index] .on-hold {
+    background: color-mix(in srgb, var(--danger) 14%, var(--background-primary));
+    border-color: color-mix(in srgb, var(--danger) 48%, var(--border-default));
+    color: var(--danger);
+  }
+  [data-pref-bg="dark"] .admin-page[data-article-index] .approved,
+  [data-pref-bg="dark"] .admin-page[data-article-index] .badge.editing {
+    background: color-mix(in srgb, var(--success) 14%, var(--background-primary));
+    border-color: color-mix(in srgb, var(--success) 48%, var(--border-default));
+    color: var(--success);
+  }
+  [data-pref-bg="dark"] .admin-page[data-article-index] .published {
+    background: color-mix(in srgb, var(--accent-primary) 14%, var(--background-primary));
+    border-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-default));
+    color: var(--accent-primary);
+  }
   .proposal-action {
     align-items: center;
     background: var(--background-secondary);
