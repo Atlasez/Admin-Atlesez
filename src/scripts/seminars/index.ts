@@ -1,4 +1,3 @@
-import { initApplicationForm, renderCatalog, renderDetail } from "./catalog";
 import { renderDashboard, renderWorkspace } from "./member";
 import { api, errorMessage, html, loginUrl } from "./shared";
 
@@ -21,13 +20,7 @@ const session = api<Session>("/session").then((value) => {
 });
 
 async function renderPage() {
-  if (page === "propose" || page === "join") {
-    await initApplicationForm(page, await session);
-    return;
-  }
   if (!content) return;
-  if (page === "catalog") return renderCatalog(content);
-  if (page === "detail") return renderDetail(content);
   if (!(await session).signedIn) {
     content.innerHTML = `<div class="seminar-entry"><p>閲覧するにはログインしてください。</p><a class="button" href="${html(loginUrl())}">Googleでログイン</a></div>`;
     return;
@@ -40,14 +33,9 @@ async function renderPage() {
   }
 }
 
-void session.catch(() => {
-  /* Public pages can still load the catalog. */
-});
 void renderPage()
   .catch((error) => {
-    const target =
-      content ?? document.querySelector<HTMLElement>("[data-form-auth]");
-    if (target)
-      target.innerHTML = `<p role="alert" class="seminar-error">${html(errorMessage(error))}</p>`;
+    if (content)
+      content.innerHTML = `<p role="alert" class="seminar-error">${html(errorMessage(error))}</p>`;
   })
   .finally(() => content?.removeAttribute("aria-busy"));

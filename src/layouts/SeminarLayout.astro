@@ -10,9 +10,7 @@ interface Props {
 }
 const { title, page } = Astro.props;
 const nav = [
-  { label: "ゼミ一覧", href: "/seminars/", page: "catalog" },
-  { label: "企画する", href: "/seminars/propose/", page: "propose" },
-  { label: "参加申請", href: "/seminars/join/", page: "join" },
+  { label: "ゼミ一覧", href: "https://atlasez.org/seminars/", page: "catalog" },
   { label: "参加者ページ", href: "/seminars/member/", page: "member" },
   { label: "運営ページ", href: SEMINAR_REVIEW_PATH, page: "operations" },
 ];
