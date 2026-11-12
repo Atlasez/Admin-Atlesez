@@ -14,6 +14,10 @@ import {
 } from "./editorial-image.mjs";
 import { renderTikzSource } from "./tikz-renderer.mjs";
 import { remarkJapaneseStrong } from "./article-japanese-strong.mjs";
+import {
+  rehypeKanjiDictionaryLayout,
+  remarkKanjiDictionaryLayout,
+} from "./kanji-dictionary-layout.mjs";
 export { remarkJapaneseStrong } from "./article-japanese-strong.mjs";
 import { fromHtml } from "hast-util-from-html";
 
@@ -133,13 +137,17 @@ export const ARTICLE_REMARK_PLUGINS = [
   remarkMath,
   remarkArticleOrderedListContinuation,
   remarkJapaneseStrong,
+  remarkKanjiDictionaryLayout,
   remarkEditorialImageSizes,
   remarkArticleMathMacros,
   remarkArticleTikz,
 ];
 
 /** @type {import("@astrojs/markdown-remark").AstroMarkdownOptions["rehypePlugins"]} */
-export const ARTICLE_REHYPE_PLUGINS = [rehypeArticleKatex];
+export const ARTICLE_REHYPE_PLUGINS = [
+  rehypeKanjiDictionaryLayout,
+  rehypeArticleKatex,
+];
 
 /** @type {import("@astrojs/markdown-remark").AstroMarkdownOptions} */
 export const ARTICLE_MARKDOWN_PROCESSOR_OPTIONS = {

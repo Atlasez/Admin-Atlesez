@@ -17,11 +17,11 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       <a href="/admin/procedures/">休止・退会・再開の手続き →</a>
     </aside>
 
-    <section class="my-intake" data-my-intake hidden aria-label="あなたの参加後フォロー">
-      <h2>あなたの参加後フォロー</h2>
+    <section class="my-intake" data-my-intake hidden aria-label="参加後の案内・確認">
+      <h2>参加後の案内・確認</h2>
       <p data-my-intake-summary>読み込み中…</p>
       <div data-my-intake-entries></div>
-      <button type="button" data-my-intake-retry hidden>参加後フォローを再読み込み</button>
+      <button type="button" data-my-intake-retry hidden>参加後の案内を再読み込み</button>
     </section>
 
     <section class="portal-summary" aria-label="ポータルの概要" data-portal-summary>
@@ -585,12 +585,12 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       myIntakeRetry.hidden = true;
       myIntakeSection.hidden = entries.length === 0;
       if (!entries.length) return;
-      myIntakeSummary.textContent = '運営と共有している連絡・初回タスク・次回フォローの記録です。';
+      myIntakeSummary.textContent = '運営と共有している連絡状況、初回タスク、次回確認予定を表示します。';
       myIntakeEntries.innerHTML = entries.map((entry) => {
         const task = entry.first_task_title ? `<li>${entry.first_task_type === 'operator' ? '参加前の運営準備' : '初回の小さなタスク'}：${escapeHtml(entry.first_task_title)}${entry.first_task_id && entry.first_task_type !== 'operator' ? ` <a href="/admin/task-detail/?task=${encodeURIComponent(entry.first_task_id)}">タスクを開く →</a>` : ''}</li>` : '';
-        const followup = entry.follow_up_completed_at ? `次回フォロー：完了（${escapeHtml(formatDate(entry.follow_up_completed_at))}）` : entry.follow_up_at ? `次回フォロー：${escapeHtml(formatDate(entry.follow_up_at))}` : '次回フォロー：未設定';
+        const confirmation = entry.follow_up_completed_at ? `確認済み（${escapeHtml(formatDate(entry.follow_up_completed_at))}）` : entry.follow_up_at ? `次回確認予定：${escapeHtml(formatDate(entry.follow_up_at))}` : '次回確認予定：未設定';
         const contact = entry.contact_status === 'replied' ? '返信あり' : entry.contact_status === 'contacted' ? '連絡済み' : '連絡前';
-        return `<article><strong>${escapeHtml(entry.project_name)}</strong><ul><li>連絡状況：${contact}</li><li>担当運営者：${escapeHtml(entry.responsible_name || '未設定')}</li><li>相談先：${escapeHtml(entry.consultation_name || '未設定')}</li><li>${followup}</li>${task}</ul></article>`;
+        return `<article><strong>${escapeHtml(entry.project_name)}</strong><ul><li>連絡状況：${contact}</li><li>担当運営者：${escapeHtml(entry.responsible_name || '未設定')}</li><li>相談先：${escapeHtml(entry.consultation_name || '未設定')}</li><li>${confirmation}</li>${task}</ul></article>`;
       }).join('');
     };
     type PortalLanguage = 'ja' | 'en';
@@ -795,7 +795,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       } catch {
         if (!lifecycle.signal.aborted) {
           myIntakeSection.hidden = false;
-          myIntakeSummary.textContent = '参加後フォローを読み込めませんでした。再読み込みしてください。';
+          myIntakeSummary.textContent = '参加後の案内を読み込めませんでした。再読み込みしてください。';
           myIntakeEntries.replaceChildren();
           myIntakeRetry.hidden = false;
         }

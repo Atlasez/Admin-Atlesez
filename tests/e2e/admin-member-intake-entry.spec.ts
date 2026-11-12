@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("担当プロジェクトへの受入フォローリンクは直接そのプロジェクトの記録を読み込む", async ({
+test("担当プロジェクトへの対応記録リンクは直接そのプロジェクトの記録を読み込む", async ({
   page,
 }) => {
   await page.route("**/api/admin/**", async (route) => {

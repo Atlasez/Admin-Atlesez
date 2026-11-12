@@ -18,8 +18,8 @@
   --text-scale: 1;
   --line-height-body: 1.75;
   --font-size-body: calc(1rem * var(--text-scale));
-  /* 要対応ダイアログの背景不透明度。0～100%（標準60%）に調整する。 */
-  --command-glass-opacity: 60%;
+  /* ポップアップの背景不透明度。初期値は不透明（透け感0%）。 */
+  --command-glass-opacity: 100%;
   --command-glass-blur: 6px;
 
   /* 色（ライト＝紙のような白） */

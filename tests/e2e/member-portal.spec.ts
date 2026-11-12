@@ -742,6 +742,195 @@ test("タスク検索はAPIに条件を渡し、全件数と表示件数を区�
   await expect.poll(() => queries.at(-1)?.get("status")).toBe("doing");
 });
 
+test("タスク詳細から戻ると検索条件・表示対象・一覧位置を復元する", async ({
+  page,
+}) => {
+  await baseAdminMocks(page);
+  const taskId = (index: number) =>
+    `11111111-1111-4111-8111-${String(index).padStart(12, "0")}`;
+  const tasks = Array.from({ length: 51 }, (_, index) => ({
+    id: taskId(index + 1),
+    project_id: "atlas",
+    title: `復元対象 ${String(index + 1).padStart(2, "0")}`,
+    status: "open",
+    created_by_me: true,
+    assigned_to_me: false,
+    can_update: false,
+    is_test_data: 1,
+  }));
+  const queries: URLSearchParams[] = [];
+  await page.route("**/api/admin/member-tasks**", (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    queries.push(new URLSearchParams(params));
+    const isSecondPage = params.get("cursor") === "second-page";
+    return route.fulfill({
+      json: {
+        scope: {
+          email: "manager@example.com",
+          isManager: true,
+          memberAccess: true,
+        },
+        projects: [{ id: "atlas", name: "アトラス", role: "manager" }],
+        members: [],
+        tasks: isSecondPage ? tasks.slice(50) : tasks.slice(0, 50),
+        pagination: {
+          nextCursor: isSecondPage ? null : "second-page",
+          hasMore: !isSecondPage,
+        },
+      },
+    });
+  });
+  await page.route("**/api/admin/task-workspaces/**", (route) =>
+    route.fulfill({
+      json: {
+        task: {
+          id: taskId(51),
+          title: "復元対象 51",
+          status: "open",
+          updatedAt: "2026-11-10T00:00:00.000Z",
+          assigneeEmails: [],
+        },
+        workspace: {
+          summary: "",
+          nextAction: "",
+          waitingFor: "",
+          documentId: null,
+          checklist: [],
+          revision: 0,
+        },
+        dependencies: [],
+        candidates: [],
+        members: [],
+        history: [],
+        canEdit: true,
+        canAssign: true,
+      },
+    }),
+  );
+
+  await page.goto("admin/member-tasks/?project=atlas");
+  await page.getByRole("button", { name: "自分が依頼" }).click();
+  await page.locator("[data-task-search]").fill("復元");
+  await page.locator("[data-status-filter]").selectOption("unfinished");
+  await page.locator("[data-due-filter]").selectOption("week");
+  await page.locator("[data-show-archived]").check();
+  await page.locator("[data-show-test]").check();
+  await expect(page.locator(`[data-task-id="${taskId(1)}"]`)).toBeVisible();
+  await page.locator("[data-task-load-more]").click();
+  const targetTask = page.locator(`[data-task-id="${taskId(51)}"]`);
+  await expect(targetTask).toBeVisible();
+  const detailLink = targetTask.getByRole("link", {
+    name: "詳細・引き継ぎ →",
+  });
+  await detailLink.scrollIntoViewIfNeeded();
+  const originalScrollY = await page.evaluate(() => window.scrollY);
+  expect(originalScrollY).toBeGreaterThan(0);
+  await detailLink.click();
+
+  const backLink = page.getByRole("link", { name: "タスク管理へ戻る" });
+  await expect(backLink).toHaveAttribute("href", /view=created/);
+  await expect(backLink).toHaveAttribute("href", /__returnScroll=/);
+  await expect(backLink).toHaveAttribute("href", /__returnCount=51/);
+  await backLink.click();
+
+  await expect(page.locator(`[data-task-id="${taskId(51)}"]`)).toBeVisible();
+  await expect(page.locator("[data-task-search]")).toHaveValue("復元");
+  await expect(page.locator("[data-status-filter]")).toHaveValue("unfinished");
+  await expect(page.locator("[data-due-filter]")).toHaveValue("week");
+  await expect(page.locator("[data-show-archived]")).toBeChecked();
+  await expect(page.locator("[data-show-test]")).toBeChecked();
+  await expect(page.locator('[data-filter="created"]')).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect
+    .poll(() =>
+      queries.some(
+        (params) =>
+          params.get("cursor") === "second-page" &&
+          params.get("view") === "created" &&
+          params.get("q") === "復元" &&
+          params.get("status") === "unfinished" &&
+          params.get("due") === "week" &&
+          params.get("includeArchived") === "1" &&
+          params.get("includeTestData") === "1" &&
+          params.get("project") === "atlas",
+      ),
+    )
+    .toBe(true);
+  await expect
+    .poll(async () =>
+      Math.abs((await page.evaluate(() => window.scrollY)) - originalScrollY),
+    )
+    .toBeLessThanOrEqual(3);
+});
+
+test("遷移イベント後に古いタスク一覧位置を適用しない", async ({ page }) => {
+  await baseAdminMocks(page);
+  let releaseSecondPage!: () => void;
+  let markSecondPageStarted!: () => void;
+  const secondPageGate = new Promise<void>((resolve) => {
+    releaseSecondPage = resolve;
+  });
+  const secondPageStarted = new Promise<void>((resolve) => {
+    markSecondPageStarted = resolve;
+  });
+  const firstPageTasks = Array.from({ length: 50 }, (_, index) => ({
+    id: `task-${index + 1}`,
+    project_id: "atlas",
+    title: `タスク ${index + 1}`,
+    status: "open",
+    created_by_me: true,
+    can_update: false,
+  }));
+  await page.route("**/api/admin/member-tasks**", async (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const isSecondPage = params.get("cursor") === "second-page";
+    if (isSecondPage) {
+      markSecondPageStarted();
+      await secondPageGate;
+    }
+    return route.fulfill({
+      json: {
+        scope: {
+          email: "manager@example.com",
+          isManager: true,
+          memberAccess: true,
+        },
+        projects: [{ id: "atlas", name: "アトラス", role: "manager" }],
+        tasks: isSecondPage
+          ? [
+              {
+                id: "task-51",
+                project_id: "atlas",
+                title: "タスク 51",
+                status: "open",
+                created_by_me: true,
+                can_update: false,
+              },
+            ]
+          : firstPageTasks,
+        pagination: {
+          nextCursor: isSecondPage ? null : "second-page",
+          hasMore: !isSecondPage,
+        },
+      },
+    });
+  });
+
+  await page.goto(
+    "admin/member-tasks/?view=created&__returnScroll=1200&__returnCount=51",
+  );
+  await secondPageStarted;
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event("astro:before-swap"));
+    window.scrollTo(0, 0);
+  });
+  releaseSecondPage();
+
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test("横断タスクで閲覧のみのタスクは状態保存とアーカイブを表示しない", async ({
   page,
 }) => {
