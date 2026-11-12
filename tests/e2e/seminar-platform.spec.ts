@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import { SEMINAR_REVIEW_PATH } from "../../src/lib/admin-routes";
-import { seminarFields } from "../../src/lib/seminar-fields";
 
 const seminar = {
   number: 32,
@@ -8,7 +7,6 @@ const seminar = {
   recruitment: "open",
   phase: "active",
   acceptingApplications: true,
-  sourceUrl: null,
   details: {
     theme: "複素幾何学",
     purpose: "リーマン面を理解する",
@@ -18,65 +16,58 @@ const seminar = {
   },
 };
 
-test("一般ページの検索から詳細・サイト内参加申請へ進む", async ({ page }) => {
-  let submitted = false;
-  await page.route("**/api/seminars**", async (route) => {
-    const path = new URL(route.request().url()).pathname;
-    if (path === "/api/seminars/session") {
-      return route.fulfill({
-        json: { signedIn: true, email: "reader@atlasez.test" },
-      });
-    }
-    if (path === "/api/seminars/32/join") {
-      expect(route.request().postDataJSON()).toMatchObject({
-        name: "テスト参加者",
-        hostNote: "見学希望",
-      });
-      submitted = true;
-      return route.fulfill({ status: 201, json: { id: "application-1" } });
-    }
-    if (path === "/api/seminars/32") return route.fulfill({ json: seminar });
-    return route.fulfill({ json: { seminars: [seminar] } });
-  });
-  await page.goto("seminars/");
-  await expect(page.getByText("ログイン中", { exact: true })).toBeVisible();
-  const search = page.getByRole("searchbox");
-  await search.fill("存在しないゼミ");
-  await expect(
-    page.getByText("検索条件に一致するゼミはありません。"),
-  ).toBeVisible();
-  await search.fill("０００００３２ Forster");
-  await expect(page.getByText("1件", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "リーマン面ゼミ" }).click();
-  await expect(
-    page.getByRole("heading", { name: "リーマン面ゼミ" }),
-  ).toBeVisible();
-  await expect(page.getByText("リーマン面を理解する")).toBeVisible();
-  await page.getByRole("link", { name: "このゼミに参加申請する" }).click();
-  await expect(page.getByLabel("ゼミ名・番号（必須）")).toHaveValue("32");
-  await page.getByLabel("氏名（必須）", { exact: true }).fill("テスト参加者");
-  await page.locator('[name="hostNote"]').fill("見学希望");
-  await page.getByRole("button", { name: "参加を申請する" }).click();
-  await expect(
-    page.getByRole("heading", { name: "参加申請を受け付けました" }),
-  ).toBeVisible();
-  expect(submitted).toBe(true);
-});
-
-test("Googleログインへの導線は選択したゼミを保持する", async ({ page }) => {
+test("一覧を元サイトと同じ募集状況ごとに表示し検索できる", async ({ page }) => {
+  const seminars = [
+    seminar,
+    {
+      ...seminar,
+      number: 31,
+      title: "分子軌道法ゼミ",
+      recruitment: "paused",
+      phase: "ended",
+    },
+    {
+      ...seminar,
+      number: 30,
+      title: "一般確率論ゼミ",
+      recruitment: "closed",
+      phase: "ended",
+    },
+  ];
   await page.route("**/api/seminars/session", (route) =>
     route.fulfill({ json: { signedIn: false } }),
   );
-  await page.goto("seminars/join/?number=32");
-  await expect(
-    page.getByRole("link", { name: "Googleでログイン" }),
-  ).toHaveAttribute(
-    "href",
-    "/auth/google/login?returnTo=%2Fseminars%2Fjoin%2F%3Fnumber%3D32",
+  await page.route("**/api/seminars", (route) =>
+    route.fulfill({ json: { seminars } }),
   );
+
+  await page.goto("/seminars/");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "ゼミ一覧" }),
+  ).toBeVisible();
+  for (const status of ["募集中", "募集停止", "募集終了"]) {
+    await expect(
+      page.getByRole("heading", { level: 2, name: status }),
+    ).toBeVisible();
+  }
+  await expect(page.getByText("開催状況：終了").first()).toBeVisible();
+  await expect(page.getByText("3件のゼミを掲載しています。")).toBeVisible();
+  await page.getByText("内容を確認").first().click();
+  await expect(page.getByText("目的").first()).toBeVisible();
+
+  await page
+    .getByRole("searchbox", { name: "ゼミ名・テーマ・教材で検索" })
+    .fill("一般確率論");
+  await expect(
+    page.getByRole("heading", { level: 3, name: "一般確率論ゼミ" }),
+  ).toBeVisible();
+  await expect(page.getByText("1件が見つかりました。")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 3, name: "リーマン面ゼミ" }),
+  ).toHaveCount(0);
 });
 
-test("企画の送信と運営承認をサイト内で行う", async ({ page }) => {
+test("ゼミ運営担当者は企画申請を確認・承認できる", async ({ page }) => {
   let status = "pending";
   await page.route("**/api/admin/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -100,13 +91,6 @@ test("企画の送信と運営承認をサイト内で行う", async ({ page }) 
           canReview: true,
         },
       });
-    if (path === "/api/seminars/proposals") {
-      expect(route.request().postDataJSON()).toMatchObject({
-        title: seminar.title,
-        observation: "可",
-      });
-      return route.fulfill({ status: 201, json: { number: seminar.number } });
-    }
     if (path === "/api/seminars/32/review") {
       expect(route.request().postDataJSON()).toMatchObject({
         decision: "approved",
@@ -131,18 +115,11 @@ test("企画の送信と運営承認をサイト内で行う", async ({ page }) 
       },
     });
   });
-  await page.goto("seminars/propose/");
-  await page.getByLabel("氏名（必須）", { exact: true }).fill("企画者");
-  await page.getByLabel("ゼミ名（必須）", { exact: true }).fill(seminar.title);
-  for (const field of seminarFields.filter((item) => !("optional" in item))) {
-    await page.getByLabel(`${field.label}（必須）`, { exact: true }).fill("可");
-  }
-  await page.getByRole("button", { name: "企画を送信する" }).click();
+
+  await page.goto(SEMINAR_REVIEW_PATH);
   await expect(
-    page.getByRole("heading", { name: "企画を受け付けました" }),
+    page.getByRole("heading", { name: "ゼミ企画審査" }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "運営ページ", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${SEMINAR_REVIEW_PATH}$`));
   await page.getByRole("button", { name: "メニュー", exact: true }).click();
   const adminMenu = page.getByRole("navigation", {
     name: "運営用サイトメニュー",
@@ -160,10 +137,4 @@ test("企画の送信と運営承認をサイト内で行う", async ({ page }) 
   await expect(
     page.getByText("この状態の企画申請はありません。"),
   ).toBeVisible();
-  await page
-    .getByRole("navigation", { name: "パンくず" })
-    .getByRole("link", { name: "ゼミプラットフォーム" })
-    .click();
-  await page.getByRole("link", { name: "企画申請を審査する" }).click();
-  await expect(page.getByText(/リーマン面ゼミ ・ 承認済み/)).toBeVisible();
 });

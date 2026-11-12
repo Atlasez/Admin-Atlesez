@@ -24,7 +24,7 @@ test.describe("ゼミプラットフォーム運営ホーム", () => {
     });
   });
 
-  test("運営メニューと現行サイトへの導線を表示する", async ({ page }) => {
+  test("運営メニューと公開サイトへの導線を表示する", async ({ page }) => {
     await page.goto("admin/semi-platform/");
 
     await expect(
@@ -52,8 +52,8 @@ test.describe("ゼミプラットフォーム運営ホーム", () => {
     }
 
     await expect(
-      page.getByRole("link", { name: /現行サイト/ }),
-    ).toHaveAttribute("href", "https://sites.google.com/view/atlasez-semi");
+      page.getByRole("link", { name: "ゼミ一覧を開く" }),
+    ).toHaveAttribute("href", "https://atlasez.org/seminars/");
   });
 
   test("メニューカードはデスクトップ2列、モバイル1列で揃う", async ({

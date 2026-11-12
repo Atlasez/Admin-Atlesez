@@ -1,170 +1,102 @@
 import {
   phaseLabels,
   recruitmentLabels,
+  seminarFields,
   seminarNumber,
 } from "../../lib/seminar-fields";
-import {
-  api,
-  bindForm,
-  detailLink,
-  empty,
-  html,
-  loginUrl,
-  numberFromUrl,
-  post,
-  publicDetails,
-  urlFor,
-  type CatalogItem,
-} from "./shared";
+import { api, errorMessage, html, type CatalogItem } from "./shared";
 
-async function loadCatalog() {
-  const { seminars } = await api<{ seminars: CatalogItem[] }>();
-  return seminars;
+const results = document.querySelector<HTMLElement>(
+  "[data-seminar-catalog-results]",
+);
+const query = document.querySelector<HTMLInputElement>(
+  "[data-seminar-catalog-query]",
+);
+const count = document.querySelector<HTMLElement>(
+  "[data-seminar-catalog-count]",
+);
+
+const groups = [
+  { status: "open", id: "seminar-open" },
+  { status: "paused", id: "seminar-paused" },
+  { status: "closed", id: "seminar-closed" },
+] as const;
+
+function seminarCard(item: CatalogItem) {
+  const theme = item.details.theme?.trim();
+  const phase = item.phase === "unknown" ? "" : phaseLabels[item.phase];
+  const details = seminarFields
+    .filter(({ key }) => item.details[key]?.trim())
+    .map(
+      ({ key, label }) =>
+        `<div><dt>${label}</dt><dd>${html(item.details[key])}</dd></div>`,
+    )
+    .join("");
+
+  return `<li class="seminar-catalog-card">
+    <article class="seminar-catalog-card-body">
+      <span class="seminar-catalog-number">ゼミ番号 ${seminarNumber(item.number)}</span>
+      <h3>${html(item.title)}</h3>
+      ${theme ? `<p class="seminar-catalog-theme">テーマ：${html(theme)}</p>` : ""}
+      <span class="seminar-catalog-badges">
+        <span class="seminar-catalog-badge">${recruitmentLabels[item.recruitment]}</span>
+        ${phase ? `<span class="seminar-catalog-phase">開催状況：${phase}</span>` : ""}
+      </span>
+      ${details ? `<details class="seminar-catalog-expanded"><summary>内容を確認</summary><dl class="seminar-details">${details}</dl></details>` : ""}
+    </article>
+  </li>`;
 }
 
-const normalize = (value: string) =>
-  value.normalize("NFKC").toLowerCase().trim();
-
-export async function renderCatalog(content: HTMLElement) {
-  const seminars = await loadCatalog();
-  const query = document.querySelector<HTMLInputElement>("[data-query]");
-  const filter =
-    document.querySelector<HTMLSelectElement>("[data-recruitment]");
-  const count = document.querySelector<HTMLElement>("[data-count]");
-  const indexed = seminars.map((item) => ({
-    item,
-    search: normalize(
-      [
-        item.title,
-        seminarNumber(item.number),
-        ...Object.values(item.details),
-      ].join(" "),
-    ),
-  }));
-  function render() {
-    const terms = normalize(query?.value ?? "")
-      .split(/\s+/)
-      .filter(Boolean);
-    const matches = indexed.filter(
-      ({ item, search }) =>
-        (!filter?.value || item.recruitment === filter.value) &&
-        terms.every((term) => search.includes(term)),
-    );
-    if (count) count.textContent = `${matches.length}件`;
-    content.innerHTML = matches.length
-      ? `<ul class="seminar-results">${matches
-          .map(
-            ({ item }) => `
-          <li class="seminar-entry">
-            <div class="seminar-row">
-              <h3><a href="${urlFor("detail", item.number)}">${html(item.title)}</a></h3>
-              <span class="seminar-state">${recruitmentLabels[item.recruitment]}</span>
-            </div>
-            <p class="seminar-meta"><span class="seminar-number">番号 ${seminarNumber(item.number)}</span>${html(
-              [
-                item.details.theme === item.title ? "" : item.details.theme,
-                item.details.format,
-              ]
-                .filter(Boolean)
-                .map((value) => ` ・ ${value}`)
-                .join(""),
-            )}</p>
-          </li>`,
-          )
-          .join("")}</ul>`
-      : empty("検索条件に一致するゼミはありません。");
-  }
-  query?.addEventListener("input", render);
-  filter?.addEventListener("change", render);
-  render();
+function matchesQuery(item: CatalogItem, value: string) {
+  if (!value) return true;
+  const searchable = [
+    item.title,
+    seminarNumber(item.number),
+    ...Object.values(item.details),
+  ]
+    .join(" ")
+    .toLocaleLowerCase("ja");
+  return searchable.includes(value.toLocaleLowerCase("ja"));
 }
 
-export async function renderDetail(content: HTMLElement) {
-  const number = numberFromUrl();
-  if (!number) throw new Error("ゼミ番号が指定されていません。");
-  const item = await api<CatalogItem>(`/${number}`);
-  document.title = `${item.title} | ゼミプラットフォーム`;
-  const source = item.sourceUrl?.startsWith(
-    "https://sites.google.com/view/atlasez-semi/",
-  )
-    ? item.sourceUrl
-    : "";
-  content.innerHTML = `
-    <header class="seminar-page-head">
-      <h1>${html(item.title)}</h1>
-      <p class="seminar-meta">ゼミ番号 ${seminarNumber(item.number)} ・ ${recruitmentLabels[item.recruitment]} ・ ${phaseLabels[item.phase]}</p>
-      ${
-        item.acceptingApplications
-          ? `<div class="seminar-actions"><a class="button" href="${urlFor("join", item.number)}">このゼミに参加申請する</a></div>`
-          : `<p>${item.recruitment === "open" && source ? "主催者の登録後に参加申請を受け付けます。" : "参加申請は受け付けていません。"}</p>`
-      }
-    </header>
-    <section class="seminar-block" aria-labelledby="detail-heading">
-      <h2 id="detail-heading">ゼミの詳細</h2>
-      ${publicDetails(item)}
-      ${source ? `<div class="seminar-actions"><a href="${html(source)}">旧サイトの掲載情報</a></div>` : ""}
-    </section>`;
+function renderCatalog(items: CatalogItem[]) {
+  if (!results) return;
+  const value = query?.value.trim() ?? "";
+  const filtered = items.filter((item) => matchesQuery(item, value));
+  if (count)
+    count.textContent = value
+      ? `${filtered.length}件が見つかりました。`
+      : `${filtered.length}件のゼミを掲載しています。`;
+
+  results.innerHTML = groups
+    .map(({ status, id }) => {
+      const entries = filtered.filter((item) => item.recruitment === status);
+      const label = recruitmentLabels[status];
+      return `<section class="seminar-catalog-group" aria-labelledby="${id}-heading">
+        <header class="seminar-catalog-group-heading">
+          <h2 id="${id}-heading">${label}</h2>
+          <span class="seminar-muted">${entries.length}件</span>
+        </header>
+        ${
+          entries.length
+            ? `<ul class="seminar-catalog-list">${entries.map(seminarCard).join("")}</ul>`
+            : `<p class="seminar-catalog-empty">該当するゼミはありません。</p>`
+        }
+      </section>`;
+    })
+    .join("");
 }
 
-export async function initApplicationForm(
-  page: "propose" | "join",
-  session: { signedIn: boolean; email?: string },
-) {
-  const auth = document.querySelector<HTMLElement>("[data-form-auth]");
-  const form = document.querySelector<HTMLFormElement>(
-    "[data-application-form]",
-  );
-  const success = document.querySelector<HTMLElement>("[data-form-success]");
-  const email = document.querySelector<HTMLElement>("[data-form-email]");
-  if (!auth || !form || !success || !email) return;
-  if (!session.signedIn) {
-    auth.innerHTML = `<p>申請にはGoogleアカウントが必要です。</p><a class="button" href="${html(loginUrl())}">Googleでログイン</a>`;
-    return;
-  }
-  if (page === "join") {
-    const number = numberFromUrl();
-    const seminars = await loadCatalog();
-    const select = form.querySelector<HTMLSelectElement>(
-      "[data-seminar-options]",
-    );
-    if (!select) return;
-    for (const item of seminars.filter((item) => item.acceptingApplications)) {
-      const option = new Option(
-        `番号 ${seminarNumber(item.number)} ${item.title}`,
-        String(item.number),
-      );
-      select.add(option);
-    }
-    if (select.options.length <= 1) {
-      auth.innerHTML =
-        '<p>参加を受け付けているゼミはありません。</p><a href="/seminars/#catalog">ゼミ一覧に戻る</a>';
-      return;
-    }
-    if (number) {
-      select.value = String(number);
-      if (!select.value) {
-        select.selectedIndex = 0;
-        const item = seminars.find((seminar) => seminar.number === number);
-        auth.innerHTML = `<p>${item ? detailLink(item) : "指定されたゼミ"}への申請は現在受け付けていません。</p>`;
-      } else auth.hidden = true;
-    } else auth.hidden = true;
-  } else auth.hidden = true;
-  email.textContent = session.email ?? "";
-  form.hidden = false;
-  const submissionKey = crypto.randomUUID();
-  bindForm(form, async (data) => {
-    const fields = Object.fromEntries(data);
-    await post(
-      page === "propose" ? "/proposals" : `/${Number(fields.number)}/join`,
-      { ...fields, submissionKey },
-    );
-    auth.hidden = true;
-    form.hidden = true;
-    success.hidden = false;
-    const heading = success.querySelector("h2");
-    if (heading) {
-      heading.tabIndex = -1;
-      heading.focus();
-    }
-  });
+if (results) {
+  void api<{ seminars: CatalogItem[] }>()
+    .then(({ seminars }) => {
+      const ordered = [...seminars].sort((a, b) => b.number - a.number);
+      renderCatalog(ordered);
+      query?.addEventListener("input", () => renderCatalog(ordered));
+    })
+    .catch((error) => {
+      if (count) count.textContent = "";
+      results.innerHTML = `<p class="seminar-error" role="alert">${html(errorMessage(error))}</p>`;
+    })
+    .finally(() => results.removeAttribute("aria-busy"));
 }

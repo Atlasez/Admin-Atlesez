@@ -29,8 +29,8 @@
   startedAt: "2024-05"
   order: 2
   links:
-    - label: ゼミプラットフォームのサイト（現行）
-      url: https://sites.google.com/view/atlasez-semi
+    - label: ゼミ一覧
+      url: https://atlasez.org/seminars/
       external: true
   howToJoin: ゼミの参加者・立ち上げメンバーを随時募集しています。
 - id: thinking-cafe

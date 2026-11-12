@@ -71,67 +71,151 @@ function fixture() {
 
 describe("seminar platform", () => {
   it.each([
-    ["/seminars/join/?number=32", applicant, false],
-    [SEMINAR_REVIEW_PATH, operator, true],
-  ])("returns Google accounts to %s", async (returnTo, email, canReview) => {
-    const { env } = fixture();
-    const oauthEnv = {
-      ...env,
-      ADMIN_PUBLIC_ORIGIN: url,
-      GOOGLE_OAUTH_CLIENT_ID: "test-client",
-      GOOGLE_OAUTH_CLIENT_SECRET: "test-secret",
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        if (String(input) === "https://oauth2.googleapis.com/token")
-          return Response.json({ access_token: "test-token" });
-        if (
-          String(input) === "https://openidconnect.googleapis.com/v1/userinfo"
-        )
-          return Response.json({
-            email,
-            email_verified: true,
-            sub: "new-seminar-user",
-          });
-        return new Response(null, { status: 500 });
-      }),
-    );
-    const login = await worker.fetch(
-      new Request(
-        `${url}/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`,
-      ),
-      oauthEnv,
-    );
-    expect(login.status).toBe(302);
-    const google = new URL(login.headers.get("location")!);
-    const callback = await worker.fetch(
-      new Request(
-        `${url}/auth/google/callback?code=test&state=${google.searchParams.get("state")}`,
-        {
-          headers: {
-            cookie: login.headers.get("set-cookie")!.split(";", 1)[0],
+    [
+      "/seminars/join/?number=32",
+      applicant,
+      false,
+      "/seminars/join/?number=32",
+    ],
+    [SEMINAR_REVIEW_PATH, operator, true, SEMINAR_REVIEW_PATH],
+    [
+      "https://atlasez.org/seminars/propose/",
+      host,
+      false,
+      "https://atlasez.org/seminars/propose/",
+    ],
+    [
+      "https://atlasez.org/seminars/join/?number=32",
+      applicant,
+      false,
+      "https://atlasez.org/seminars/join/?number=32",
+    ],
+    ["https://example.com/seminars/propose/", host, false, "/apply/"],
+  ])(
+    "returns Google accounts to the approved page from %s",
+    async (returnTo, email, canReview, expectedReturnTo) => {
+      const { env } = fixture();
+      const oauthEnv = {
+        ...env,
+        ADMIN_PUBLIC_ORIGIN: url,
+        GOOGLE_OAUTH_CLIENT_ID: "test-client",
+        GOOGLE_OAUTH_CLIENT_SECRET: "test-secret",
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+          if (String(input) === "https://oauth2.googleapis.com/token")
+            return Response.json({ access_token: "test-token" });
+          if (
+            String(input) === "https://openidconnect.googleapis.com/v1/userinfo"
+          )
+            return Response.json({
+              email,
+              email_verified: true,
+              sub: "new-seminar-user",
+            });
+          return new Response(null, { status: 500 });
+        }),
+      );
+      const login = await worker.fetch(
+        new Request(
+          `${url}/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`,
+        ),
+        oauthEnv,
+      );
+      expect(login.status).toBe(302);
+      const google = new URL(login.headers.get("location")!);
+      const callback = await worker.fetch(
+        new Request(
+          `${url}/auth/google/callback?code=test&state=${google.searchParams.get("state")}`,
+          {
+            headers: {
+              cookie: login.headers.get("set-cookie")!.split(";", 1)[0],
+            },
           },
+        ),
+        oauthEnv,
+      );
+      expect(callback.status).toBe(302);
+      expect(callback.headers.get("location")).toBe(expectedReturnTo);
+      const accountCookie = callback.headers
+        .getSetCookie()
+        .find((value) => value.startsWith("atlasez_admin_session="))!;
+      const session = await worker.fetch(
+        new Request(`${url}${api}/session`, {
+          headers: { cookie: accountCookie.split(";", 1)[0] },
+        }),
+        oauthEnv,
+      );
+      expect(await session.json()).toMatchObject({
+        signedIn: true,
+        email,
+        canReview,
+      });
+    },
+  );
+
+  it("allows credentialed seminar requests from the public site only", async () => {
+    const { env, request } = fixture();
+    const preflight = await worker.fetch(
+      new Request(`${url}${api}/proposals`, {
+        method: "OPTIONS",
+        headers: {
+          origin: "https://atlasez.org",
+          "access-control-request-method": "POST",
+          "access-control-request-headers": "content-type",
         },
-      ),
-      oauthEnv,
-    );
-    expect(callback.status).toBe(302);
-    expect(callback.headers.get("location")).toBe(returnTo);
-    const accountCookie = callback.headers
-      .getSetCookie()
-      .find((value) => value.startsWith("atlasez_admin_session="))!;
-    const session = await worker.fetch(
-      new Request(`${url}${api}/session`, {
-        headers: { cookie: accountCookie.split(";", 1)[0] },
       }),
-      oauthEnv,
+      env as never,
     );
-    expect(await session.json()).toMatchObject({
-      signedIn: true,
-      email,
-      canReview,
-    });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe(
+      "https://atlasez.org",
+    );
+    expect(preflight.headers.get("access-control-allow-credentials")).toBe(
+      "true",
+    );
+
+    const session = await request(
+      `${api}/session`,
+      host,
+      undefined,
+      "https://atlasez.org",
+    );
+    expect(session.status).toBe(200);
+    expect(session.headers.get("access-control-allow-origin")).toBe(
+      "https://atlasez.org",
+    );
+    expect(await session.json()).toMatchObject({ signedIn: true, email: host });
+
+    const proposal = await request(
+      `${api}/proposals`,
+      host,
+      payload(),
+      "https://atlasez.org",
+    );
+    expect(proposal.status).toBe(201);
+    expect(proposal.headers.get("access-control-allow-origin")).toBe(
+      "https://atlasez.org",
+    );
+
+    const rejected = await request(
+      `${api}/proposals`,
+      host,
+      payload(),
+      "https://example.com",
+    );
+    expect(rejected.status).toBe(403);
+    expect(rejected.headers.get("access-control-allow-origin")).toBeNull();
+
+    const operations = await request(
+      `${api}/operations`,
+      operator,
+      undefined,
+      "https://atlasez.org",
+    );
+    expect(operations.status).toBe(403);
+    expect(operations.headers.get("access-control-allow-origin")).toBeNull();
   });
 
   it("redirects the former operations URL and serves the admin page only to project reviewers", async () => {
@@ -151,6 +235,39 @@ describe("seminar platform", () => {
     expect((await request(SEMINAR_REVIEW_PATH, operator)).status).toBe(200);
   });
 
+  it.each([
+    ["/seminars/propose/", "https://atlasez.org/seminars/propose/"],
+    [
+      "/seminars/join/?number=32",
+      "https://atlasez.org/seminars/join/?number=32",
+    ],
+    [
+      "/seminars/detail/?number=32",
+      "https://atlasez.org/seminars/detail/?number=32",
+    ],
+  ])(
+    "sends public seminar route %s to the public site",
+    async (path, target) => {
+      const { anonymous } = fixture();
+      const response = await anonymous(path);
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe(target);
+    },
+  );
+
+  it("serves the public seminar catalogue on the Admin host", async () => {
+    const { anonymous } = fixture();
+    const page = await anonymous("/seminars/");
+    expect(page.status).toBe(200);
+    expect(await page.text()).toBe("isolated fixture");
+
+    const canonical = await anonymous("/seminars");
+    expect(canonical.status).toBe(308);
+    expect(canonical.headers.get("location")).toBe(
+      "https://admin.atlasez.test/seminars/",
+    );
+  });
+
   it("lists the imported directory publicly without enabling unassigned hosts", async () => {
     const { anonymous, request } = fixture();
     expect(await (await anonymous(`${api}/session`)).json()).toEqual({
@@ -163,6 +280,67 @@ describe("seminar platform", () => {
       number: 32,
       title: "リーマン面ゼミ",
       acceptingApplications: false,
+    });
+    const imported = new Map(
+      seminars.map((seminar: { number: number }) => [seminar.number, seminar]),
+    );
+    expect(imported.get(20)).toMatchObject({
+      title: "流体力学ゼミ",
+      details: { theme: "流体力学" },
+    });
+    expect(imported.get(31)).toMatchObject({
+      details: {
+        description: expect.stringContaining(
+          "主催者自身は近現代ドイツの歴史・政治に非常に強い関心があります。",
+        ),
+        remarks:
+          "他人を傷つけたり、差別的な発言をする方の参加は断固お断りさせていただきます。\n「差別をしない」というのは人として当たり前のことであり、普遍的な理念です。",
+      },
+    });
+    expect(imported.get(5)).toMatchObject({
+      details: {
+        remarks:
+          "かなり進んでいて、上巻の半分以上は終わりました。これから超関数を導入していく感じです。",
+      },
+    });
+    expect(imported.get(29)).toMatchObject({
+      details: {
+        remarks:
+          "9版と10版で多少数値にブレがある。しかし、0.1とかの些細な違いなのでこの違いの意図まではよく分からなかった。",
+      },
+    });
+    expect(imported.get(16)).toMatchObject({
+      details: {
+        remarks: expect.stringContaining(
+          "https://docs.google.com/document/d/1oC5vn6lWZ5_S2tFY8tsbUfJQM68vjwK-WhLmSHwPvNg/edit?usp=sharing",
+        ),
+      },
+    });
+    expect(imported.get(10)).toMatchObject({
+      details: { remarks: "6/20時点で§8の中盤です。" },
+    });
+    expect(imported.get(8)).toMatchObject({
+      details: {
+        remarks:
+          "現在の進行状況としては、まだ数学的準備のフェーズです。ラグランジアンも出てきてません。",
+      },
+    });
+    expect(imported.get(15)).toMatchObject({
+      details: {
+        remarks: expect.stringContaining("火曜6限"),
+      },
+    });
+    for (const number of [2, 3])
+      expect(imported.get(number)).toMatchObject({
+        details: {
+          remarks: expect.stringContaining("個別ページでは「募集中」"),
+        },
+      });
+    expect(imported.get(17)).toMatchObject({
+      details: {
+        description:
+          expect.stringContaining("場の量子論を勉強中の初学者です。"),
+      },
     });
     expect(
       (await request(`${api}/32/host`, outsider, { email: host })).status,

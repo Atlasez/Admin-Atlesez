@@ -13,7 +13,6 @@ export type CatalogItem = {
   recruitment: keyof typeof recruitmentLabels;
   phase: keyof typeof phaseLabels;
   acceptingApplications: boolean;
-  sourceUrl: string | null;
 };
 
 export type RequestStatus = "pending" | "approved" | "rejected";
