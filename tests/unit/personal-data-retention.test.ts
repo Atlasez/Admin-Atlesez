@@ -45,7 +45,7 @@ afterEach(() => {
   for (const db of databases.splice(0)) db.close();
 });
 
-it("keeps proposed article-report cleanup opt-in while routine expiry continues", async () => {
+it("keeps proposed article-report cleanup opt-in and pauses application deletion", async () => {
   const createDatabase = () => {
     const executed: string[] = [];
     const database = {
@@ -95,11 +95,16 @@ it("keeps proposed article-report cleanup opt-in while routine expiry continues"
   await scheduled(disabled.database);
   expect(
     disabled.executed.some((query) =>
-      /DELETE FROM admin_auth_sessions|DELETE FROM atlasez_application_rate_limits|DELETE FROM atlasez_member_applications/.test(
+      /DELETE FROM admin_auth_sessions|DELETE FROM atlasez_application_rate_limits/.test(
         query,
       ),
     ),
   ).toBe(true);
+  expect(
+    disabled.executed.some((query) =>
+      query.includes("DELETE FROM atlasez_member_applications"),
+    ),
+  ).toBe(false);
   expect(
     disabled.executed.some((query) => query.includes("article_reports")),
   ).toBe(false);
@@ -112,10 +117,142 @@ it("keeps proposed article-report cleanup opt-in while routine expiry continues"
       enabled.executed.some((query) =>
         query.includes("DELETE FROM atlasez_member_applications"),
       ),
+    ).toBe(false);
+    expect(
+      enabled.executed.some((query) => query.includes("article_reports")),
     ).toBe(true);
   } finally {
     info.mockRestore();
   }
+});
+
+it("retains accepted/rejected applications and cascading notification/review history while OPSD-03 is pending", async () => {
+  const db = new DatabaseSync(":memory:");
+  databases.push(db);
+  db.exec(`
+    PRAGMA foreign_keys=ON;
+    CREATE TABLE admin_auth_sessions (expires_at TEXT NOT NULL);
+    CREATE TABLE atlasez_application_rate_limits (bucket INTEGER NOT NULL);
+    CREATE TABLE atlasez_member_applications (
+      id TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE atlasez_application_email_deliveries (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL REFERENCES atlasez_member_applications(id) ON DELETE CASCADE,
+      status TEXT NOT NULL
+    );
+    CREATE TABLE atlasez_application_interviews (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL UNIQUE REFERENCES atlasez_member_applications(id) ON DELETE CASCADE
+    );
+    CREATE TABLE atlasez_application_interview_reviews (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL UNIQUE REFERENCES atlasez_member_applications(id) ON DELETE CASCADE
+    );
+    CREATE TABLE atlasez_application_interview_history (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL REFERENCES atlasez_member_applications(id) ON DELETE CASCADE
+    );
+  `);
+  const database: D1Database = {
+    prepare: (query) => new Statement(query, db),
+    batch: async () => [],
+  };
+  const now = new Date("2026-11-06T00:00:00.000Z");
+  const expired = new Date(now.getTime() - 181 * 86_400_000).toISOString();
+  const expiredSession = new Date(now.getTime() - 2 * 86_400_000).toISOString();
+  const activeSession = new Date(now.getTime() + 2 * 86_400_000).toISOString();
+  db.prepare("INSERT INTO admin_auth_sessions(expires_at) VALUES (?)").run(
+    expiredSession,
+  );
+  db.prepare("INSERT INTO admin_auth_sessions(expires_at) VALUES (?)").run(
+    activeSession,
+  );
+  const expiredRateLimitBucket = Math.floor(
+    (now.getTime() - 2 * 86_400_000) / 600_000,
+  );
+  const activeRateLimitBucket = Math.floor(
+    (now.getTime() - 12 * 60 * 60 * 1_000) / 600_000,
+  );
+  db.prepare(
+    "INSERT INTO atlasez_application_rate_limits(bucket) VALUES (?)",
+  ).run(expiredRateLimitBucket);
+  db.prepare(
+    "INSERT INTO atlasez_application_rate_limits(bucket) VALUES (?)",
+  ).run(activeRateLimitBucket);
+  db.prepare(
+    "INSERT INTO atlasez_member_applications(id,status,updated_at) VALUES (?,?,?)",
+  ).run("accepted-old", "accepted", expired);
+  db.prepare(
+    "INSERT INTO atlasez_member_applications(id,status,updated_at) VALUES (?,?,?)",
+  ).run("rejected-old", "rejected", expired);
+  db.prepare(
+    "INSERT INTO atlasez_application_email_deliveries(id,application_id,status) VALUES (?,?,?)",
+  ).run("pending-email", "accepted-old", "pending");
+  db.prepare(
+    "INSERT INTO atlasez_application_email_deliveries(id,application_id,status) VALUES (?,?,?)",
+  ).run("retry-email", "rejected-old", "retry");
+  db.prepare(
+    "INSERT INTO atlasez_application_interviews(id,application_id) VALUES (?,?)",
+  ).run("interview", "accepted-old");
+  db.prepare(
+    "INSERT INTO atlasez_application_interview_reviews(id,application_id) VALUES (?,?)",
+  ).run("review", "accepted-old");
+  db.prepare(
+    "INSERT INTO atlasez_application_interview_history(id,application_id) VALUES (?,?)",
+  ).run("history", "accepted-old");
+
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    await expect(
+      runPersonalDataRetention(database, now),
+    ).resolves.toMatchObject({
+      sessionsDeleted: 1,
+      rateLimitsDeleted: 1,
+      applicationDeletionPaused: true,
+      resolvedApplicationsDeleted: 0,
+    });
+    expect(info).toHaveBeenCalledWith(
+      "personal_data_retention_completed",
+      expect.objectContaining({
+        sessionsDeleted: 1,
+        rateLimitsDeleted: 1,
+        applicationDeletionPaused: true,
+        resolvedApplicationsDeleted: 0,
+      }),
+    );
+  } finally {
+    info.mockRestore();
+  }
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM admin_auth_sessions").get(),
+  ).toEqual({
+    count: 1,
+  });
+  expect(
+    db
+      .prepare("SELECT COUNT(*) AS count FROM atlasez_application_rate_limits")
+      .get(),
+  ).toEqual({ count: 1 });
+  for (const table of [
+    "atlasez_member_applications",
+    "atlasez_application_email_deliveries",
+    "atlasez_application_interviews",
+    "atlasez_application_interview_reviews",
+    "atlasez_application_interview_history",
+  ]) {
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()).toEqual({
+      count:
+        table === "atlasez_member_applications"
+          ? 2
+          : table === "atlasez_application_email_deliveries"
+            ? 2
+            : 1,
+    });
+  }
+  expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
 it("clears expired article-report fingerprints and resolved contacts without deleting reports", async () => {

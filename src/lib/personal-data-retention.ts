@@ -2,7 +2,7 @@ import type { D1Database } from "./admin-database";
 
 const dayMs = 24 * 60 * 60 * 1_000;
 
-/** Applies the retention periods documented for ADMIN-managed personal data. */
+/** Applies enabled retention cleanup; application deletion is paused pending OPSD-03. */
 export async function purgeExpiredPersonalData(
   db: D1Database,
   now = new Date(),
@@ -28,12 +28,6 @@ export async function purgeExpiredPersonalData(
     db
       .prepare("DELETE FROM atlasez_application_rate_limits WHERE bucket < ?")
       .bind(expiredRateLimits)
-      .run(),
-    db
-      .prepare(
-        "DELETE FROM atlasez_member_applications WHERE status IN ('rejected','accepted') AND updated_at < ?",
-      )
-      .bind(expiredApplications)
       .run(),
   ];
   if (options.clearArticleReportData) {
@@ -63,9 +57,13 @@ export async function purgeExpiredPersonalData(
   return {
     sessionsDeleted: Number(results[0]?.meta?.changes ?? 0),
     rateLimitsDeleted: Number(results[1]?.meta?.changes ?? 0),
-    resolvedApplicationsDeleted: Number(results[2]?.meta?.changes ?? 0),
-    reporterHashesCleared: Number(results[3]?.meta?.changes ?? 0),
-    reportContentHashesCleared: Number(results[4]?.meta?.changes ?? 0),
-    resolvedReportContactsCleared: Number(results[5]?.meta?.changes ?? 0),
+    applicationDeletionPaused: true,
+    // Terminal-application deletion is paused until OPSD-03 is approved and
+    // the migration-backed retention guard is released. Keep this field for
+    // the existing diagnostics shape without implying rows were removed.
+    resolvedApplicationsDeleted: 0,
+    reporterHashesCleared: Number(results[2]?.meta?.changes ?? 0),
+    reportContentHashesCleared: Number(results[3]?.meta?.changes ?? 0),
+    resolvedReportContactsCleared: Number(results[4]?.meta?.changes ?? 0),
   };
 }
