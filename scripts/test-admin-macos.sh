@@ -6,6 +6,14 @@ app_path="$(cd "$(dirname "$app_path")" && pwd)/$(basename "$app_path")"
 frameworks="$app_path/Contents/Frameworks"
 output="$repo_root/dist-macos/tests"
 mkdir -p "$output"
+
+automatic_checks="$(/usr/libexec/PlistBuddy -c 'Print :SUEnableAutomaticChecks' "$app_path/Contents/Info.plist")"
+automatic_updates="$(/usr/libexec/PlistBuddy -c 'Print :SUAutomaticallyUpdate' "$app_path/Contents/Info.plist")"
+if [[ "$automatic_checks" != "true" || "$automatic_updates" != "true" ]]; then
+  echo "Sparkle automatic update checks and installation must both be enabled." >&2
+  exit 1
+fi
+
 swiftc -parse-as-library -D ADMIN_APP_TESTING -framework AppKit -framework SwiftUI \
   -framework WebKit -framework Security -framework CryptoKit -F "$frameworks" -framework Sparkle \
   -Xlinker -rpath -Xlinker "$frameworks" \
